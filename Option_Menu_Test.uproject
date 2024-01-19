@@ -52,7 +52,7 @@
 		},
 		{
 			"Name": "LightExplorer",
-			"Enabled": true,
+			"Enabled": false,
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/4dc7591f494343f1ae6cac5192bb1f62"
 		},
 		{
@@ -62,7 +62,7 @@
 		},
 		{
 			"Name": "PhysicalLayout",
-			"Enabled": true,
+			"Enabled": false,
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/349bf2d4b1a945fa8f31db80fabf8058"
 		},
 		{
@@ -85,6 +85,16 @@
 		{
 			"Name": "XeSS",
 			"Enabled": true
+		},
+		{
+			"Name": "RecentBlueprintMenu",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/484f72297c144cf9b5c35fea3359500c"
+		},
+		{
+			"Name": "RuntimeTextTranslation",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/8e87c3ee75e84deea700026c80d1e941"
 		}
 	]
 }
