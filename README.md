@@ -1,4 +1,4 @@
-# THIS IS STILL IN DEVELOPEMENT AND IS ABSOLUTELY NOT FINISHED.
+## THIS IS STILL IN DEVELOPEMENT AND IS ABSOLUTELY NOT FINISHED.
 
 # Features
 For the moment, there is mainly options about Upscaling (DLSS, FSR, XeSS). It will show you if you PC is incompatible to some option and hide these ones.
