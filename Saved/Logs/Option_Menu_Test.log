@@ -1996,3 +1996,38 @@ LogConfig: Set CVar [[r.Shadow.DetectVertexShaderLayerAtRuntime:1]]
 [2024.01.19-17.22.33:201][ 99]LogDLSSNGX: [DLSS]: [2024-01-19 18:22:33] [tid:25392][NgxDltss::FillCreationParams::<lambda_583ff369ed629de4c4862af8f7b727ed>::operator ():2782] Info: (UltraQuality) Using App hint Preset F
 [2024.01.19-17.22.33:205][ 99]LogDLSSNGXRHI: Creating   NGX DLSS Feature  SrcRect=[0x0->1309x875], DestRect=[0x0->1874x1252], ScaleX=0.698506, ScaleY=0.698882, NGXDLSSPreset=Default(0), NGXPerfQuality=MaxQuality(2), bHighResolutionMotionVectors=1, bNonZeroSharpness=0, bUseAutoExposure=1, bReleaseMemoryOnDelete=1, GPUNode=0, GPUVisibility=0x1, DenoiseMode=Off 
 [2024.01.19-17.22.33:234][101]LogDLSSNGXRHI: Destroying NGX DLSS Feature SrcRect=[0x0->922x580], DestRect=[0x0->922x580], ScaleX=1.000000, ScaleY=1.000000, NGXDLSSPreset=Default(0), NGXPerfQuality=DLAA(5), bHighResolutionMotionVectors=1, bNonZeroSharpness=0, bUseAutoExposure=1, bReleaseMemoryOnDelete=1, GPUNode=0, GPUVisibility=0x1, DenoiseMode=Off 
+[2024.01.19-17.25.05:756][896]BlueprintLog: New page: Compile BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.05:819][896]LogUObjectHash: Compacting FUObjectHashTables data took   1.51ms
+[2024.01.19-17.25.06:570][938]LogFileHelpers: InternalPromptForCheckoutAndSave started...
+[2024.01.19-17.25.06:694][938]Cmd: OBJ SAVEPACKAGE PACKAGE="/Game/UI/BPW_Ultimate_GraphicsSettings" FILE="E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Content/UI/BPW_Ultimate_GraphicsSettings.uasset" SILENT=true
+[2024.01.19-17.25.06:781][938]LogSavePackage: Moving output files for package: /Game/UI/BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.06:782][938]LogSavePackage: Moving 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Saved/BPW_Ultimate_GraphicsSettingsBAE1099F4C219E80DB2879AA0A1721AB.tmp' to 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Content/UI/BPW_Ultimate_GraphicsSettings.uasset'
+[2024.01.19-17.25.06:811][938]LogFileHelpers: InternalPromptForCheckoutAndSave took 240 ms (total: 7.75 sec)
+[2024.01.19-17.25.06:814][938]AssetCheck: New page: Asset Save: BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.06:814][938]LogContentValidation: Display: Validating /Script/UMGEditor.WidgetBlueprint /Game/UI/BPW_Ultimate_GraphicsSettings.BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.22:388][287]BlueprintLog: New page: Compile BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.22:461][287]LogUObjectHash: Compacting FUObjectHashTables data took   1.40ms
+[2024.01.19-17.25.23:328][344]LogFileHelpers: InternalPromptForCheckoutAndSave started...
+[2024.01.19-17.25.23:432][344]Cmd: OBJ SAVEPACKAGE PACKAGE="/Game/UI/BPW_Ultimate_GraphicsSettings" FILE="E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Content/UI/BPW_Ultimate_GraphicsSettings.uasset" SILENT=true
+[2024.01.19-17.25.23:500][344]LogSavePackage: Moving output files for package: /Game/UI/BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.23:501][344]LogSavePackage: Moving 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Saved/BPW_Ultimate_GraphicsSettings77758843492EA47273D4E9A1E964510E.tmp' to 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Content/UI/BPW_Ultimate_GraphicsSettings.uasset'
+[2024.01.19-17.25.23:535][344]LogFileHelpers: InternalPromptForCheckoutAndSave took 207 ms (total: 7.96 sec)
+[2024.01.19-17.25.23:543][344]AssetCheck: New page: Asset Save: BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.23:543][344]LogContentValidation: Display: Validating /Script/UMGEditor.WidgetBlueprint /Game/UI/BPW_Ultimate_GraphicsSettings.BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.25.24:584][442]LogDebuggerCommands: Repeating last play command: Standalone Game
+[2024.01.19-17.25.24:605][442]LogUObjectHash: Compacting FUObjectHashTables data took   1.35ms
+[2024.01.19-17.27.19:425][616]LogFileHelpers: InternalPromptForCheckoutAndSave started...
+[2024.01.19-17.27.19:531][616]Cmd: OBJ SAVEPACKAGE PACKAGE="/Game/UI/BPW_Ultimate_GraphicsSettings" FILE="E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Content/UI/BPW_Ultimate_GraphicsSettings.uasset" SILENT=true
+[2024.01.19-17.27.19:595][616]LogSavePackage: Moving output files for package: /Game/UI/BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.27.19:596][616]LogSavePackage: Moving 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Saved/BPW_Ultimate_GraphicsSettingsE1E574424EEF82E0F7C3FBBC52334919.tmp' to 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Content/UI/BPW_Ultimate_GraphicsSettings.uasset'
+[2024.01.19-17.27.19:636][616]LogFileHelpers: InternalPromptForCheckoutAndSave took 210 ms (total: 8.17 sec)
+[2024.01.19-17.27.19:649][616]AssetCheck: New page: Asset Save: BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.27.19:649][616]LogContentValidation: Display: Validating /Script/UMGEditor.WidgetBlueprint /Game/UI/BPW_Ultimate_GraphicsSettings.BPW_Ultimate_GraphicsSettings
+[2024.01.19-17.31.11:991][771]LogUObjectHash: Compacting FUObjectHashTables data took   1.45ms
+[2024.01.19-17.31.11:993][771]LogFileHelpers: Editor autosave (incl. external actors) for '/Game/ThirdPerson/Maps/ThirdPersonMap' took 0.019
+[2024.01.19-17.31.11:994][771]OBJ SavePackage: Generating thumbnails for [1] asset(s) in package [/Game/UI/BPW_Ultimate_GraphicsSettings] ([2] browsable assets)...
+[2024.01.19-17.31.11:994][771]OBJ SavePackage: Finished generating thumbnails for package [/Game/UI/BPW_Ultimate_GraphicsSettings]
+[2024.01.19-17.31.12:083][771]LogSavePackage: Moving output files for package: /Temp/Autosaves/Game/UI/BPW_Ultimate_GraphicsSettings_Auto2
+[2024.01.19-17.31.12:083][771]LogSavePackage: Moving 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Saved/BPW_Ultimate_GraphicsSettings_Au458C7B8E490751D0327D79850AD3FFCB.tmp' to 'E:/GameDev/Unreal Engine/Unreal Projects/Option_Menu_Test/Saved/Autosaves/Game/UI/BPW_Ultimate_GraphicsSettings_Auto2.uasset'
+[2024.01.19-17.31.12:084][771]LogFileHelpers: Auto-saving content packages took 0.091
+[2024.01.19-17.34.03:946][339]LogDerivedDataCache: C:/Users/adri1/AppData/Local/UnrealEngine/Common/DerivedDataCache: Maintenance finished in +00:02:11.325 and deleted 0 files with total size 0 MiB and 0 empty folders. Scanned 68404 files in 67384 folders with total size 6366 MiB.
