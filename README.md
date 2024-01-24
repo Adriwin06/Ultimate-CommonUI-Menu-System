@@ -5,6 +5,7 @@ For the moment, there is mainly options about Upscaling (DLSS, FSR, XeSS). It wi
 
 # Goal
 The goal of this project is to make a settings menu that is the most complete possible by featuring practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets. And all of that free for eveyone to save hours of making a settings menu logic that doesn't even necessarily feature as much option as this one.
+Also feel free to contribute, I would be happy to review your changes.
 
 # Requierments
 There are a lot of plugin that I use in this project that are just for making my workflow easier that are absolutely not requiered. BUT the plugins that ARE used in the menu need to be downloaded in order for this to properly work. Here is a table of the requiered Plugins : 
@@ -28,3 +29,7 @@ Tab bring a menu originally by Unreal Bench https://www.unreal-bench.com/unreal-
   - If you enable the DLSS Super Resolution and then disable it, other upsaclers won't work until the game is restarted with DLSS Super Resolution disabled. (I can't figure out what causes this problem)
   - Settings will not be saved when exiting/re-enterring the menu
   - Some settings do nothing at the moment
+
+## To do :
+  - Store the menu variable in a Gamesave Blueprint. When the save button will be clicked, it will copy all usefull variable value in it and when the menu is oppened, it will restore them from that Gamesave BP. I'm not sure that's the best way of doing it but I will try and exeperiment on it and see where it go.
+  - Add a lot more settings (full list not available atm because it's too long and not completed)
