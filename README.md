@@ -1,4 +1,5 @@
 ## THIS IS STILL IN DEVELOPEMENT AND IS ABSOLUTELY NOT FINISHED.
+### Sorry if there is no update but I'm currently learning and experimenting with Common UI to use that instead of the default system because it's the future.
 
 # Features
 For the moment, there is mainly options about Upscaling (DLSS, FSR, XeSS). It will show you if you PC is incompatible to some option and hide these ones.
