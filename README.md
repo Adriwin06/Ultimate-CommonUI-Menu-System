@@ -6,6 +6,8 @@
   -  Easy prompt system
   -  VERY complete graphics settings, like there is probably too much settings for a normal user, with engine setings as well as Post Process Volume Settings
   -  Main Menu with background map & camera movements
+  - Partial French Localization
+  - Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)
 
 # Goal
 The goal of this project is to make the Ultimate Game Menu system that has everything you need, from a complete settings (only graphics at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to beautiful main menu. And all of that free for eveyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as much option as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build you own menu by using this one as a base. To make things even better, everyone can contribute; just contact me on Discord @adriwin78 before so we can talk and I can make you a contributor.
