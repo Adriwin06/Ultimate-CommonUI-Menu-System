@@ -1,4 +1,3 @@
-# This Readme is not finished.
 ## THIS IS STILL IN DEVELOPEMENT AND IS ABSOLUTELY NOT FINISHED.
 
 # Features 
