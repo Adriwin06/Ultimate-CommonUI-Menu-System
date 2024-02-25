@@ -36,6 +36,7 @@ Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unrea
   - Settings are not saved
   - Settings got reapplied when oppenning the settings menu
   - Prompt doesn't work in the pause menu
+  - Not all settings does something right now
 
 ## To do :
   - Store the menu variable in a Gamesave Blueprint. When the save button will be clicked, it will copy all usefull variable value in it and when the menu is oppened, it will restore them from that Gamesave BP. I'm not sure that's the best way of doing it but I will try and exeperiment on it and see where it go.
