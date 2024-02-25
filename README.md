@@ -1,14 +1,14 @@
-# A new Readme will come for the new version.
+# This Readme is not finished.
 ## THIS IS STILL IN DEVELOPEMENT AND IS ABSOLUTELY NOT FINISHED.
-### Sorry if there is no update but I'm currently learning and experimenting with Common UI to use that instead of the default system because it's the future.
-### SPOILER: It's gonna be incredible. Especially for the back-end where it will be super easy to reuse any UI element. And now it's a full game menu and not only a setting menu. 100% Blueprint, I can't wait to share it.
 
-# Features
-For the moment, there is mainly options about Upscaling (DLSS, FSR, XeSS). It will show you if you PC is incompatible to some option and hide these ones.
+# Features 
+  -  Full WIP Game menu system
+  -  Easy prompt system
+  -  VERY complete graphics settings, like there is probably too much settings for a normal user, with engine setings as well as Post Process Volume Settings
+  -  Main Menu with background map & camera movements
 
 # Goal
-The goal of this project is to make a settings menu that is the most complete possible by featuring practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets. And all of that free for eveyone to save hours of making a settings menu logic that doesn't even necessarily feature as much option as this one.
-Also feel free to contribute, I would be happy to review your changes.
+The goal of this project is to make the Ultimate Game Menu system that has everything you need, from a complete settings (only graphics at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to beautiful main menu. And all of that free for eveyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as much option as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build you own menu by using this one as a base. To make things even better, everyone can contribute; just contact me on Discord @adriwin78 before so we can talk and I can make you a contributor.
 
 # Requierments
 There are a lot of plugin that I use in this project that are just for making my workflow easier that are absolutely not requiered. BUT the plugins that ARE used in the menu need to be downloaded in order for this to properly work. Here is a table of the requiered Plugins : 
@@ -19,9 +19,11 @@ There are a lot of plugin that I use in this project that are just for making my
 | [Intel Xe SUper Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 
 # Access the Menu
-Press Num 2 In-Game to access my menu.  
-Num 1 bring a menu by Nvidia for their DLSS3 Test Sample.  
-Tab bring a menu originally by Unreal Bench https://www.unreal-bench.com/unreal-engine but I modified the two menu and mixed them.  
+Press Num ² In-Game to access my menu.  
+Tab bring the old menu before I switch to CommonUI
+Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unreal-engine but I modified the two menu and mixed them. 
+
+### What follow next in the old Readme that isn't finished
 
 # Conditions : 
   - You can use this freely in you project
