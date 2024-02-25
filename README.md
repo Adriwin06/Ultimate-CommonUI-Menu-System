@@ -1,3 +1,4 @@
+# A new Readme will come for the new version.
 ## THIS IS STILL IN DEVELOPEMENT AND IS ABSOLUTELY NOT FINISHED.
 ### Sorry if there is no update but I'm currently learning and experimenting with Common UI to use that instead of the default system because it's the future.
 ### SPOILER: It's gonna be incredible. Especially for the back-end where it will be super easy to reuse any UI element. And now it's a full game menu and not only a setting menu. 100% Blueprint, I can't wait to share it.
