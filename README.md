@@ -19,22 +19,24 @@ There are a lot of plugin that I use in this project that are just for making my
 | [Intel Xe SUper Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 
 # Access the Menu
-Press Num ² In-Game to access my menu.  
-Tab bring the old menu before I switch to CommonUI
+Press ² In-Game to access the absolutely not finished pause menu while in third person.  
+Tab bring the old menu before I switch to CommonUI.
 Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unreal-engine but I modified the two menu and mixed them. 
 
 ### What follow next in the old Readme that isn't finished
 
 # Conditions : 
   - You can use this freely in you project
-  - You don't have to credit me (even if I would be glad if you do)
-  - You can't claim that it's you work
+  - You have to credit me
+  - You can't claim that it's your work
 
 ## Known Bugs : 
-  - If you enable the DLSS Super Resolution and then disable it, other upsaclers won't work until the game is restarted with DLSS Super Resolution disabled. (I can't figure out what causes this problem)
-  - Settings will not be saved when exiting/re-enterring the menu
-  - Some settings do nothing at the moment
+  - There is a lot of bugs I can't write everything here but:
+  - Settings are not saved
+  - Settings got reapplied when oppenning the settings menu
+  - Prompt doesn't work in the pause menu
 
 ## To do :
   - Store the menu variable in a Gamesave Blueprint. When the save button will be clicked, it will copy all usefull variable value in it and when the menu is oppened, it will restore them from that Gamesave BP. I'm not sure that's the best way of doing it but I will try and exeperiment on it and see where it go.
-  - Add a lot more settings (full list not available atm because it's too long and not completed)
+  - Add other settings like controls, audio, color blind, etc
+  - Fix all bugs
