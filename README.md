@@ -36,6 +36,7 @@ There is a lot of bugs I can't write everything here but:
   - Not all settings does something right now
 
 ## To do :
+  - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
   - Store the menu variable in a Gamesave Blueprint. When the save button will be clicked, it will copy all usefull variable value in it and when the menu is oppened, it will restore them from that Gamesave BP. I'm not sure that's the best way of doing it but I will try and exeperiment on it and see where it go.
   - Add other settings like controls, audio, color blind, etc
   - Fix all bugs
