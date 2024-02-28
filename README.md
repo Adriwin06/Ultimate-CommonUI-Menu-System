@@ -5,8 +5,8 @@
   -  Easy prompt system
   -  VERY complete graphics settings, like there is probably too much settings for a normal user, with engine setings as well as Post Process Volume Settings
   -  Main Menu with background map & camera movements
-  - Partial French Localization
-  - Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)
+  -  Partial French Localization
+  -  Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)
 
 # Goal
 The goal of this project is to make the Ultimate Game Menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for eveyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as much option as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build you own menu by using this one as a base. To make things even better, everyone can contribute; just contact me on Discord @adriwin78 before so we can talk a bit.
@@ -38,5 +38,5 @@ There is a lot of bugs I can't write everything here but:
 ## To do :
   - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
   - Store the menu variable in a Gamesave Blueprint. When the save button will be clicked, it will copy all usefull variable value in it and when the menu is oppened, it will restore them from that Gamesave BP. I'm not sure that's the best way of doing it but I will try and exeperiment on it and see where it go.
-  - Add other settings like controls, audio, color blind, etc
+  - Add other settings like controls, audio, color blind mode, etc
   - Fix all bugs
