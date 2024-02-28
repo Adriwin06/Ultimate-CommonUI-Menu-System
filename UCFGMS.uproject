@@ -96,5 +96,11 @@
 			"Enabled": true,
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/8e87c3ee75e84deea700026c80d1e941"
 		}
+	],
+	"TargetPlatforms": [
+		"Linux",
+		"LinuxArm64",
+		"Mac",
+		"Windows"
 	]
 }
