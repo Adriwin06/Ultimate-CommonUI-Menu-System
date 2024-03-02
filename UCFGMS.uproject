@@ -95,6 +95,11 @@
 			"Name": "RuntimeTextTranslation",
 			"Enabled": true,
 			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/8e87c3ee75e84deea700026c80d1e941"
+		},
+		{
+			"Name": "LiveBlueprintDebugger",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/6019cfbf80bb4942add3b61d9180380a"
 		}
 	],
 	"TargetPlatforms": [
