@@ -4,6 +4,7 @@
   -  Full WIP Game menu system
   -  Easy prompt system
   -  VERY complete graphics settings, like there is probably too much settings for a normal user, with engine setings as well as Post Process Volume Settings
+  -  Save System that save all settings accross levels and when you quit/reopen the game
   -  Main Menu with background map & camera movements
   -  Partial French Localization
   -  Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)
@@ -20,6 +21,7 @@ There are a lot of plugin that I use in this project that are just for making my
 | [Intel Xe SUper Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 
 # Access the Menu
+The Main Menu is launched automatically.
 Press ² In-Game to access the pause menu while in third person.  
 Tab bring the old menu before I switch to CommonUI.
 Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unreal-engine but I modified the two menu and mixed them. 
@@ -30,13 +32,10 @@ Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unrea
 
 ## Known Bugs : 
 There is a lot of bugs I can't write everything here but:
-  - Settings are not saved
-  - Settings got reapplied when oppenning the settings menu
+  - To reapply your settings, you need to open the "Options" menu in the Main Menu
   - Prompt doesn't work in the pause menu
-  - Not all settings does something right now
 
 ## To do :
   - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
-  - Store the menu variable in a Gamesave Blueprint. When the save button will be clicked, it will copy all usefull variable value in it and when the menu is oppened, it will restore them from that Gamesave BP. I'm not sure that's the best way of doing it but I will try and exeperiment on it and see where it go.
   - Add other settings like controls, audio, color blind mode, etc
   - Fix all bugs
