@@ -1,5 +1,3 @@
-# SaveGame file got corrupted I have no idea why. It was working when I did the commit and now it's corrupted on my PC and when I restore it from here. I really don't know what append but now I need to redo everything. I'm really sorry.
-
 ## THIS IS STILL IN DEVELOPMENT AND IS ABSOLUTELY NOT FINISHED.
 
 # Features 
