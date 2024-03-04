@@ -6,6 +6,7 @@
   -  VERY complete graphics settings, like there is probably too much settings for a normal user, with engine setings as well as Post Process Volume Settings
   -  Save System that save all settings accross levels and when you quit/reopen the game
   -  Main Menu with background map & camera movements
+  -  Controller support (except in the "Options" menu but I'm working on it)
   -  Partial French Localization
   -  Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)
 
