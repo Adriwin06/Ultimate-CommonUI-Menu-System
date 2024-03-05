@@ -1,20 +1,20 @@
 ## THIS IS STILL IN DEVELOPMENT AND IS ABSOLUTELY NOT FINISHED.
 
 # Features 
-  -  Full WIP Game menu system
-  -  Easy prompt system
-  -  VERY complete graphics settings, like there is probably too much settings for a normal user, with engine setings as well as Post Process Volume Settings
-  -  Save System that save all settings accross levels and when you quit/reopen the game
-  -  Main Menu with background map & camera movements
-  -  Controller support (except in the "Options" menu but I'm working on it)
-  -  Partial French Localization
-  -  Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)
+  - Full WIP Game menu system
+  - Easy prompt system
+  - VERY complete graphics settings, like there is probably too much settings for a normal user, with engine settings as well as Post Process Volume Settings
+  - Save System that saves all settings when you quit/reopen the game. You just have to reapply them at the moment.
+  - Main Menu with background map & camera movements
+  - Controller support (except in the "Options" menu but I'm working on it)
+  - Partial French Localization
+  - Every text is on a single string table so it's easier to edit it and to make localization (it's also faster) [for the last commits I didn't take the time to actually add each text in the string table]
 
 # Goal
-The goal of this project is to make the Ultimate Game Menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for eveyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as much option as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build you own menu by using this one as a base. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants.
+The goal of this project is to make the Ultimate Game Menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for everyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as many options as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build your own menu by using this one as a base. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants.
 
 # Requirements
-There are a lot of plugin that I use in this project that are just for making my workflow easier that are absolutely not requiered. BUT the plugins that ARE used in the menu need to be downloaded in order for this to properly work. Here is a table of the requiered Plugins : 
+There are a lot of plugins that I use in this project that are just for making my workflow easier that are absolutely not required. BUT the plugins that ARE used in the menu need to be downloaded in order for this to properly work. Here is a table of the required Plugins: 
 | Name | Description |
 | ------------- | ------------- |
 | [NVIDIA DLSS 3.5](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS 3.5 is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
@@ -32,9 +32,9 @@ Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unrea
   - You have to credit me
 
 ## Known Bugs : 
-There is a lot of bugs I can't write everything here but:
-  - To reapply your settings, you need to open the "Options" menu in the Main Menu
-  - Prompt doesn't work in the pause menu
+Here are the main ones:
+  - To reapply your settings after relaunxjung the game, you need to open the "Options" menu in the Main Menu.
+  - Prompt doesn't work in the pause menu; there is a problem with the player character and it uses that.
 
 ## To do :
   - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
