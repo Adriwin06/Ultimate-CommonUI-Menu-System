@@ -4,8 +4,9 @@
   - Full WIP Game menu system
   - Easy prompt system
   - VERY complete graphics settings, like there is probably too much settings for a normal user, with engine settings as well as Post Process Volume Settings
-  - Save System that saves all settings when you quit/reopen the game. You just have to reapply them at the moment.
+  - Save System that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level.
   - Main Menu with background map & camera movements
+  - Pause Menu (press ²)
   - Controller support (except in the "Options" menu but I'm working on it)
   - Partial French Localization
   - Every text is on a single string table so it's easier to edit it and to make localization (it's also faster) [for the last commits I didn't take the time to actually add each text in the string table]
@@ -33,8 +34,7 @@ Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unrea
 
 ## Known Bugs : 
 Here are the main ones:
-  - To reapply your settings after relaunxjung the game, you need to open the "Options" menu in the Main Menu.
-  - Prompt doesn't work in the pause menu; there is a problem with the player character and it uses that.
+  - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a Make PostProcessSettings node, because the pin doesn't sho up, despite checking the 'show pin' box. As for the clouds settings, I have not yet investigated why they are not working.
 
 ## To do :
   - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
