@@ -9,7 +9,7 @@
   - Pause Menu (press ²)
   - Controller support (except in the "Options" menu but I'm working on it)
   - Partial French Localization
-  - Every text is on a single string table so it's easier to edit it and to make localization (it's also faster) [for the last commits I didn't take the time to actually add each text in the string table]
+  - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
 
 # Goal
 The goal of this project is to make the Ultimate Game Menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for everyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as many options as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build your own menu by using this one as a base. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants.
@@ -34,9 +34,10 @@ Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unrea
 
 # Known Bugs : 
 Here are the main ones:
-  - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a Make PostProcessSettings node, because the pin doesn't sho up, despite checking the 'show pin' box. As for the clouds settings, I have not yet investigated why they are not working.
+  - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a Make PostProcessSettings node, because the pin doesn't show up, despite checking the 'show pin' box. As for the clouds settings, I have not yet investigated why they are not working.
 
 # To do :
-  - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
-  - Add other settings like controls, audio, color blind mode, etc
+  - Make a better Common Bound Action Bar with "Apply", "Reset" and "Cancel" settings, instead of just "Back", in the options menu
+  - Make the Tab List View Working
+  - Add other settings like controls, display, audio, color blind mode, etc
   - Fix all bugs
