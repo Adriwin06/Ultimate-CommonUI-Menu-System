@@ -32,11 +32,11 @@ Num 0 bring a menu originally by Unreal Bench https://www.unreal-bench.com/unrea
   - You can use this freely in you project
   - You have to credit me
 
-## Known Bugs : 
+# Known Bugs : 
 Here are the main ones:
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a Make PostProcessSettings node, because the pin doesn't sho up, despite checking the 'show pin' box. As for the clouds settings, I have not yet investigated why they are not working.
 
-## To do :
+# To do :
   - Make a better Common Bound Action Bar with Apply, Reset and Cancel settings
   - Add other settings like controls, audio, color blind mode, etc
   - Fix all bugs
