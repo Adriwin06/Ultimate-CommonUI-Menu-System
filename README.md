@@ -28,7 +28,7 @@ There are a lot of plugins that I use in this project that are just for making m
   - Main Menu: The main menu is launched automatically.
   - Pause Menu: Press "²", "Escape" or "Start"/"Options" on a controller in-game to access the pause menu.
 
-## Conditions:
+## Conditions
   - You can use this freely in you project
   - You have to credit me
 
