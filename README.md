@@ -5,11 +5,11 @@
 ## Features 
   - Full WIP game menu system
   - Easy prompt system
-  - VERY complete graphics settings, like there is probably too much settings for a normal user, with engine settings as well as Post Process Volume Settings
-  - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level.
+  - VERY complete "options menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings
+  - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level
   - Main menu with background map & camera movements
-  - Pause menu (press ²)
-  - Controller support (except in the "Options" menu but I'm working on it)
+  - Pause menu (press ² or escape if in standalone mode)
+  - Controller support (except for the settings in the "Options" menu but I'm working on it)
   - Partial French localization
   - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
 
@@ -25,10 +25,8 @@ There are a lot of plugins that I use in this project that are just for making m
 | [Intel Xe SUper Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 
 ## Access the Menu
-The main menu is launched automatically.
-Press "²" in-game to access the pause menu while in third person.  
-"Tab" bring the old menu before I switch to CommonUI.
-"Num 0" bring a menu originally by Unreal Bench https://www.unreal-bench.com/unreal-engine but I modified the two menu and mixed them. 
+  - Main Menu: The main menu is launched automatically.
+  - Pause Menu: Press "²", "Escape" or "Start"/"Options" on a controller in-game to access the pause menu.
 
 ## Conditions:
   - You can use this freely in you project
@@ -37,13 +35,17 @@ Press "²" in-game to access the pause menu while in third person.
 ## Known Bugs
 Here are the main ones:
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. As for the clouds settings, I have not yet investigated why they are not working.
+  - Controller does not really work to change the settings inside the "Options" menu .
+  - DLSS Sharpness got reapplied to default when reopening the "Options" menu and relaunching the game.
+  - In the "Options" menu, when a setting panel doesn't fill the entire screen, there is a gap below it without any border.
 
 ## To do
-  - Make the Tab List View working
-  - Add other settings like controls, display, audio, color blind mode, etc
-  - Fix all bugs
+  - Make the Tab List View working.
+  - Add other settings like controls, display, audio, color blind mode, etc.
+  - Fix all bugs.
 
 ### To maybe do in C++
-  - The CommonBoundActionBar actions, instead of hidden action button in the widget that got displayed in this bar.
+  - CommonBoundActionBar actions, instead of hidden action button in the widget that got displayed in this bar.
   - Update the style of buttons in the CommonBoundActionBar of the "Options" menu when switching between controller and mouse & keyboard inputs, avoiding the use of two separate bars with different styles that are hidden based on the input type.
-  - The prompt system.
+  - Prompt system.
+  - Tab List View automation to eliminate the need for separate button blueprints for each tab button.
