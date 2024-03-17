@@ -33,7 +33,6 @@ There are a lot of plugins that I use in this project that are just for making m
   - You have to credit me
 
 ## Known Bugs
-Here are the main ones:
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. As for the clouds settings, I have not yet investigated why they are not working.
   - Controller does not really work to change the settings inside the "Options" menu .
   - DLSS Sharpness got reapplied to default when reopening the "Options" menu and relaunching the game.
