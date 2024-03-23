@@ -1,0 +1,133 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+/*=============================================================================
+	FlattenVelocity.usf: XeSS Flatten Vecolity
+=============================================================================*/
+
+#include "/Engine/Private/Common.ush"
+
+//------------------------------------------------------- COMPILER CONFIG
+
+// Generate vector truncation warnings to errors.
+#pragma warning(error: 3206)
+
+//------------------------------------------------------- CONFIGS
+
+// Define upsampling config
+#define AA_CROSS 1
+
+//------------------------------------------------------- PARAMETERS
+float4 OutputViewportSize;
+float4 OutputViewportRect;
+
+Texture2D SceneDepthTexture;
+Texture2D GBufferVelocityTexture;
+
+float2 InputViewMin;
+float4 InputViewSize;
+// Temporal jitter at the pixel scale.
+float2 TemporalJitterPixels;
+
+RWTexture2D<float2> OutVelocityTex;
+
+//------------------------------------------------------- HELPER FUNCTIONS
+
+float LoadSceneDepthTexture(int2 PixelPos, int2 Offset)
+{
+	return SceneDepthTexture.Load(int3(PixelPos + Offset, 0)).r;
+}
+
+//------------------------------------------------------- MAIN VELOCITY PROCESSING FUNCTION
+
+float2 FlattenAndUpsampleVelocity(uint2 PixelId)
+{
+	float2 ViewportUV = (float2(PixelId) + 0.5f) * OutputViewportSize.zw;
+	float2 PPCo = ViewportUV * InputViewSize.xy + TemporalJitterPixels;	
+	float2 PPCk = floor(PPCo) + 0.5;
+
+	// FIND MOTION OF PIXEL AND NEAREST IN NEIGHBORHOOD
+	// ------------------------------------------------
+	float3 PosN; // Position of this pixel, possibly later nearest pixel in neighborhood.
+	PosN.xy = float2(2 * ViewportUV.x - 1, 1 - 2 * ViewportUV.y);
+
+	// Apply offset to the input depth pixel coordinate.
+    int2 DepthCoord = int2(InputViewMin) + int2(PPCk);
+	PosN.z = LoadSceneDepthTexture(DepthCoord, int2(0,0));
+
+	// Screen position of minimum depth.
+	int2 VelocityOffset = int2(0.0, 0.0);
+
+	{
+		// For motion vector, use camera/dynamic motion from min depth pixel in pattern around pixel.
+		// This enables better quality outline on foreground against different motion background.
+		// Larger 2 pixel distance "x" works best (because AA dilates surface).
+		float4 Depths;
+		Depths.x = LoadSceneDepthTexture(DepthCoord, int2(-AA_CROSS, -AA_CROSS));
+		Depths.y = LoadSceneDepthTexture(DepthCoord, int2( AA_CROSS, -AA_CROSS));
+		Depths.z = LoadSceneDepthTexture(DepthCoord, int2(-AA_CROSS,  AA_CROSS));
+		Depths.w = LoadSceneDepthTexture(DepthCoord, int2( AA_CROSS,  AA_CROSS));
+
+		int2 DepthOffset = int2(AA_CROSS, AA_CROSS);
+		int DepthOffsetXx = int(AA_CROSS);
+		#if HAS_INVERTED_Z_BUFFER
+			// Nearest depth is the largest depth (depth surface 0=far, 1=near).
+			if(Depths.x > Depths.y) 
+			{
+				DepthOffsetXx = -AA_CROSS;
+			}
+			if(Depths.z > Depths.w) 
+			{
+				DepthOffset.x = -AA_CROSS;
+			}
+			float DepthsXY = max(Depths.x, Depths.y);
+			float DepthsZW = max(Depths.z, Depths.w);
+			if(DepthsXY > DepthsZW) 
+			{
+				DepthOffset.y = -AA_CROSS;
+				DepthOffset.x = DepthOffsetXx; 
+			}
+			float DepthsXYZW = max(DepthsXY, DepthsZW);
+			if(DepthsXYZW > PosN.z) 
+			{
+				VelocityOffset = DepthOffset;
+				PosN.z = DepthsXYZW;
+			}
+		#else // !HAS_INVERTED_Z_BUFFER
+			#error Fix me!
+		#endif // !HAS_INVERTED_Z_BUFFER
+	}
+
+	// Camera motion for pixel or nearest pixel (in ScreenPos space).
+	float2 BackN;
+	float4 EncodedVelocity;
+
+	{
+		float4 ThisClip = float4( PosN.xy, PosN.z, 1 );
+		float4 PrevClip = mul( ThisClip, View.ClipToPrevClip );
+		float2 PrevScreen = PrevClip.xy / PrevClip.w;
+		BackN = PosN.xy - PrevScreen;
+
+		float2 VelocityShift = int2(PPCk) + VelocityOffset + int2(InputViewMin);
+		EncodedVelocity = GBufferVelocityTexture.Load(int3(VelocityShift, 0));
+		bool DynamicN = EncodedVelocity.x > 0.0;
+		if (DynamicN)
+		{
+			BackN = DecodeVelocityFromTexture(EncodedVelocity).xy;
+		}
+	}
+
+	float2 velocityColor = -BackN * OutputViewportSize.xy * float2(0.5, -0.5);
+	return velocityColor;
+}
+
+//------------------------------------------------------- ENTRY POINT
+
+[numthreads(THREADGROUP_SIZEX, THREADGROUP_SIZEY, 1)]
+void MainCS(
+	uint2 DispatchThreadId : SV_DispatchThreadID)
+{
+	float2 OutputVelocity = FlattenAndUpsampleVelocity(DispatchThreadId);
+
+	uint2 PixelPos = DispatchThreadId + OutputViewportRect.xy;
+	OutVelocityTex[PixelPos] = OutputVelocity;
+}
