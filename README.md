@@ -9,7 +9,7 @@
   - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level
   - Main menu with background map & camera movements
   - Pause menu (press ² or escape if in standalone mode)
-  - Controller support (except for the settings in the "Options" menu but I'm working on it)
+  - Full controller support (navigate between widget, change settings, etc)
   - Partial French localization
   - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
 
@@ -34,8 +34,7 @@ There are a lot of plugins that I use in this project that are just for making m
 
 ## Known Bugs
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power, AO Quality, and all Clouds settings are not functioning. For all settings except the clouds, the issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. As for the clouds settings, I have not yet investigated why they are not working.
-  - Controller does not really work to change the settings inside the "Options" menu .
-  - In the "Options" menu, when a setting panel doesn't fill the entire screen, there is a gap below it without any border.
+  - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
 
 ## To do
   - Make the Tab List View working.
