@@ -37,8 +37,8 @@ There are a lot of plugins that I use in this project that are just for making m
   - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
 
 ## To do
-  - Make the Tab List View working.
-  - Add other settings like controls, display, audio, color blind mode, etc.
+  - Add other settings like controls, audio device, audio mode, color blind mode, etc.
+  - Add Enhanced Input system (for scrolling in the menu with left thumbstick on a controller & more)
   - Fix all bugs.
 
 ### To maybe do in C++
