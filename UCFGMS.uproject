@@ -5,28 +5,7 @@
 	"Description": "",
 	"Plugins": [
 		{
-			"Name": "ModelingToolsEditorMode",
-			"Enabled": true,
-			"TargetAllowList": [
-				"Editor"
-			]
-		},
-		{
-			"Name": "CommonLoadingScreen",
-			"Enabled": false,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/655175e6418341be8924dd4108d7dd9f"
-		},
-		{
-			"Name": "AutoSizeComments",
-			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/ae89a2c4ab384de0a3f213b23de324f3"
-		},
-		{
 			"Name": "CommonUI",
-			"Enabled": true
-		},
-		{
-			"Name": "EditorDiscordRichPresence",
 			"Enabled": true
 		},
 		{
@@ -44,11 +23,6 @@
 			]
 		},
 		{
-			"Name": "GraphFormatter",
-			"Enabled": true,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/297159d6d3f4425b9c095b18a811a401"
-		},
-		{
 			"Name": "XeSS",
 			"Enabled": true
 		},
@@ -56,15 +30,6 @@
 			"Name": "DLSSMoviePipelineSupport",
 			"Enabled": true,
 			"MarketplaceURL": "https://www.unrealengine.com/marketplace/en-US/product/nvidia-dlss"
-		},
-		{
-			"Name": "NiagaraUIRenderer",
-			"Enabled": false,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/fd24d23ca57b4c59a4e4b7368da250bd",
-			"SupportedTargetPlatforms": [
-				"Win64",
-				"Android"
-			]
 		},
 		{
 			"Name": "Streamline",
@@ -80,34 +45,6 @@
 			"Name": "DLSS",
 			"Enabled": true,
 			"MarketplaceURL": "https://www.unrealengine.com/marketplace/en-US/product/nvidia-dlss"
-		},
-		{
-			"Name": "PaperZD",
-			"Enabled": false,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/c4b43502026047d89296cd7bffd92828"
-		},
-		{
-			"Name": "RecentBlueprintMenu",
-			"Enabled": false,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/484f72297c144cf9b5c35fea3359500c"
-		},
-		{
-			"Name": "RuntimeTextTranslation",
-			"Enabled": false,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/8e87c3ee75e84deea700026c80d1e941"
-		},
-		{
-			"Name": "LiveBlueprintDebugger",
-			"Enabled": false,
-			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/6019cfbf80bb4942add3b61d9180380a"
-		},
-		{
-			"Name": "WebBrowserWidget",
-			"Enabled": true
-		},
-		{
-			"Name": "WebBrowserNativeProxy",
-			"Enabled": true
 		}
 	],
 	"TargetPlatforms": [
