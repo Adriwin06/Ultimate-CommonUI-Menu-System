@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -68,30 +68,42 @@ public:
 
 	HRESULT CreateSwapChainForHwnd(IDXGIFactory2* pFactory, IUnknown* pDevice, HWND hWnd, const DXGI_SWAP_CHAIN_DESC1* pDesc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullScreenDesc, IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain) override final
 	{
+		HRESULT DXGIResult = LONG_ERROR;
 		if (!StreamlineRHI->IsSwapchainHookingAllowed())
 		{
-			return pFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
+			DXGIResult = pFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
 		}
-		// TODO: what happens if a second swapchain is created while PIE is active?
-		IDXGIFactory2* SLFactory = pFactory;
-		sl::Result Result = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
-		checkf(Result == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		else
+		{
+			// TODO: what happens if a second swapchain is created while PIE is active?
+			IDXGIFactory2* SLFactory = pFactory;
+			sl::Result SLResult = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
+			checkf(SLResult == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(SLResult)));
+			DXGIResult = SLFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
+		}
 
-		return SLFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
+		StreamlineRHI->OnSwapchainCreated(ppSwapChain);
+		return DXGIResult;
 	}
 
 	HRESULT CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain) override final
 	{
+		HRESULT DXGIResult = LONG_ERROR;
 		if (!StreamlineRHI->IsSwapchainHookingAllowed())
 		{
-			return pFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+			DXGIResult = pFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
 		}
-		// TODO: what happens if a second swapchain is created while PIE is active?
-		IDXGIFactory* SLFactory = pFactory;
-		sl::Result Result = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
-		checkf(Result == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		else
+		{
+			// TODO: what happens if a second swapchain is created while PIE is active?
+			IDXGIFactory* SLFactory = pFactory;
+			sl::Result SLResult = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
+			checkf(SLResult == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(SLResult)));
+			DXGIResult = SLFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+		}
 
-		return SLFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+		StreamlineRHI->OnSwapchainCreated(*ppSwapChain);
+		return DXGIResult;
 	}
 private:
 	const FStreamlineRHI* StreamlineRHI;
@@ -141,19 +153,18 @@ public:
 
 		if (IsStreamlineSupported())
 		{
-			sl::Result Result = SLisFeatureSupported(sl::kFeatureDLSS_G, SLAdapterInfo);
-			UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("SLisFeatureSupported(sl::kFeatureDLSS_G) -> (%d, %s)"), Result, ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
-		
-			if (Result == sl::Result::eOk)
+			TTuple<bool, FString> bSwapchainProvider = IsSwapChainProviderRequired(SLAdapterInfo);
+			if (bSwapchainProvider.Get<0>())
 			{
-
-				UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("Registering FStreamlineD3D11DXGISwapchainProvider as IDXGISwapchainProvider"));
+				UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("Registering FStreamlineD3D11DXGISwapchainProvider as IDXGISwapchainProvider, due to %s"), *bSwapchainProvider.Get<1>());
 				CustomSwapchainProvider = MakeUnique<FStreamlineD3D11DXGISwapchainProvider>(this);
 				IModularFeatures::Get().RegisterModularFeature(IDXGISwapchainProvider::GetModularFeatureName(), CustomSwapchainProvider.Get());
+				bIsSwapchainProviderInstalled = true;
 			}
 			else
 			{
-				UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("Skip registering IDXGISwapchainProvider, DLSS-FG unavailable (%s)"), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+				UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("Skip registering IDXGISwapchainProvider, due to %s"), *bSwapchainProvider.Get<1>());
+				bIsSwapchainProviderInstalled = false;
 			}
 		}
 
@@ -172,37 +183,56 @@ public:
 		UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("%s Leave"), ANSI_TO_TCHAR(__FUNCTION__));
 	}
 
-	virtual void TagTexture(FRHICommandList& CmdList, const FRHITextureWithRect& InResource, EStreamlineResource InResourceTag, uint32 InViewID) final
+	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const TArrayView<const FRHIStreamlineResource> InResources) final
 	{
-		if (InResource.Texture && InResource.Texture->IsValid())
+
+#if ENGINE_PROVIDES_ID3D11DYNAMICRHI
+		void* NativeCmdBuffer = D3D11RHI->RHIGetDeviceContext();
+#else
+		void* NativeCmdBuffer = D3D11RHI->GetDeviceContext();
+#endif
+
+
+		for (const FRHIStreamlineResource& Resource : InResources)
 		{
 			sl::Resource SLResource;
 			FMemory::Memzero(SLResource);
+			if (Resource.Texture && Resource.Texture->IsValid())
+			{
+				SLResource.native = Resource.Texture->GetNativeResource();
+			}
 
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION < 27)
-			void* NativeCmdBuffer = nullptr;
-#else
-			void* NativeCmdBuffer = D3D11RHI->FDynamicRHI::RHIGetNativeCommandBuffer();
-#endif
-			SLResource.native = InResource.Texture->GetNativeResource();
 			SLResource.type = sl::ResourceType::eTex2d;
+
 			// no resource state in d3d11
 			SLResource.state = 0;
 
 			sl::ResourceTag Tag;
 			Tag.resource = &SLResource;
-			Tag.type = ToSL(InResourceTag);
+			Tag.type = ToSL(Resource.StreamlineTag);
 			// TODO: sl::ResourceLifecycle::eValidUntilPreset would be more efficient, are there any textures where it's applicable?
 			Tag.lifecycle = sl::ResourceLifecycle::eOnlyValidNow;
-			Tag.extent = ToSL(InResource.ViewRect);
+			Tag.extent = ToSL(Resource.ViewRect);
 
 			SLsetTag(sl::ViewportHandle(InViewID), &Tag, 1, NativeCmdBuffer);
-		}
-		else
-		{
-				TagNullTexture(InResourceTag, InViewID);
+			
 		}
 	}
+	virtual void* GetCommandBuffer(FRHICommandList& CmdList, FRHITexture* Texture) override final
+	{
+
+#if ENGINE_PROVIDES_ID3D11DYNAMICRHI
+		return D3D11RHI->RHIGetDeviceContext();
+#else
+		return D3D11RHI->GetDeviceContext();
+#endif
+	}
+
+	virtual void PostStreamlineFeatureEvaluation(FRHICommandList& CmdList, FRHITexture* Texture) final
+	{
+	}
+
+
 
 	virtual const sl::AdapterInfo* GetAdapterInfo() override final
 	{
@@ -210,6 +240,11 @@ public:
 	}
 
 	virtual bool IsDLSSGSupportedByRHI() const override final
+	{
+		return true;
+	}
+
+	virtual bool IsDeepDVCSupportedByRHI() const override final
 	{
 		return true;
 	}
@@ -228,6 +263,22 @@ public:
 #else
 		VerifyD3D11Result(LastError.hres, "Streamline/DLSSG present", __FILE__, __LINE__, static_cast<ID3D11Device*>(GDynamicRHI->RHIGetNativeDevice()));
 #endif
+	}
+
+	virtual bool IsStreamlineSwapchainProxy(void* NativeSwapchain) const override final
+	{
+		TRefCountPtr<IUnknown> NativeInterface;
+		const sl::Result Result = SLgetNativeInterface(NativeSwapchain, IID_PPV_ARGS_Helper(NativeInterface.GetInitReference()));
+
+		if (Result == sl::Result::eOk)
+		{
+			return NativeInterface != NativeSwapchain;
+		}
+		else
+		{
+			UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("SLgetNativeInterface(%p) failed (%d, %s)"), NativeSwapchain, Result, ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		}
+		return false;
 	}
 
 
@@ -252,7 +303,7 @@ private:
 void FStreamlineD3D11RHIModule::StartupModule()
 {
 	auto CVarInitializePlugin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.InitializePlugin"));
-	if (CVarInitializePlugin && !CVarInitializePlugin->GetBool())
+	if (CVarInitializePlugin && !CVarInitializePlugin->GetBool() || (FParse::Param(FCommandLine::Get(), TEXT("slno"))))
 	{
 		UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("Initialization of StreamlineD3D11RHI is disabled."));
 		return;

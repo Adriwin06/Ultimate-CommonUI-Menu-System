@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -27,7 +27,7 @@ public:
 		// Only cook for the platforms/RHIs where DLSS-FG is supported, which is DX11,DX12 [on Win64]
 		return 	IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
 				IsPCPlatform(Parameters.Platform) && (
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION <= 26)
+#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION < 27)
 					IsD3DPlatform(Parameters.Platform, false));
 #else
 					IsD3DPlatform(Parameters.Platform));
@@ -81,21 +81,12 @@ FRDGTextureRef AddStreamlineUIHintExtractionPass(
 	const FIntRect OutputViewRect = { FIntPoint::ZeroValue,BackBufferDimension };
 
 	FRDGTextureDesc UIHintTextureDesc =
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-	FRDGTextureDesc::Create2DDesc(
-#else
 	FRDGTextureDesc::Create2D(
-#endif
+
 		OutputViewRect.Size(),
 		PF_B8G8R8A8,
 		FClearValueBinding::Black,
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-		TexCreate_None,
-		TexCreate_ShaderResource | TexCreate_RenderTargetable | TexCreate_UAV,
-		/* bInForceSeparateTargetAndShaderResource = */ false);
-#else
 		TexCreate_ShaderResource | TexCreate_UAV);
-#endif
 	const TCHAR* OutputName = TEXT("Streamline.UIColorAndAlpha");
 
 	FRDGTextureRef UIHintTexture = GraphBuilder.CreateTexture(
@@ -137,8 +128,10 @@ FRDGTextureRef AddStreamlineUIHintExtractionPass(
 
 	FComputeShaderUtils::AddPass(
 		GraphBuilder,
-		RDG_EVENT_NAME("Streamline UI Hint extraction (%dx%d)", 
-			OutputViewRect.Width(), OutputViewRect.Height()
+		RDG_EVENT_NAME("Streamline UI Hint extraction (%dx%d) [%d,%d -> %d,%d]", 
+			OutputViewRect.Width(), OutputViewRect.Height(),
+			OutputViewRect.Min.X, OutputViewRect.Min.Y,
+			OutputViewRect.Max.X, OutputViewRect.Max.Y
 		),
 		ComputeShader,
 		PassParameters,

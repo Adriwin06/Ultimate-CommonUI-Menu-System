@@ -115,6 +115,7 @@ class FFXFrameInterpolationCustomPresent : public IFFXFrameInterpolationCustomPr
 	bool bHasValidInterpolatedRT;
 	bool bEnabled;
 	bool bResized;
+	bool bUseFFXSwapchain;
 public:
 	FFXFrameInterpolationCustomPresent();
 	virtual ~FFXFrameInterpolationCustomPresent();
@@ -175,6 +176,8 @@ public:
 	void SetMode(EFFXFrameInterpolationPresentMode Mode) override final;
 	void SetCustomPresentStatus(FFXFrameInterpolationCustomPresentStatus Flag);
 	EFFXFrameInterpolationPresentMode GetMode() const { return Mode; }
+	bool GetUseFFXSwapchain() const { return bUseFFXSwapchain; }
+	void SetUseFFXSwapchain(bool const bEnabled) override final;;
 
 	FFXFIResourceRef UpdateContexts(FRDGBuilder& GraphBuilder, uint32 UniqueID, FfxFsr3UpscalerContextDescription const& FsrDesc, FIntPoint ViewportSizeXY, FfxSurfaceFormat BackBufferFormat);
 

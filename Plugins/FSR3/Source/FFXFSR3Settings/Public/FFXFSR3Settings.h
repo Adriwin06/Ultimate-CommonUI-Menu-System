@@ -99,6 +99,8 @@ extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3UseExperimentalSS
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3DeDitherMode;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3QualityMode;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3QuantizeInternalTextures;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveMaskPreDOFTranslucencyScale;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3ReactiveMaskPreDOFTranslucencyMax;
 
 //------------------------------------------------------------------------------------------------------
 // Console variables for Frame Interpolation.
@@ -236,6 +238,12 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveHistoryTranslucencyLumaBias", DisplayName = "Translucency Luminance Bias", ClampMin = 0, ClampMax = 1, ToolTip = "Biases the translucency contribution to suppress history via the reactive mask by the luminance of the transparency."))
 		float ReactiveHistoryTranslucencyLumaBias;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveMaskPreDOFTranslucencyScale", DisplayName = "Pre Depth-of-Field Translucency Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Scales how much contribution pre-Depth-of-Field translucency color makes to the reactive mask. Higher values will make translucent materials less reactive which can reduce smearing."))
+		float PreDOFTranslucencyScale;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveMaskPreDOFTranslucencyMax", DisplayName = "Pre Depth-of-Field Translucency Max/Average", ToolTip = "Toggle to determine whether to use the max(SceneColorPostDepthOfField - SceneColorPreDepthOfField) or length(SceneColorPostDepthOfField - SceneColorPreDepthOfField) to determine the contribution of Pre-Depth-of-Field translucency."))
+		bool bPreDOFTranslucencyMax;
 };
 
 class FFXFSR3SettingsModule final : public IModuleInterface

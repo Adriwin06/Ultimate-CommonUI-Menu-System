@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -42,13 +42,23 @@ enum class EStreamlineResource
 	Depth,
 	MotionVectors,
 	HUDLessColor,
-	UIColorAndAlpha
+	UIColorAndAlpha,
+	Backbuffer,
+	ScalingOutputColor,
+	// we use this to size some arrays statically somewhere, but we also don't wanto have a real new enum value so we don't have to handle switch statements ...
+	Last = ScalingOutputColor
 };
 
-struct FRHITextureWithRect
+struct FRHIStreamlineResource
 {
 	FRHITexture* Texture = nullptr;
 	FIntRect ViewRect = FIntRect(FIntPoint::ZeroValue, FIntPoint::ZeroValue);
+	EStreamlineResource StreamlineTag;
+
+	static FRHIStreamlineResource NullResource(EStreamlineResource InTag)
+	{
+		return { nullptr, FIntRect(FIntPoint::ZeroValue, FIntPoint::ZeroValue), InTag };
+	}
 };
 
 // TODO STREAMLINE rename variables
@@ -68,15 +78,6 @@ struct STREAMLINERHI_API FRHIStreamlineArguments
 	using FVector4f = ::FVector4f;
 #endif
 	
-
-
-	//! Dept buffer - IMPORTANT - Must be suitable to use with clipToPrevClip transformation (see Constants below)
-	FRHITextureWithRect InputDepth;
-	//! Object and optional camera motion vectors (see Constants below)
-	FRHITextureWithRect InputMotionVectors;
-	//! Color buffer with all post-processing effects applied but without any UI/HUD elements
-	FRHITextureWithRect InputHUDLessColor;
-	
 	// View ID across all active views
 	uint32 ViewId;
 
@@ -84,8 +85,6 @@ struct STREAMLINERHI_API FRHIStreamlineArguments
 
 	//! Specifies if previous frame has no connection to the current one (motion vectors are invalid)
 	bool bReset;
-	//! Specifies if application is not currently rendering game frames (paused in menu, playing video cut-scenes)
-	bool bIsNotRenderingGameFrames;
 
 	//! Specifies if depth values are inverted (value closer to the camera is higher) or not.
 	bool bIsDepthInverted;
@@ -153,20 +152,51 @@ private:
 	uint32_t LastFrameCounter;
 };
 
+
+class  FStreamlineRHIModule;
+
+
 class STREAMLINERHI_API FStreamlineRHI
 {
+
+	friend class FStreamlineRHIModule;
 public:
 	virtual ~FStreamlineRHI();
 
 	virtual void SetStreamlineData(FRHICommandList& CmdList, const FRHIStreamlineArguments& InArguments);
-	virtual void TagTexture(FRHICommandList& CmdList, const FRHITextureWithRect& InResource, EStreamlineResource InResourceTag, uint32 InViewID) = 0;
-	static void TagNullTexture(EStreamlineResource InResourceTag, uint32 InViewID);
+	void StreamlineEvaluateDeepDVC(FRHICommandList& CmdList, const FRHIStreamlineResource& InputOutput, sl::FrameToken* FrameToken, uint32 ViewID);
+	
+	void TagTextures(FRHICommandList& CmdList, uint32 InViewID, std::initializer_list< FRHIStreamlineResource> InResources)
+	{
+		TagTextures(CmdList, InViewID, MakeArrayView(InResources));
+	}
 
+	void TagTexture(FRHICommandList& CmdList, uint32 InViewID, const FRHIStreamlineResource& InResource)
+	{
+		TagTextures(CmdList, InViewID, MakeArrayView<const FRHIStreamlineResource>(&InResource, 1));
+	}
+
+	// Implemented by API specific  subclasses
+	//	
+public: 
+	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const TArrayView<const FRHIStreamlineResource> InResources) = 0;
 	virtual const sl::AdapterInfo* GetAdapterInfo() = 0;
-
 	virtual void APIErrorHandler(const sl::APIError& LastError) = 0;
 
+protected:
+
+	virtual void* GetCommandBuffer(FRHICommandList& CmdList, FRHITexture* Texture) = 0;
+	virtual void PostStreamlineFeatureEvaluation(FRHICommandList& CmdList, FRHITexture* Texture) = 0;
+
+
+	TTuple<bool, FString> IsSwapChainProviderRequired(const sl::AdapterInfo& AdapterInfo) const;
+public:
 	virtual bool IsDLSSGSupportedByRHI() const
+	{
+		return false;
+	}
+
+	virtual bool IsDeepDVCSupportedByRHI() const
 	{
 		return false;
 	}
@@ -180,8 +210,18 @@ public:
 
 	sl::FrameToken* GetFrameToken(uint64 FrameCounter);
 	bool IsSwapchainHookingAllowed() const;
+	bool IsSwapchainProviderInstalled() const;
+	void ReleaseStreamlineResourcesForAllFeatures(uint32 ViewID);
+
+	// that needs to call some virtual methods that we can't call in the ctor. Just C++ things
+	void PostPlatformRHICreateInit();
+
+	void OnSwapchainDestroyed(void* InNativeSwapchain) const;
+	void OnSwapchainCreated(void* InNativeSwapchain) const;
 
 protected:
+
+
 	FStreamlineRHI(const FStreamlineRHICreateArguments& Arguments);
 
 #if WITH_EDITOR
@@ -199,15 +239,31 @@ protected:
 	FDelegateHandle EndPIEHandle;
 #endif
 
+
+	mutable int32 NumActiveSwapchainProxies = 0;
+	virtual bool IsStreamlineSwapchainProxy(void* NativeSwapchain) const = 0;
+	
+
 #if PLATFORM_WINDOWS
 	// whether an HRESULT is a DXGI_STATUS_*
 	bool IsDXGIStatus(const HRESULT HR);
 #endif
 
+	
+
 	FDynamicRHI* DynamicRHI = nullptr;
 	TUniquePtr<FSLFrameTokenProvider> FrameTokenProvider = nullptr;
 
 	static bool bIsIncompatibleAPICaptureToolActive;
+
+
+	bool bIsSwapchainProviderInstalled = false;
+	static TArray<sl::Feature> FeaturesRequestedAtSLInitTime;
+	
+
+	TArray<sl::Feature> LoadedFeatures;
+	TArray<sl::Feature> SupportedFeatures;
+
 };
 
 class IStreamlineRHIModule : public IModuleInterface
@@ -223,7 +279,7 @@ public:
 	STREAMLINERHI_API void InitializeStreamline();
 	STREAMLINERHI_API void ShutdownStreamline();
 
-	/** IModuleInterface implementation */
+	/** IModuleInterface implementation */ 
 	virtual void StartupModule();
 	virtual void ShutdownModule();
 
@@ -248,3 +304,4 @@ namespace sl
 
 STREAMLINERHI_API void LogStreamlineFeatureSupport(sl::Feature Feature, const sl::AdapterInfo& Adapter);
 STREAMLINERHI_API void LogStreamlineFeatureRequirements(sl::Feature Feature, const sl::FeatureRequirements& Requirements);
+STREAMLINERHI_API FString CurrentThreadName();

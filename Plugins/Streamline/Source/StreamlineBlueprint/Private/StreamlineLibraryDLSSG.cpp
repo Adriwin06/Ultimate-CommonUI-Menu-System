@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -353,6 +353,8 @@ void UStreamlineLibraryDLSSG::Startup()
 #if WITH_STREAMLINE
 	// This initialization will likely not succeed unless this module has been moved to PostEngineInit, and that's ok
 	UStreamlineLibraryDLSSG::TryInitDLSSGLibrary();
+
+	UStreamlineLibrary::RegisterFeatureSupport(UStreamlineFeature::DLSSG, UStreamlineLibraryDLSSG::QueryDLSSGSupport());
 #else
 	UE_LOG(LogStreamlineBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DLSS-G and will always return UStreamlineDLSSGSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off DLSS-G related UI elements."));
 	UStreamlineLibraryDLSSG::DLSSGSupport = UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;

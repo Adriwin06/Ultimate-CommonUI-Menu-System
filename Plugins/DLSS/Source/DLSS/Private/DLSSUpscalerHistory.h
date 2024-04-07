@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -39,7 +39,8 @@ private:
 	friend class FDLSSSceneViewFamilyUpscaler;
 
 	FDLSSStateRef DLSSState;
-
+	// in 5.3+ the debug name must match the upscaler's debug name, and since the name includes whether we're running DLSS-RR the history needs to know the denoiser mode
+	ENGXDLSSDenoiserMode DenoiserMode;
 
 
 	virtual uint32 AddRef() const final
@@ -57,7 +58,7 @@ private:
 		return FRefCountBase::GetRefCount();
 	}
 
-	FDLSSUpscalerHistory(FDLSSStateRef InDLSSState);
+	FDLSSUpscalerHistory(FDLSSStateRef InDLSSState, ENGXDLSSDenoiserMode InDenoiserMode);
 	~FDLSSUpscalerHistory();
 
 };

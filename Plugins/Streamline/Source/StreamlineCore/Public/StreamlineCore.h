@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -25,6 +25,7 @@ enum class EStreamlineFeature
 {
 	DLSSG,
 	Reflex,
+	DeepDVC,
 	NumValues
 };
 
@@ -51,6 +52,7 @@ public:
 
 	virtual EStreamlineSupport QueryStreamlineSupport() const = 0;
 	virtual EStreamlineFeatureSupport QueryDLSSGSupport() const = 0;
+	virtual EStreamlineFeatureSupport QueryDeepDVCSupport() const = 0;
 };
 
 class FStreamlineCoreModule final: public IStreamlineModuleInterface
@@ -62,6 +64,7 @@ public:
 	virtual void ShutdownModule();
 	virtual EStreamlineSupport QueryStreamlineSupport() const override;
 	virtual EStreamlineFeatureSupport QueryDLSSGSupport() const override;
+	virtual EStreamlineFeatureSupport QueryDeepDVCSupport() const override;
 
 	static FStreamlineRHI* GetStreamlineRHI();
 private:

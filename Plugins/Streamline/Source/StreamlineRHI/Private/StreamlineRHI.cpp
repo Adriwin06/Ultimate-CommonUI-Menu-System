@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -27,6 +27,18 @@
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 
+#include "sl_deepdvc.h"
+#include "sl_dlss_g.h"
+#include "sl.h"
+
+static TAutoConsoleVariable<int32> CVarStreamlineMaxNumSwapchainProxies(
+	TEXT("r.Streamline.MaxNumSwapchainProxies"),
+	-1,
+	TEXT("Determines how many Streamline swapchain proxies can be created. This impacts compatibility with some Streamline features that have restrictions on that\n")
+	TEXT(" -1: automatic, depending on enabled Streamline features (default)\n")
+	TEXT(" 0: no maximum")
+	TEXT(" 1..n: only create a Streamline swapchain proxy for that many swapchains/windows"),
+	ECVF_RenderThreadSafe);
 
 DEFINE_LOG_CATEGORY(LogStreamlineRHI);
 DEFINE_LOG_CATEGORY_STATIC(LogStreamlineAPI, Log, All);
@@ -110,7 +122,7 @@ static int32 GetNGXAppID(bool bIsDLSSPluginEnabled)
 
 // TODO: the derived RHIs will set this to true during their initialization
 bool FStreamlineRHI::bIsIncompatibleAPICaptureToolActive = false;
-
+TArray<sl::Feature> FStreamlineRHI::FeaturesRequestedAtSLInitTime;
 FSLFrameTokenProvider::FSLFrameTokenProvider() : Section()
 {
 	// truncated to 32 bits because that's all SL stores
@@ -143,6 +155,8 @@ FStreamlineRHI::FStreamlineRHI(const FStreamlineRHICreateArguments& Arguments)
 	BeginPIEHandle = FEditorDelegates::BeginPIE.AddLambda([this](bool bIsSimulating) { OnBeginPIE(bIsSimulating); });
 	EndPIEHandle = FEditorDelegates::EndPIE.AddLambda([this](bool bIsSimulating) { OnEndPIE(bIsSimulating); });
 #endif
+
+	
 	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Leave"), ANSI_TO_TCHAR(__FUNCTION__));
 }
 
@@ -152,6 +166,30 @@ bool FStreamlineRHI::IsSwapchainHookingAllowed() const
 	{
 		return false;
 	}
+
+
+	int32 MaxNumSwapchainProxies = CVarStreamlineMaxNumSwapchainProxies.GetValueOnGameThread();
+
+	// automatic 
+	if (MaxNumSwapchainProxies == -1)
+	{
+		// TODO make this depend on the required features and their limitations.
+		MaxNumSwapchainProxies = 1;
+	}
+
+	// no maximum
+	if (MaxNumSwapchainProxies == 0)
+	{
+		/* 🦗 🦗 🦗 */
+	}
+	else
+	{
+		if (NumActiveSwapchainProxies >= MaxNumSwapchainProxies)
+		{
+			return false;
+		}
+	}
+
 #if WITH_EDITOR
 	if (GIsEditor)
 	{
@@ -171,6 +209,71 @@ bool FStreamlineRHI::IsSwapchainHookingAllowed() const
 	}
 #endif
 	return true;
+}
+
+bool FStreamlineRHI::IsSwapchainProviderInstalled() const
+{
+	return bIsSwapchainProviderInstalled;
+}
+
+void FStreamlineRHI::ReleaseStreamlineResourcesForAllFeatures(uint32 ViewID)
+{
+	for (sl::Feature Feature : LoadedFeatures)
+	{
+		SLFreeResources(Feature, ViewID);
+	}
+}
+
+void FStreamlineRHI::PostPlatformRHICreateInit()
+{
+	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Enter"), ANSI_TO_TCHAR(__FUNCTION__));
+	
+	LoadedFeatures = FeaturesRequestedAtSLInitTime.FilterByPredicate([](sl::Feature Feature) 
+		{
+		bool bIsLoaded = false;
+		SLisFeatureLoaded(Feature, bIsLoaded);
+		return bIsLoaded;
+		});
+
+	UE_LOG(LogStreamlineRHI, Log, TEXT("LoadedFeatures = %s)"),
+		*FString::JoinBy(LoadedFeatures, TEXT(", "), [](const sl::Feature& Feature) { return FString::Printf(TEXT("%s (%u)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), Feature); }));
+
+	SupportedFeatures = FStreamlineRHI::LoadedFeatures.FilterByPredicate([this](sl::Feature Feature) { return SLisFeatureSupported(Feature, *GetAdapterInfo()) == sl::Result::eOk; });
+	
+	UE_LOG(LogStreamlineRHI, Log, TEXT("SupportedFeatures = %s)"),
+		*FString::JoinBy(SupportedFeatures, TEXT(", "), [](const sl::Feature& Feature) { return FString::Printf(TEXT("%s (%u)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), Feature); }));
+
+	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Leave"), ANSI_TO_TCHAR(__FUNCTION__));
+}
+void FStreamlineRHI::OnSwapchainCreated(void* InNativeSwapchain) const
+{
+
+	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Enter %s NumActiveSwapchainProxies=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), NumActiveSwapchainProxies);
+
+	const bool bIsSwapchainProxy = IsStreamlineSwapchainProxy(InNativeSwapchain);
+	if (bIsSwapchainProxy)
+	{
+		++NumActiveSwapchainProxies;
+	}
+	UE_LOG(LogStreamlineRHI, Log, TEXT("NativeSwapChain=%p IsSwapChainProxy=%u , NumActiveSwapchainProxies=%d"), InNativeSwapchain, bIsSwapchainProxy, NumActiveSwapchainProxies);
+	
+	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Leave %u"), ANSI_TO_TCHAR(__FUNCTION__), NumActiveSwapchainProxies);
+}
+
+void FStreamlineRHI::OnSwapchainDestroyed(void* InNativeSwapchain) const
+{
+	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Enter %s NumActiveSwapchainProxies=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), NumActiveSwapchainProxies);
+
+	const bool bIsSwapchainProxy = IsStreamlineSwapchainProxy(InNativeSwapchain);
+	
+	if (bIsSwapchainProxy)
+	{
+		--NumActiveSwapchainProxies;
+		check(NumActiveSwapchainProxies >= 0);
+	}
+
+	UE_LOG(LogStreamlineRHI, Log, TEXT("NativeSwapchain=%p IsSwapChainProxy=%u, NumActiveSwapchainProxies=%d "), InNativeSwapchain, bIsSwapchainProxy, NumActiveSwapchainProxies);
+	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Leave %u"), ANSI_TO_TCHAR(__FUNCTION__), NumActiveSwapchainProxies);
 }
 
 bool FStreamlineRHI::IsStreamlineAvailable() const
@@ -214,28 +317,6 @@ void FStreamlineRHI::SetStreamlineData(FRHICommandList& CmdList, const FRHIStrea
 
 	SLsetConstants(StreamlineConstants, *GetFrameToken(InArguments.FrameId), sl::ViewportHandle(InArguments.ViewId));
 
-	TagTexture(CmdList, InArguments.InputDepth, EStreamlineResource::Depth, InArguments.ViewId);
-	TagTexture(CmdList, InArguments.InputMotionVectors, EStreamlineResource::MotionVectors, InArguments.ViewId);
-	
-	TagTexture(CmdList, InArguments.InputHUDLessColor, EStreamlineResource::HUDLessColor, InArguments.ViewId);
-}
-
-void FStreamlineRHI::TagNullTexture(EStreamlineResource InResourceTag, uint32 InViewID)
-{
-	sl::Resource SLResource;
-	FMemory::Memzero(SLResource);
-
-	SLResource.native = nullptr;
-	SLResource.type = sl::ResourceType::eCount;
-	SLResource.state = 0;
-	sl::ResourceTag Tag;
-	Tag.resource = &SLResource;
-	Tag.type = ToSL(InResourceTag);
-	// TODO: sl::ResourceLifecycle::eValidUntilPreset would be more efficient, are there any textures where it's applicable?
-	Tag.lifecycle = sl::ResourceLifecycle::eOnlyValidNow;
-	Tag.extent = ToSL(FIntRect());
-
-	SLsetTag(sl::ViewportHandle(InViewID), &Tag, 1, nullptr);
 }
 
 sl::FrameToken* FStreamlineRHI::GetFrameToken(uint64 FrameCounter)
@@ -245,6 +326,21 @@ sl::FrameToken* FStreamlineRHI::GetFrameToken(uint64 FrameCounter)
 		return nullptr;
 	}
 	return FrameTokenProvider->GetTokenForFrame(FrameCounter);
+}
+
+void FStreamlineRHI::StreamlineEvaluateDeepDVC(FRHICommandList& CmdList, const FRHIStreamlineResource& InputOutput, sl::FrameToken* FrameToken, uint32 ViewID)
+{
+	check(InputOutput.StreamlineTag == EStreamlineResource::ScalingOutputColor);
+	TagTexture(CmdList, ViewID, InputOutput);
+	sl::Feature SLFeature = sl::kFeatureDeepDVC;
+
+
+	sl::CommandBuffer* NativeCommandBuffer = GetCommandBuffer(CmdList, InputOutput.Texture);
+	sl::ViewportHandle SLView(ViewID);
+
+	const sl::BaseStructure* SLInputs[] = { &SLView };
+	SLevaluateFeature(SLFeature, *FrameToken, SLInputs, UE_ARRAY_COUNT(SLInputs), NativeCommandBuffer);
+	PostStreamlineFeatureEvaluation(CmdList, InputOutput.Texture);
 }
 
 FStreamlineRHI::~FStreamlineRHI()
@@ -283,6 +379,54 @@ bool FStreamlineRHI::IsDXGIStatus(const HRESULT HR)
 	}
 }
 #endif
+
+
+TTuple<bool, FString> FStreamlineRHI::IsSwapChainProviderRequired(const sl::AdapterInfo& AdapterInfo) const
+{
+	TTuple <bool, FString> Result(false, TEXT(""));
+
+	// TODO query SL for which of all features implemented in UE need a swapchain proxy
+	TArray<sl::Feature> FeaturesThatNeedSwapchainProvider = { sl::kFeatureImGUI, sl::kFeatureDLSS_G
+		/*	, sl::kFeatureDeepDVC, sl::kFeatureReflex, sl::kFeaturePCL */
+	};
+
+	TArray<FString> SLResultStrings;
+
+	TSet<sl::Result> UniqueResults;
+	for (sl::Feature Feature : FeaturesThatNeedSwapchainProvider)
+	{
+		sl::Result SLResult  = SLisFeatureSupported(Feature, AdapterInfo);
+
+		UniqueResults.Add(SLResult);
+		
+		// put the supported features at the begin of what eventually will be logged
+		SLResultStrings.Insert(
+			FString::Printf(TEXT("(%s, %s)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), ANSI_TO_TCHAR(sl::getResultAsStr(SLResult))), 
+			(SLResult == sl::Result::eOk) || (SLResultStrings.Num() == 0) ? 0 : SLResultStrings.Num() - 1
+		);
+
+	}
+	const FString CombinedResultString = FString::Join(SLResultStrings, TEXT(","));
+	
+	if (UniqueResults.Contains(sl::Result::eOk))
+	{
+		Result = MakeTuple(true, FString::Printf(TEXT("a supported feature needing a swap chain provider: %s. This can be overriden with -sl{no}swapchainprovider"), *CombinedResultString));
+	}
+	else
+	{
+		Result = MakeTuple(false, FString::Printf(TEXT("no supported feature needing a swap chain provider: %s. This can be overriden with -sl{no}swapchainprovider"), *CombinedResultString));
+	}
+
+	if (FParse::Param(FCommandLine::Get(), TEXT("-slswapchainprovider")))
+	{
+		Result = MakeTuple(true, TEXT("-slswapchainprovider command line"));
+	}
+	else if (FParse::Param(FCommandLine::Get(), TEXT("slnoswapchainprovider")))
+	{
+		Result = MakeTuple(false, TEXT("-slnoswapchainprovider command line"));
+	}
+	return Result;
+}
 
 
 static TUniquePtr<FStreamlineRHI> GStreamlineRHI;
@@ -360,6 +504,9 @@ STREAMLINERHI_API void PlatformCreateStreamlineRHI()
 				{
 					GStreamlineSupport = EStreamlineSupport::Supported;
 					UE_LOG(LogStreamlineRHI, Log, TEXT("Streamline supported by the %s %s RHI in the %s module at runtime"), RHIVendorIdToString(), *RHIName, StreamlineRHIModuleName);
+					
+					GStreamlineRHI->PostPlatformRHICreateInit();
+
 				}
 				else
 				{
@@ -451,11 +598,7 @@ void FStreamlineRHIModule::InitializeStreamline()
 	StreamlineDLLSearchPaths.Append({ StreamlineBinaryDirectory });
 
 	TSharedPtr<IPlugin> DLSSPlugin = IPluginManager::Get().FindPlugin(TEXT("DLSS"));
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25)
-	const bool bIsDLSSPluginEnabled = true;
-#else
 	const bool bIsDLSSPluginEnabled = DLSSPlugin && (DLSSPlugin->IsEnabled() || DLSSPlugin->IsEnabledByDefault(false));
-#endif
 	if (bIsDLSSPluginEnabled)
 	{
 		// NGX will get initialized by Streamline below, long before the DLSS-SR plugin tries to initialize NGX in PostEngineInit.
@@ -466,14 +609,9 @@ void FStreamlineRHIModule::InitializeStreamline()
 		// this is a stripped down variant from the logic  NGXRHI::NGXRHI
 		const FString ProjectNGXBinariesDir = FPaths::Combine(FPaths::ProjectDir(), TEXT("Binaries/ThirdParty/NVIDIA/NGX/Win64/"));
 		const FString LaunchNGXBinariesDir = FPaths::Combine(FPaths::LaunchDir(), TEXT("Binaries/ThirdParty/NVIDIA/NGX/Win64/"));
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25)
-		const FString EngineNGXBinariesDir = FPaths::Combine(FPaths::EngineDir(), TEXT("Binaries/ThirdParty/NVIDIA/NGX/Win64/"));
-		StreamlineDLLSearchPaths.Append({ ProjectNGXBinariesDir, LaunchNGXBinariesDir, EngineNGXBinariesDir});
-#else
 		const FString DLSSPluginBaseDir = DLSSPlugin->GetBaseDir();
 		const FString PluginNGXProductionBinariesDir = FPaths::Combine(*DLSSPluginBaseDir, TEXT("Binaries/ThirdParty/Win64/"));
 		StreamlineDLLSearchPaths.Append({ ProjectNGXBinariesDir, LaunchNGXBinariesDir, PluginNGXProductionBinariesDir });
-#endif
 	}
 	else
 	{
@@ -574,25 +712,50 @@ void FStreamlineRHIModule::InitializeStreamline()
 
 	Preferences.applicationId = GetNGXAppID(bIsDLSSPluginEnabled);
 
+	// sl::kFeaturePCL is always loaded by SL and doesn't have to be explicitly requested
 	TArray<sl::Feature> Features = { sl::kFeatureReflex };
-	
-	bool bAllowDLSSG = true;
-	
-	if (FParse::Param(FCommandLine::Get(), TEXT("sldlssg")))
-	{
-		UE_LOG(LogStreamlineRHI, Log, TEXT("Loading Streamline DLSS-FG due to -sldlssg command line option"));
-		bAllowDLSSG = true;
-	}
-	else if (FParse::Param(FCommandLine::Get(), TEXT("slnodlssg")))
-	{
-		UE_LOG(LogStreamlineRHI, Log, TEXT("Not loading Streamline DLSS-FG due to -slnodlssg command line option"));
-		bAllowDLSSG = false;
-	}
 
-	if (bAllowDLSSG)
+	TArray <FString> FeatureEnableDisableCommandlines;
+	auto EnableStreamlineFeature = [&Features, &FeatureEnableDisableCommandlines](sl::Feature SLFeature, const TCHAR* UEPluginName, const TCHAR* FeatureName, const TCHAR* CommandLineSuffix, bool bAllowByDefault=true)
 	{
-		Features.Push(sl::kFeatureDLSS_G);
-	}
+			TSharedPtr<IPlugin> RequiredPlugin = IPluginManager::Get().FindPlugin(UEPluginName);
+			const bool bIsRequiredPluginEnabled = RequiredPlugin && (RequiredPlugin->IsEnabled() || RequiredPlugin->IsEnabledByDefault(false));
+
+			bool bAllowFeature = bIsRequiredPluginEnabled;
+
+			if (!bIsRequiredPluginEnabled)
+			{
+				UE_LOG(LogStreamlineRHI, Log, TEXT("Skipping loading Streamline %s since the corresponding UE %s plugin is not enabled"), FeatureName, UEPluginName);
+				return;
+			}
+
+			// That's skipping the leading '-' intentionally
+			const FString AllowCMD = FString::Printf(TEXT("sl%s"), CommandLineSuffix);
+			const FString DisallowCMD = FString::Printf(TEXT("slno%s"), CommandLineSuffix);
+
+			// And this one has it intentinally for further logging
+			FeatureEnableDisableCommandlines.Add(FString::Printf(TEXT("-sl{no}%s"), CommandLineSuffix));
+
+			if (FParse::Param(FCommandLine::Get(), *AllowCMD))
+			{
+				UE_LOG(LogStreamlineRHI, Log, TEXT("Loading Streamline %s due to -%s command line option"), FeatureName, *AllowCMD);
+				bAllowFeature = true;
+			}
+			else if (FParse::Param(FCommandLine::Get(), *DisallowCMD))
+			{
+				UE_LOG(LogStreamlineRHI, Log, TEXT("Not loading Streamline %s due to -%s command line option"), FeatureName, *DisallowCMD);
+				bAllowFeature = false;
+			}
+
+			if (bAllowFeature)
+			{
+				Features.Add(SLFeature);
+			}
+	};
+
+	EnableStreamlineFeature(sl::kFeatureDLSS_G, TEXT("Streamline"), TEXT("DLSS-FG"), TEXT("dlssg"));
+	EnableStreamlineFeature(sl::kFeatureDeepDVC, TEXT("StreamlineDeepDVC"), TEXT("DeepDVC"), TEXT("deepdvc"));
+		
 #if !UE_BUILD_SHIPPING
 	if ( ShouldLoadDebugOverlay())
 	{
@@ -633,8 +796,14 @@ void FStreamlineRHIModule::InitializeStreamline()
 	UE_LOG(LogStreamlineRHI, Log, TEXT("Initializing Streamline"));
 	UE_LOG(LogStreamlineRHI, Log, TEXT("sl::Preferences::logLevel    = %u. Can be overridden via -slloglevel={0,1,2} command line switches"), Preferences.logLevel);
 	UE_LOG(LogStreamlineRHI, Log, TEXT("sl::Preferences::showConsole = %u. Can be overridden via -sllogconsole={0,1} command line switches"), Preferences.showConsole);
-	UE_LOG(LogStreamlineRHI, Log, TEXT("sl::Preferences::featuresToLoad = {%s}. Feature loading can be overridden on the command line with -sl{no}dlssg and and -sl{no}debugoverlay (non-shipping)" ),
-		*FString::JoinBy(Features, TEXT(", "), [](const sl::Feature& Feature) { return FString::Printf(TEXT("%s (%u)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), Feature); }));
+	UE_LOG(LogStreamlineRHI, Log, TEXT("sl::Preferences::featuresToLoad = {%s}. Feature loading can be overridden on the command line with %s and -sl{no}debugoverlay (non-shipping)" ),
+		*FString::JoinBy(Features, TEXT(", "), [](const sl::Feature& Feature) { return FString::Printf(TEXT("%s (%u)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), Feature); }),
+		*FString::Join(FeatureEnableDisableCommandlines, TEXT(", "))
+		);
+
+
+	FStreamlineRHI::FeaturesRequestedAtSLInitTime = Features;
+
 
 	sl::Result Result = SLinit(Preferences);
 	if (Result == sl::Result::eOk)
@@ -670,7 +839,7 @@ STREAMLINERHI_API void FStreamlineRHIModule::ShutdownStreamline()
 void FStreamlineRHIModule::StartupModule()
 {
 	auto CVarInitializePlugin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.InitializePlugin"));
-	if (CVarInitializePlugin && !CVarInitializePlugin->GetBool())
+	if (CVarInitializePlugin && !CVarInitializePlugin->GetBool() || (FParse::Param(FCommandLine::Get(), TEXT("slno"))))
 	{
 		UE_LOG(LogStreamlineRHI, Log, TEXT("Initialization of StreamlineRHI is disabled."));
 		return;

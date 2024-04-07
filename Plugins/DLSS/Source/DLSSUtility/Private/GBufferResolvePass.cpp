@@ -1,5 +1,5 @@
-/*
-* Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+/* 
+* Copyright (c) 2023 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -41,7 +41,11 @@ public:
 
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
-		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+		// Only cook for the platforms/RHIs where DLSS is supported, which is DX11,DX12 and Vulkan [on Win64]
+		return 	IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
+				IsPCPlatform(Parameters.Platform) && (
+					IsVulkanPlatform(Parameters.Platform) ||
+					IsD3DPlatform(Parameters.Platform));
 	}
 
 	using FPermutationDomain = TShaderPermutationDomain<FDiffuseSpecularAlbedoDim, FForceDisableSubsurfaceCheckerboardDim>;

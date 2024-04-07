@@ -74,8 +74,8 @@ FFXFrameInterpolation::FFXFrameInterpolation()
 , AverageTime(0.f)
 , AverageFPS(0.f)
 , Index(0u)
+, ResetState(0u)
 , bInterpolatedFrame(false)
-, bNeedsReset(true)
 {
 	UGameViewportClient::OnViewportCreated().AddRaw(this, &FFXFrameInterpolation::OnViewportCreatedHandler_SetCustomPresent);
 	FCoreDelegates::OnPostEngineInit.AddRaw(this, &FFXFrameInterpolation::OnPostEngineInit);
@@ -308,7 +308,7 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 	float CameraNear = ViewDesc.CameraNear;
 	float CameraFOV = ViewDesc.CameraFOV;
 	bool bEnabled = ViewDesc.bEnabled;
-	bool bReset = ViewDesc.bReset || bNeedsReset;
+	bool bReset = ViewDesc.bReset || (ResetState == 0);
 	bool const bResized = Presenter->Resized();
 	FRHICopyTextureInfo Info;
 
@@ -427,20 +427,20 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 	if (Presenter->GetBackend()->GetAPI() == EFFXBackendAPI::Unreal)
 	{
 		bInterpolated = true;
-		Presenter->GetBackend()->UpdateSwapChain(Presenter->GetInterface(), ViewportRHI->GetNativeSwapChain(), true, bAllowAsyncWorkloads, bShowDebugMode);
 		interpolateParams->currentBackBuffer = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_RESOURCE_STATE_COPY_DEST);
 		FMemory::Memzero(interpolateParams->currentBackBuffer_HUDLess);
 
 		Presenter->GetBackend()->SetFeatureLevel(Presenter->GetInterface(), View->GetFeatureLevel());
 
-		GraphBuilder.AddPass(RDG_EVENT_NAME("FidelityFX-FrameInterpolation"), PassParameters, ERDGPassFlags::Compute | ERDGPassFlags::NeverCull | ERDGPassFlags::Copy, [Presenter, PassParameters, interpolateParams, DeltaTimeMs](FRHICommandListImmediate& RHICmdList)
+		GraphBuilder.AddPass(RDG_EVENT_NAME("FidelityFX-FrameInterpolation"), PassParameters, ERDGPassFlags::Compute | ERDGPassFlags::NeverCull | ERDGPassFlags::Copy, [Presenter, PassParameters, interpolateParams, DeltaTimeMs, ViewportRHI, bAllowAsyncWorkloads, bShowDebugMode](FRHICommandListImmediate& RHICmdList)
 		{
 			PassParameters->ColorTexture->MarkResourceAsUsed();
 			PassParameters->InterpolatedRT->MarkResourceAsUsed();
 
 			Presenter->SetCustomPresentStatus(FFXFrameInterpolationCustomPresentStatus::InterpolateRT);
-			RHICmdList.EnqueueLambda([Presenter](FRHICommandListImmediate& cmd) mutable
+			RHICmdList.EnqueueLambda([Presenter, ViewportRHI, bAllowAsyncWorkloads, bShowDebugMode](FRHICommandListImmediate& cmd) mutable
 			{
+				Presenter->GetBackend()->UpdateSwapChain(Presenter->GetInterface(), ViewportRHI->GetNativeSwapChain(), true, bAllowAsyncWorkloads, bShowDebugMode);
 				Presenter->SetCustomPresentStatus(FFXFrameInterpolationCustomPresentStatus::InterpolateRHI);
 			});
 		});
@@ -749,6 +749,14 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 	}
 
 	bInterpolatedFrame = bAllowed;
+	if (Presenter && Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative)
+	{
+		ResetState = bAllowed ? 1u : 0u;
+	}
+	else
+	{
+		ResetState = bAllowed ? 2u : 0u;
+	}
 }
 
 void FFXFrameInterpolation::OnSlateWindowRendered(SWindow& SlateWindow, void* ViewportRHIPtr)
@@ -845,15 +853,24 @@ void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& Sl
         FViewportRHIRef Viewport = *ViewportPtr;
         FFXFrameInterpolationCustomPresent* Presenter = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
 
-		if (bInterpolatedFrame)
+		if (ResetState)
 		{
 			if (Presenter)
 			{
 				Presenter->CopyBackBufferRT(BackBuffer);
 			}
 		}
-		else
+    }
+
+	ResetState = ((ResetState > 0) && !bInterpolatedFrame) ? ResetState - 1 : ResetState;
+	bInterpolatedFrame = false;
+
+	if (ResetState == 0)
+	{
+		if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread() && (CVarFSR3Enabled && CVarFSR3Enabled->GetValueOnAnyThread() != 0))
 		{
+			FViewportRHIRef Viewport = *ViewportPtr;
+			FFXFrameInterpolationCustomPresent* Presenter = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
 			if (Presenter)
 			{
 				Presenter->SetEnabled(false);
@@ -863,7 +880,5 @@ void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& Sl
 				}
 			}
 		}
-    }
-	bNeedsReset = !bInterpolatedFrame;
-	bInterpolatedFrame = false;
+	}
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -21,12 +21,13 @@
 //}
 
 // That should be updated if new BP libraries are added for new featurew
-#define STREAMLINE_LIBARY_KEYWORDS "DLSS-G, Reflex, Streamline"
+#define STREAMLINE_LIBARY_KEYWORDS "DLSS-G, Reflex, DeepDVC, Streamline"
 UENUM(BlueprintType)
 enum class UStreamlineFeature : uint8
 {
 	DLSSG UMETA(DisplayName = "DLSS Frame Generation"),
 	Reflex UMETA(DisplayName = "Reflex"),
+	DeepDVC UMETA(DisplayName = "DeepDVC"),
 	Count UMETA(Hidden)
 };
 
@@ -77,7 +78,7 @@ public:
 
 };
 
-static_assert(uint8(UStreamlineFeature::Count) == 2u, "dear NVIDIA plugin developer, please update the Keywords below handle the new enum values");
+static_assert(uint8(UStreamlineFeature::Count) == 3u, "dear NVIDIA plugin developer, please update the Keywords below handle the new enum values");
 
 USTRUCT(BlueprintType)
 struct FStreamlineFeatureRequirements 
@@ -111,19 +112,22 @@ class  UStreamlineLibrary : public UBlueprintFunctionLibrary
 public:
 
 		/** Checks whether a Streamline feature is supported by the current GPU. Further details can be retrieved via QueryStreamlineFeatureSupport*/
-	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Get NVIDIA Streamline Feature information", Keywords = "Reflex, DLSS-G"))
+	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Get NVIDIA Streamline Feature information", Keywords = "Reflex, DLSS-G, DeepDVC"))
 	static STREAMLINEBLUEPRINT_API FStreamlineFeatureRequirements GetStreamlineFeatureInformation(UStreamlineFeature Feature);
 
-	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (/*DisplayName = "Get Streamline Feature Requirements", */Keywords = "Reflex, DLSS-G"))
+	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (/*DisplayName = "Get Streamline Feature Requirements", */Keywords = "Reflex, DLSS-G, DeepDVC"))
 	static STREAMLINEBLUEPRINT_API void BreakStreamlineFeatureRequirements(UStreamlineFeatureRequirementsFlags Requirements, bool& D3D11Supported, bool& D3D12Supported, bool& VulkanSupported, bool& VSyncOffRequired, bool& HardwareSchedulingRequired);
 
 	/** Checks whether a Streamline feature is supported by the current GPU. Further details can be retrieved via QueryStreamlineFeatureSupport*/
-	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Is NVIDIA Streamline Feature Supported", Keywords = "Reflex, DLSS-G" ))
+	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Is NVIDIA Streamline Feature Supported", Keywords = "Reflex, DLSS-G, DeepDVC" ))
 	static STREAMLINEBLUEPRINT_API bool IsStreamlineFeatureSupported(UStreamlineFeature Feature);
 
 	/** Checks whether Streamline feature  is supported by the current GPU	*/
-	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Query NVIDIA Streamline Feature Support", Keywords = "Reflex, DLSS-G"))
+	UFUNCTION(BlueprintPure, Category = "Streamline", meta = (DisplayName = "Query NVIDIA Streamline Feature Support", Keywords = "Reflex, DLSS-G, DeepDVC"))
 	static STREAMLINEBLUEPRINT_API UStreamlineFeatureSupport QueryStreamlineFeatureSupport(UStreamlineFeature Feature);
+
+
+	static STREAMLINEBLUEPRINT_API void RegisterFeatureSupport(UStreamlineFeature Feature, UStreamlineFeatureSupport Support);
 
 protected:
 
@@ -133,13 +137,20 @@ protected:
 private:
 
 	
-	static constexpr uint8 Num = 2;
-
-	static TStaticArray<FStreamlineFeatureRequirements, Num> Features;
+	static TStaticArray<FStreamlineFeatureRequirements, static_cast<uint8>(UStreamlineFeature::Count)> Features;
 	
 	static bool bStreamlineLibraryInitialized;
 	static bool TryInitStreamlineLibrary();
 };
+
+
+
+// TODO maybe move inter SL plugin stuff into a separate header?
+#if WITH_STREAMLINE
+#include "StreamlineCore.h"
+STREAMLINEBLUEPRINT_API UStreamlineFeatureSupport ToUStreamlineFeatureSupport(EStreamlineFeatureSupport Support);
+#endif
+
 
 class FStreamlineBlueprintModule final : public IModuleInterface
 {

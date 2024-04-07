@@ -42,6 +42,7 @@ class IFFXFrameInterpolationCustomPresent : public FRHICustomPresent
 public:
 	virtual void InitViewport(FViewport* InViewport, FViewportRHIRef ViewportRHI) = 0;
 	virtual void SetMode(EFFXFrameInterpolationPresentMode Mode) = 0;
+	virtual void SetUseFFXSwapchain(bool const bEnabled) = 0;
 };
 
 class IFFXFrameInterpolation

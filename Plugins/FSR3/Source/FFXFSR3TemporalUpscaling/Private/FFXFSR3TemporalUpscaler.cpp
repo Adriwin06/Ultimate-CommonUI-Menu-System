@@ -112,6 +112,7 @@ public:
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		RDG_TEXTURE_ACCESS(DepthTexture, ERHIAccess::SRVCompute)
+		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, InputSeparateTranslucency)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, GBufferB)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, GBufferD)
 		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, ReflectionTexture)
@@ -133,6 +134,8 @@ public:
 		SHADER_PARAMETER(float, ReactiveHistoryTranslucencyLumaBias)
 		SHADER_PARAMETER(float, ReactiveMaskTranslucencyBias)
 		SHADER_PARAMETER(float, ReactiveMaskTranslucencyLumaBias)
+		SHADER_PARAMETER(float, ReactiveMaskPreDOFTranslucencyScale)
+		SHADER_PARAMETER(uint32, ReactiveMaskPreDOFTranslucencyMax)
 		SHADER_PARAMETER(float, ReactiveMaskTranslucencyMaxDistance)
 		SHADER_PARAMETER(float, ForceLitReactiveValue)
 		SHADER_PARAMETER(uint32, ReactiveShadingModelID)
@@ -1082,6 +1085,22 @@ IFFXFSR3TemporalUpscaler::FOutputs FFXFSR3TemporalUpscaler::AddPasses(
 				FFXFSR3CreateReactiveMaskCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FFXFSR3CreateReactiveMaskCS::FParameters>();
 				PassParameters->Sampler = TStaticSamplerState<SF_Point>::GetRHI();
 
+				FRDGTextureRef SeparateTranslucency;
+#if UE_VERSION_OLDER_THAN(5, 3, 0)
+				if (PassInputs.PostDOFTranslucencyResources.ColorTexture.IsValid())
+				{
+					SeparateTranslucency = PassInputs.PostDOFTranslucencyResources.ColorTexture.Resolve;
+				}
+				else
+#else
+				FFXFSR3RDGBuilder& GraphBulderAccessor = (FFXFSR3RDGBuilder&)GraphBuilder;
+				SeparateTranslucency = GraphBulderAccessor.FindTexture(TEXT("Translucency.AfterDOF.Color"));
+				if (!SeparateTranslucency)
+#endif
+				{
+					SeparateTranslucency = GraphBuilder.RegisterExternalTexture(GSystemTextures.BlackAlphaOneDummy);
+				}
+
 				FRDGTextureRef GBufferB = (*PostInputs.SceneTextures)->GBufferBTexture;
 				if (!GBufferB)
 				{
@@ -1115,6 +1134,14 @@ IFFXFSR3TemporalUpscaler::FOutputs FFXFSR3TemporalUpscaler::AddPasses(
 				if (SceneColorPreAlphaRT)
 				{
 					FRDGTextureRef SceneColorPreAlphaRDG = GraphBuilder.RegisterExternalTexture(SceneColorPreAlphaRT);
+
+					if (SceneColorPreAlphaRT->GetDesc().Format != SceneColorFormat)
+					{
+						FRDGTextureRef SceneColorPreAlphaTemp = GraphBuilder.CreateTexture(SceneColorDesc, TEXT("FFXFSR3SceneColorPreAlphaTemp"));
+						AddDrawTexturePass(GraphBuilder, View, SceneColorPreAlphaRDG, SceneColorPreAlphaTemp);
+						SceneColorPreAlphaRDG = SceneColorPreAlphaTemp;
+					}
+
 					FRDGTextureSRVDesc SceneColorPreAlphaSRV = FRDGTextureSRVDesc::Create(SceneColorPreAlphaRDG);
 					PassParameters->SceneColorPreAlpha = GraphBuilder.CreateSRV(SceneColorPreAlphaSRV);
 				}
@@ -1147,9 +1174,11 @@ IFFXFSR3TemporalUpscaler::FOutputs FFXFSR3TemporalUpscaler::AddPasses(
 				FRDGTextureSRVDesc GBufferBDesc = FRDGTextureSRVDesc::Create(GBufferB);
 				FRDGTextureSRVDesc GBufferDDesc = FRDGTextureSRVDesc::Create(GBufferD);
 				FRDGTextureSRVDesc ReflectionsDesc = FRDGTextureSRVDesc::Create(Reflections);
+				FRDGTextureSRVDesc InputDesc = FRDGTextureSRVDesc::Create(SeparateTranslucency);
 				FRDGTextureUAVDesc ReactiveDesc(ReactiveMaskTexture);
 				FRDGTextureUAVDesc CompositeDesc(CompositeMaskTexture);
 
+				PassParameters->InputSeparateTranslucency = GraphBuilder.CreateSRV(InputDesc);
 				PassParameters->GBufferB = GraphBuilder.CreateSRV(GBufferBDesc);
 				PassParameters->GBufferD = GraphBuilder.CreateSRV(GBufferDDesc);
 				PassParameters->ReflectionTexture = GraphBuilder.CreateSRV(ReflectionsDesc);
@@ -1168,6 +1197,8 @@ IFFXFSR3TemporalUpscaler::FOutputs FFXFSR3TemporalUpscaler::AddPasses(
 				PassParameters->ReactiveHistoryTranslucencyLumaBias = CVarFSR3ReactiveHistoryTranslucencyLumaBias.GetValueOnRenderThread();
 				PassParameters->ReactiveMaskTranslucencyBias = CVarFSR3ReactiveMaskTranslucencyBias.GetValueOnRenderThread();
 				PassParameters->ReactiveMaskTranslucencyLumaBias = CVarFSR3ReactiveMaskTranslucencyLumaBias.GetValueOnRenderThread();
+				PassParameters->ReactiveMaskPreDOFTranslucencyScale = CVarFSR3ReactiveMaskPreDOFTranslucencyScale.GetValueOnRenderThread();
+				PassParameters->ReactiveMaskPreDOFTranslucencyMax = CVarFSR3ReactiveMaskPreDOFTranslucencyMax.GetValueOnRenderThread();
 				PassParameters->ReactiveMaskTranslucencyMaxDistance = CVarFSR3ReactiveMaskTranslucencyMaxDistance.GetValueOnRenderThread();
 				PassParameters->ForceLitReactiveValue = CVarFSR3ReactiveMaskForceReactiveMaterialValue.GetValueOnRenderThread();
 				PassParameters->ReactiveShadingModelID = (uint32)CVarFSR3ReactiveMaskReactiveShadingModelID.GetValueOnRenderThread();
@@ -1456,6 +1487,11 @@ IFFXFSR3TemporalUpscaler::FOutputs FFXFSR3TemporalUpscaler::AddPasses(
 				}
 #endif
 			}
+#if UE_VERSION_AT_LEAST(5, 3, 0)
+			else {
+				Outputs.NewHistory = PassInputs.PrevHistory;
+			}
+#endif
 
 			//-----------------------------------------------------------------------------------------------------------------------------------------
 			// Invalidate FSR3 Contexts

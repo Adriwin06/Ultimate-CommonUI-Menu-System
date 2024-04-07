@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -44,7 +44,7 @@ static TAutoConsoleVariable<int32> CVarNGXDLSSAutomationTesting(
 static TAutoConsoleVariable<int32> CVarNGXDLSSPresetSetting(
 	TEXT("r.NGX.DLSS.Preset"),
 	0,
-	TEXT("DLSS/DLAA preset setting. Allows selecting a different DL model than the default\n")
+	TEXT("DLSS-SR/DLSS-RR/DLAA preset setting. Allows selecting a different DL model than the default\n")
 	TEXT("  0: Use default preset or ini value\n")
 	TEXT("  1: Force preset A\n")
 	TEXT("  2: Force preset B\n")
@@ -110,6 +110,16 @@ static TAutoConsoleVariable<int32> CVarNGXDLSSDenoiserMode(
 	ECVF_RenderThreadSafe
 );
 
+static TAutoConsoleVariable<bool> CVarNGXEnableAlphaUpscaling(
+	TEXT("r.NGX.DLSS.EnableAlphaUpscaling"), 
+	false,
+	TEXT("Enables Alpha channel upscaling\n")
+	TEXT("Note: r.PostProcessing.PropagateAlpha MUST be enabled for this feature to work.\n")
+	TEXT("0: off (default)\n")
+	TEXT("1: on \n"),
+	ECVF_RenderThreadSafe
+);
+
 DECLARE_GPU_STAT(DLSS)
 
 static const float kDLSSResolutionFractionError = 0.01f;
@@ -138,6 +148,17 @@ static FDLSSUpscaler* GetGlobalDLSSUpscaler()
 	check(DLSSModule);
 
 	return DLSSModule->GetDLSSUpscaler();
+}
+
+static ENGXDLSSDenoiserMode GetDenoiserMode(const FDLSSUpscaler* Upscaler)
+{
+	if ((Upscaler != nullptr) && Upscaler->GetNGXRHI()->IsDLSSRRAvailable())
+	{
+		const ENGXDLSSDenoiserMode DenoiserMode = static_cast<ENGXDLSSDenoiserMode>(FMath::Clamp<int32>(CVarNGXDLSSDenoiserMode.GetValueOnRenderThread(), int32(ENGXDLSSDenoiserMode::Off), int32(ENGXDLSSDenoiserMode::MaxValue)));
+		return DenoiserMode;
+	}
+
+	return ENGXDLSSDenoiserMode::Off;
 }
 
 FIntPoint FDLSSPassParameters::GetOutputExtent() const
@@ -460,16 +481,23 @@ void FDLSSUpscaler::ReleaseStaticResources()
 }
 
 static const TCHAR* const GDLSSSceneViewFamilyUpscalerDebugName = TEXT("FDLSSSceneViewFamilyUpscaler");
+static const TCHAR* const GDLSSRRSceneViewFamilyUpscalerDebugName = TEXT("FDLSSSceneViewFamilyUpscaler(DLSS-RR)");
 
 const TCHAR* FDLSSSceneViewFamilyUpscaler::GetDebugName() const
 {
-	return GDLSSSceneViewFamilyUpscalerDebugName;
+	ENGXDLSSDenoiserMode DenoiserMode = GetDenoiserMode(Upscaler);
+	return (DenoiserMode == ENGXDLSSDenoiserMode::DLSSRR) ? GDLSSRRSceneViewFamilyUpscalerDebugName : GDLSSSceneViewFamilyUpscalerDebugName;
+}
+
+static bool IsDLSSUpscalerName(const TCHAR* Name)
+{
+	return (Name == GDLSSSceneViewFamilyUpscalerDebugName) || (Name == GDLSSRRSceneViewFamilyUpscalerDebugName);
 }
 
 // static
 bool FDLSSSceneViewFamilyUpscaler::IsDLSSTemporalUpscaler(const ITemporalUpscaler* TemporalUpscaler)
 {
-	return TemporalUpscaler != nullptr && TemporalUpscaler->GetDebugName() == GDLSSSceneViewFamilyUpscalerDebugName;
+	return (TemporalUpscaler != nullptr) && IsDLSSUpscalerName(TemporalUpscaler->GetDebugName());
 }
 
 float FDLSSSceneViewFamilyUpscaler::GetMinUpsampleResolutionFraction() const
@@ -498,8 +526,6 @@ ITemporalUpscaler::FOutputs FDLSSSceneViewFamilyUpscaler::AddPasses(
 #endif
 ) const
 {
-	checkf(View.PrimaryScreenPercentageMethod == EPrimaryScreenPercentageMethod::TemporalUpscale, TEXT("DLSS requires TemporalUpscale. If you hit this assert, please set r.TemporalAA.Upscale=1"));
-
 	ITemporalUpscaler::FOutputs Outputs;
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
 	const TRefCountPtr<ITemporalUpscaler::IHistory> InputCustomHistory = PassInputs.PrevHistory;
@@ -519,19 +545,16 @@ ITemporalUpscaler::FOutputs FDLSSSceneViewFamilyUpscaler::AddPasses(
 	FIntRect InputViewRect = View.ViewRect;
 	FDLSSPassParameters DLSSParameters(View, PassInputs);
 #endif
+
+	bool bIsDLAA = (InputViewRect == DLSSParameters.OutputViewRect);
+	checkf(bIsDLAA || (View.PrimaryScreenPercentageMethod == EPrimaryScreenPercentageMethod::TemporalUpscale),
+		TEXT("DLSS-SR requires TemporalUpscale. If you hit this assert, please set r.TemporalAA.Upscale=1"));
+
 	{
 		RDG_GPU_STAT_SCOPE(GraphBuilder, DLSS);
 		RDG_EVENT_SCOPE(GraphBuilder, "DLSS");
 
-		if (Upscaler->GetNGXRHI()->IsDLSSRRAvailable())
-		{
-			const ENGXDLSSDenoiserMode DenoiserMode = static_cast<ENGXDLSSDenoiserMode>(FMath::Clamp<int32>(CVarNGXDLSSDenoiserMode.GetValueOnRenderThread(), int32(ENGXDLSSDenoiserMode::Off), int32(ENGXDLSSDenoiserMode::MaxValue)));
-			DLSSParameters.DenoiserMode = DenoiserMode;
-		}
-		else
-		{
-			DLSSParameters.DenoiserMode = ENGXDLSSDenoiserMode::Off;
-		}
+		DLSSParameters.DenoiserMode = GetDenoiserMode(Upscaler);
 
 		bool bDilateMotionVectors = CVarNGXDLSSDilateMotionVectors.GetValueOnRenderThread() != 0;
 		if (DLSSParameters.DenoiserMode == ENGXDLSSDenoiserMode::DLSSRR)
@@ -657,7 +680,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 	{
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
 		const ITemporalUpscaler::IHistory* InputCustomHistory = InputCustomHistoryInterface.GetReference();
-		if (GDLSSSceneViewFamilyUpscalerDebugName == InputCustomHistory->GetDebugName())
+		if (IsDLSSUpscalerName(InputCustomHistory->GetDebugName()))
 		{
 			InputDLSSHistory = static_cast<const FDLSSUpscalerHistory*>(InputCustomHistory);
 		}
@@ -711,6 +734,13 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 		const bool bUseAutoExposure = CVarNGXDLSSAutoExposure.GetValueOnRenderThread() != 0;
 		const bool bReleaseMemoryOnDelete = CVarNGXDLSSReleaseMemoryOnDelete.GetValueOnRenderThread() != 0;
 
+		//if r.PostProcessing.PropagateAlpha is not enabled no reason incur a 20% pref cost upscaling alpha channel.
+		auto PropagateAlphaCVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.PostProcessing.PropagateAlpha"));
+		check(PropagateAlphaCVar);
+
+		const bool bEnableAlphaUpscaling = (CVarNGXEnableAlphaUpscaling.GetValueOnRenderThread()) &&
+										   (PropagateAlphaCVar->GetValueOnRenderThread() != 0);
+
 		const float Sharpness = FMath::Clamp(CVarNGXDLSSSharpness.GetValueOnRenderThread(), -1.0f, 1.0f);
 #if !NO_LOGGING
 		static bool bLoggedSharpnessWarning = false;
@@ -743,7 +773,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 			PassParameters,
 			ERDGPassFlags::Compute | ERDGPassFlags::Raster | ERDGPassFlags::SkipRenderPass,
 			// FRHICommandListImmediate forces it to run on render thread, FRHICommandList doesn't
-			[LocalNGXRHIExtensions, PassParameters, Inputs, bCameraCut, DeltaWorldTimeMS, Sharpness, NGXDLSSPreset, NGXPerfQuality, DLSSState, bUseAutoExposure, bReleaseMemoryOnDelete](FRHICommandListImmediate& RHICmdList)
+			[LocalNGXRHIExtensions, PassParameters, Inputs, bCameraCut, DeltaWorldTimeMS, Sharpness, NGXDLSSPreset, NGXPerfQuality, DLSSState, bUseAutoExposure, bEnableAlphaUpscaling, bReleaseMemoryOnDelete](FRHICommandListImmediate& RHICmdList)
 		{
 			FRHIDLSSArguments DLSSArguments;
 			FMemory::Memzero(&DLSSArguments, sizeof(DLSSArguments));
@@ -784,6 +814,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 			DLSSArguments.PreExposure = Inputs.PreExposure;
 			DLSSArguments.bUseAutoExposure = bUseAutoExposure;
 
+			DLSSArguments.bEnableAlphaUpscaling = bEnableAlphaUpscaling;
 
 			DLSSArguments.DenoiserMode = Inputs.DenoiserMode;
 
@@ -828,7 +859,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
 	check(OutputCustomHistoryInterface);
-	(*OutputCustomHistoryInterface) = new FDLSSUpscalerHistory(DLSSState);
+	(*OutputCustomHistoryInterface) = new FDLSSUpscalerHistory(DLSSState, Inputs.DenoiserMode);
 #else
 	if (!View.bStatePrevViewInfoIsReadOnly && OutputHistory)
 	{
@@ -845,7 +876,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 	{
 		if (!OutputCustomHistoryInterface->GetReference())
 		{
-			(*OutputCustomHistoryInterface) = new FDLSSUpscalerHistory(DLSSState);
+			(*OutputCustomHistoryInterface) = new FDLSSUpscalerHistory(DLSSState, Inputs.DenoiserMode);
 		}
 	}
 #endif
@@ -855,7 +886,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
 const TCHAR* FDLSSUpscalerHistory::GetDebugName() const
 {
-	return GDLSSSceneViewFamilyUpscalerDebugName;
+	return (DenoiserMode == ENGXDLSSDenoiserMode::DLSSRR) ? GDLSSRRSceneViewFamilyUpscalerDebugName : GDLSSSceneViewFamilyUpscalerDebugName;
 }
 
 uint64 FDLSSUpscalerHistory::GetGPUSizeBytes() const

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -14,8 +14,17 @@
 #include "StreamlineLibrary.h"
 DECLARE_LOG_CATEGORY_EXTERN(LogStreamlineBlueprint, Verbose, All);
 
-
 #if WITH_STREAMLINE
-#include "StreamlineCore.h"
-UStreamlineFeatureSupport ToUStreamlineFeatureSupport(EStreamlineFeatureSupport Support);
+
+#define TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(ReturnValueWhichCanBeEmpty) \
+if (!TryInitStreamlineLibrary()) \
+{ \
+	UE_LOG(LogStreamlineBlueprint, Error, TEXT("%s should not be called before PostEngineInit"), ANSI_TO_TCHAR(__FUNCTION__)); \
+	return ReturnValueWhichCanBeEmpty; \
+}
+
+#else
+
+#define TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(ReturnValueWhichCanBeEmpty) 
+
 #endif

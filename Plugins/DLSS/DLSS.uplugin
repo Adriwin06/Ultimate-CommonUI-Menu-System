@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 37,
-	"VersionName": "3.5.2b",
+	"Version": 38,
+	"VersionName": "3.7.0b",
 	"FriendlyName": "NVIDIA DLSS Super Resolution/Ray Reconstruction/DLAA",
 	"Description": "NVIDIA Deep Learning Super Sampling Super Resolution and Ray Reconstruction",
 	"Category": "Rendering",

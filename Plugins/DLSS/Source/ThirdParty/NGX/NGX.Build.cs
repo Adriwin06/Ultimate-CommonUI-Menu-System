@@ -18,7 +18,7 @@ public class NGX : ModuleRules
 
 	protected virtual bool IsSupportedWindowsPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform == UnrealTargetPlatform.Win64;
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
 	}
 
 	public NGX (ReadOnlyTargetRules Target) : base(Target)

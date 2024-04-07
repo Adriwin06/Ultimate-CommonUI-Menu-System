@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -41,6 +41,7 @@ struct FDLSSFeatureDesc
 			|| bHighResolutionMotionVectors != Other.bHighResolutionMotionVectors
 			|| bNonZeroSharpness != Other.bNonZeroSharpness
 			|| bUseAutoExposure != Other.bUseAutoExposure
+			|| bEnableAlphaUpscaling != Other.bEnableAlphaUpscaling
 			|| bReleaseMemoryOnDelete != Other.bReleaseMemoryOnDelete
 			|| GPUNode != Other.GPUNode
 			|| GPUVisibility != Other.GPUVisibility
@@ -59,6 +60,7 @@ struct FDLSSFeatureDesc
 	bool bHighResolutionMotionVectors = false;
 	bool bNonZeroSharpness = false;
 	bool bUseAutoExposure = false;
+	bool bEnableAlphaUpscaling = false;
 	bool bReleaseMemoryOnDelete = false;
 	uint32 GPUNode = 0;
 	uint32 GPUVisibility = 0;
@@ -103,7 +105,7 @@ struct FDLSSFeatureDesc
 			}
 		};
 
-		return FString::Printf(TEXT("SrcRect=[%dx%d->%dx%d], DestRect=[%dx%d->%dx%d], ScaleX=%f, ScaleY=%f, NGXDLSSPreset=%s(%d), NGXPerfQuality=%s(%d), bHighResolutionMotionVectors=%d, bNonZeroSharpness=%d, bUseAutoExposure=%d, bReleaseMemoryOnDelete=%d, GPUNode=%u, GPUVisibility=0x%x, DenoiseMode=%s"),
+		return FString::Printf(TEXT("SrcRect=[%dx%d->%dx%d], DestRect=[%dx%d->%dx%d], ScaleX=%f, ScaleY=%f, NGXDLSSPreset=%s(%d), NGXPerfQuality=%s(%d), bHighResolutionMotionVectors=%d, bNonZeroSharpness=%d, bUseAutoExposure=%d, bEnableAlphaUpscaling=%d, bReleaseMemoryOnDelete=%d, GPUNode=%u, GPUVisibility=0x%x, DenoiseMode=%s"),
 			SrcRect.Min.X, SrcRect.Min.Y, SrcRect.Max.X, SrcRect.Max.Y,
 			DestRect.Min.X, DestRect.Min.Y, DestRect.Max.X, DestRect.Max.Y,
 			float(SrcRect.Width()) / float(DestRect.Width()),
@@ -113,6 +115,7 @@ struct FDLSSFeatureDesc
 			bHighResolutionMotionVectors,
 			bNonZeroSharpness,
 			bUseAutoExposure,
+			bEnableAlphaUpscaling,
 			bReleaseMemoryOnDelete,
 			GPUNode,
 			GPUVisibility,
@@ -154,7 +157,8 @@ struct NGXRHI_API FRHIDLSSArguments
 
 	float PreExposure = 1.0f;
 	bool bUseAutoExposure = false;
-	
+
+	bool bEnableAlphaUpscaling = false;
 	
 	bool bReleaseMemoryOnDelete = false;
 	uint32 GPUNode = 0;
@@ -169,7 +173,7 @@ struct NGXRHI_API FRHIDLSSArguments
 		return FDLSSFeatureDesc 
 		{ 
 			SrcRect, DestRect, DLSSPreset, PerfQuality,
-			bHighResolutionMotionVectors, Sharpness != 0.0f, bUseAutoExposure, 
+			bHighResolutionMotionVectors, Sharpness != 0.0f, bUseAutoExposure, bEnableAlphaUpscaling,
 			bReleaseMemoryOnDelete, GPUNode, GPUVisibility, DenoiserMode
 		};
 	}

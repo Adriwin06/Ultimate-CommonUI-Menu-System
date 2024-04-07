@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -23,7 +23,7 @@ public class Streamline : ModuleRules
 
 	protected virtual bool IsSupportedWindowsPlatform(ReadOnlyTargetRules Target)
 	{
-		return Target.Platform == UnrealTargetPlatform.Win64;
+		return Target.Platform.IsInGroup(UnrealPlatformGroup.Windows);
 	}
 
 	public Streamline (ReadOnlyTargetRules Target) : base(Target)
@@ -45,15 +45,20 @@ public class Streamline : ModuleRules
 				 "sl.interposer.dll",
 				 "sl.common.dll",
 				 "sl.reflex.dll",
+				 "sl.pcl.dll",
 
 				 "nvngx_dlssg.dll",
 				 "sl.dlss_g.dll",
+
+				 "nvngx_deepdvc.dll",
+				 "sl.deepdvc.dll",
 			 };
 
 			List<string> StreamlinePdbs = new List<string>(StreamlineDlls);
 			StreamlinePdbs.ForEach(DLLFile =>  Path.ChangeExtension(DLLFile, ".pdb"));
 
 			PublicDefinitions.Add("STREAMLINE_INTERPOSER_BINARY_NAME=TEXT(\"" + StreamlineDlls[0] + "\")");
+			PublicDefinitions.Add("SL_BUILD_DEEPDVC=1");
 
 			bool bHasProductionBinaries = Directory.Exists(SLProductionBinariesPath);
 			bool bHasDevelopmentBinaries = Directory.Exists(SLDevelopmentBinariesPath);

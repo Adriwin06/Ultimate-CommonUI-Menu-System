@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -14,6 +14,9 @@
 
 #include "sl.h"
 #include "sl_helpers.h"
+#include "sl_dlss_g.h"
+#include "sl_deepdvc.h"
+
 
 // Those are the actual Streamline API calls
 extern STREAMLINERHI_API sl::Result SLinit(const sl::Preferences& pref, uint64_t sdkVersion = sl::kSDKVersion);
@@ -34,6 +37,66 @@ extern STREAMLINERHI_API sl::Result SLgetFeatureFunction(sl::Feature feature, co
 extern STREAMLINERHI_API sl::Result SLgetNewFrameToken(sl::FrameToken*& token, uint32_t* frameIndex = nullptr);
 extern STREAMLINERHI_API sl::Result SLsetD3DDevice(void* d3dDevice);
 
+
+extern STREAMLINERHI_API void LogStreamlineFunctionCall(const FString& Function, const FString& Arguments);
+
+struct StringifySLArgument
+{
+	TArray<FString> ArgStrings;
+	
+	template <typename Whatever>
+	void operator()(const Whatever& In)
+	{
+		ArgStrings.Add(FString::Printf(TEXT("arg%d"), ArgStrings.Num()));
+	}
+
+	void operator()(const sl::PCLMarker& In)
+	{
+		ArgStrings.Add(FString(ANSI_TO_TCHAR(sl::getPCLMarkerAsStr(In))));
+	}
+
+	void operator()(const sl::FrameToken& In)
+	{
+		ArgStrings.Add(FString::Printf(TEXT("frame=%u"), In.operator unsigned int()));
+	}
+
+	void operator()(const sl::ViewportHandle& In)
+	{
+		ArgStrings.Add(FString::Printf(TEXT("viewport=%u"), In.operator unsigned int()));
+	}
+
+	// sl_helpers.h, where are thou?
+	inline const char* getDLSSGModeAsStr(sl::DLSSGMode mode)
+	{
+		switch (mode)
+		{
+			SL_CASE_STR(sl::DLSSGMode::eOff);
+			SL_CASE_STR(sl::DLSSGMode::eOn);
+			SL_CASE_STR(sl::DLSSGMode::eAuto);
+			SL_CASE_STR(sl::DLSSGMode::eCount);
+		};
+		return "Unknown";
+	}
+
+	void operator()(const sl::DLSSGOptions& In)
+	{
+		ArgStrings.Add(FString(ANSI_TO_TCHAR(getDLSSGModeAsStr(In.mode))));
+	}
+
+	void operator()(const sl::DeepDVCOptions& In)
+	{
+		ArgStrings.Add(FString::Printf(TEXT("%s intensity=%.3f saturationBoost=%.3f"), ANSI_TO_TCHAR(getDeepDVCModeAsStr(In.mode)), In.intensity, In.saturationBoost));
+	}
+
+	FString GetJoinedArgString() const
+	{
+		return FString::Join(ArgStrings, TEXT(", "));
+	}
+};
+
+
+
+
 // Convenience function template and macro for using SLgetFeatureFunction
 //
 // Example use:
@@ -44,7 +107,36 @@ template<typename F, typename... Ts> static sl::Result CallSLFeatureFn(sl::Featu
 	if (PtrFn == nullptr)
 	{
 		sl::Result Result = SLgetFeatureFunction(Feature, FunctionName,  reinterpret_cast<void*&>(PtrFn));
-		checkf(Result == sl::Result::eOk, TEXT("%s: unable to map function (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		checkf(Result == sl::Result::eOk, TEXT("%s: unable to map function %s (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(FunctionName), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+	}
+
+	FString FunctionArgs;
+
+	const TTuple<Ts...> Quarrel(args...);
+	StringifySLArgument Stringifier;
+	VisitTupleElements(Stringifier, Quarrel);
+
+	bool bLogFeature = true;
+
+	// Look at me, I'm the denoiser nows
+	if (Feature == sl::kFeaturePCL)
+	{
+		bLogFeature = false;
+	}
+
+	if (Feature == sl::kFeatureReflex)
+	{
+		bLogFeature = false;
+	}
+
+	if (FString(FunctionName).Contains(TEXT("Get")))
+	{
+		bLogFeature = false;
+	}
+
+	if (bLogFeature)
+	{
+		LogStreamlineFunctionCall(FString::Printf(TEXT("%s"), ANSI_TO_TCHAR(FunctionName)), Stringifier.GetJoinedArgString());
 	}
 
 	return PtrFn(std::forward<Ts>(args)...);

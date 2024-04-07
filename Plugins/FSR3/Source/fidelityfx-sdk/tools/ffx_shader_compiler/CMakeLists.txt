@@ -1,4 +1,4 @@
-# This file is part of the FidelityFX SDK.
+# This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
 #
 # Copyright © 2023 Advanced Micro Devices, Inc.
 # 

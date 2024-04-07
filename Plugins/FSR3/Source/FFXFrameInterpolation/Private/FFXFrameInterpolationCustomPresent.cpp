@@ -264,6 +264,7 @@ FFXFrameInterpolationCustomPresent::FFXFrameInterpolationCustomPresent()
 , bHasValidInterpolatedRT(false)
 , bEnabled(false)
 , bResized(false)
+, bUseFFXSwapchain(false)
 {
 	FMemory::Memzero(Desc);
 }
@@ -321,7 +322,7 @@ void FFXFrameInterpolationCustomPresent::OnBackBufferResize()
 // match value subsequently returned by Present for this frame.
 bool FFXFrameInterpolationCustomPresent::NeedsNativePresent()
 {
-	return true;
+	return bUseFFXSwapchain ? bNeedsNativePresentRT : true;
 }
 // In come cases we want to use custom present but still let the native environment handle 
 // advancement of the backbuffer indices.
@@ -343,7 +344,20 @@ void FFXFrameInterpolationCustomPresent::BeginDrawing()
 // Present.  Must match value previously returned by NeedsNativePresent for this frame.
 bool FFXFrameInterpolationCustomPresent::Present(int32& InOutSyncInterval)
 {
-	return true;
+	if (bUseFFXSwapchain && !bPresentRHI && Current.Interpolated.GetReference())
+	{
+		FfxSwapchain SwapChain = GetBackend()->GetSwapchain(RHIViewport->GetNativeSwapChain());
+		FfxResource OutputRes = GetBackend()->GetInterpolationOutput(SwapChain);
+		FfxResource Interpolated = GetBackend()->GetNativeResource(Current.Interpolated->GetRHI(), FFX_RESOURCE_STATE_COPY_DEST);
+		FfxCommandList CmdList = GetBackend()->GetInterpolationCommandList(SwapChain);
+		FIntPoint Size = FIntPoint(OutputRes.description.width, OutputRes.description.height);
+		if (CmdList)
+		{
+			GetBackend()->CopySubRect(CmdList, Interpolated, OutputRes, Size, FIntPoint(0, 0));
+		}
+	}
+
+	return (!bUseFFXSwapchain || bPresentRHI);
 }
 
 // Called from RHI thread after native Present has been called
@@ -512,4 +526,9 @@ void FFXFrameInterpolationCustomPresent::SetCustomPresentStatus(FFXFrameInterpol
 			break;
 		}
 	}
+}
+
+void FFXFrameInterpolationCustomPresent::SetUseFFXSwapchain(bool const bToggle)
+{ 
+	bUseFFXSwapchain = bToggle;
 }

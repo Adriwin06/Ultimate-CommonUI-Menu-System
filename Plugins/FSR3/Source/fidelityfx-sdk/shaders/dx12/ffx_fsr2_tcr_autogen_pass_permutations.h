@@ -1,5 +1,5 @@
-#include "ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144.h"
 #include "ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63.h"
+#include "ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144.h"
 
 typedef union ffx_fsr2_tcr_autogen_pass_PermutationKey {
     struct {
@@ -62,14 +62,6 @@ typedef struct ffx_fsr2_tcr_autogen_pass_PermutationInfo {
 } ffx_fsr2_tcr_autogen_pass_PermutationInfo;
 
 static const uint32_t g_ffx_fsr2_tcr_autogen_pass_IndirectionTable[] = {
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
-    0,
     1,
     1,
     1,
@@ -126,10 +118,18 @@ static const uint32_t g_ffx_fsr2_tcr_autogen_pass_IndirectionTable[] = {
     1,
     1,
     1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
 };
 
 static const ffx_fsr2_tcr_autogen_pass_PermutationInfo g_ffx_fsr2_tcr_autogen_pass_PermutationInfo[] = {
-    { g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_size, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_data, 2, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceNames, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceSpaces, 7, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceNames, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceSpaces, 4, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceNames, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceSpaces, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
     { g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_size, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_data, 2, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_CBVResourceNames, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_CBVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_CBVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_CBVResourceSpaces, 7, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureSRVResourceNames, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureSRVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureSRVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureSRVResourceSpaces, 4, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureUAVResourceNames, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureUAVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureUAVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_c19b329acc1018b150607dc4141a2f63_TextureUAVResourceSpaces, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
+    { g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_size, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_data, 2, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceNames, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_CBVResourceSpaces, 7, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceNames, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureSRVResourceSpaces, 4, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceNames, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceBindings, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceCounts, g_ffx_fsr2_tcr_autogen_pass_7326f87ea31cd1235ebcc4db5d305144_TextureUAVResourceSpaces, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 };
 

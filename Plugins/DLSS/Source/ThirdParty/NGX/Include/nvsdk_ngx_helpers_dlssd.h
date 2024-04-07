@@ -188,6 +188,10 @@ typedef struct NVSDK_NGX_D3D11_DLSSD_Eval_Params
     float                               InFrameTimeDeltaInMsec; /* helps in determining the amount to denoise or anti-alias based on the speed of the object from motion vector magnitudes and fps as determined by this delta */
     ID3D11Resource*                     pInRayTracingHitDistance; /* for each effect - approximation to the amount of noise in a ray-traced color */
     ID3D11Resource*                     pInMotionVectorsReflections; /* motion vectors of reflected objects like for mirrored surfaces */
+    ID3D11Resource*                     pInTransparencyLayer; /* optional input res particle layer */
+    NVSDK_NGX_Coordinates               InTransparencyLayerSubrectBase;
+    ID3D11Resource*                     pInTransparencyLayerOpacity; /* optional input res particle opacity layer */
+    NVSDK_NGX_Coordinates               InTransparencyLayerOpacitySubrectBase;
 } NVSDK_NGX_D3D11_DLSSD_Eval_Params;
 
 static inline NVSDK_NGX_Result NGX_D3D11_CREATE_DLSSD_EXT(
@@ -238,7 +242,7 @@ static inline NVSDK_NGX_Result NGX_D3D11_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_MaterialId, pInDlssDEvalParams->GBufferSurface.pInAttrib[NVSDK_NGX_GBUFFER_MATERIALID]);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_8, pInDlssDEvalParams->GBufferSurface.pInAttrib[8]);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_9, pInDlssDEvalParams->GBufferSurface.pInAttrib[9]);
-    NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_SpecularMvec, pInDlssDEvalParams->GBufferSurface.pInAttrib[NVSDK_NGX_GBUFFER_SPECULAR_MVEC]);
+    NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_SpecularMvec, pInDlssDEvalParams->pInMotionVectorsReflections);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_11, pInDlssDEvalParams->GBufferSurface.pInAttrib[11]);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_12, pInDlssDEvalParams->GBufferSurface.pInAttrib[12]);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_13, pInDlssDEvalParams->GBufferSurface.pInAttrib[13]);
@@ -252,7 +256,6 @@ static inline NVSDK_NGX_Result NGX_D3D11_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_Position_ViewSpace, pInDlssDEvalParams->pInPositionViewSpace);
     NVSDK_NGX_Parameter_SetF(pInParams, NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, pInDlssDEvalParams->InFrameTimeDeltaInMsec);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_RayTracingHitDistance, pInDlssDEvalParams->pInRayTracingHitDistance);
-    NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_MotionVectorsReflection, pInDlssDEvalParams->pInMotionVectorsReflections);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, pInDlssDEvalParams->InColorSubrectBase.X);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, pInDlssDEvalParams->InColorSubrectBase.Y);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, pInDlssDEvalParams->InDepthSubrectBase.X);
@@ -320,6 +323,13 @@ static inline NVSDK_NGX_Result NGX_D3D11_EVALUATE_DLSSD_EXT(
 
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Normals, pInDlssDEvalParams->pInNormals);
     NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Roughness, pInDlssDEvalParams->pInRoughness);
+    NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer, pInDlssDEvalParams->pInTransparencyLayer);
+    NVSDK_NGX_Parameter_SetD3d11Resource(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity, pInDlssDEvalParams->pInTransparencyLayerOpacity);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer_Subrect_Base_X, pInDlssDEvalParams->InTransparencyLayerSubrectBase.X);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer_Subrect_Base_Y, pInDlssDEvalParams->InTransparencyLayerSubrectBase.Y);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity_Subrect_Base_X, pInDlssDEvalParams->InTransparencyLayerOpacitySubrectBase.X);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity_Subrect_Base_Y, pInDlssDEvalParams->InTransparencyLayerOpacitySubrectBase.Y);
+
 
     return NVSDK_NGX_D3D11_EvaluateFeature_C(pInCtx, pInHandle, pInParams, NULL);
 }
@@ -394,6 +404,11 @@ typedef struct NVSDK_NGX_D3D12_DLSSD_Eval_Params
     float                               InFrameTimeDeltaInMsec; /* helps in determining the amount to denoise or anti-alias based on the speed of the object from motion vector magnitudes and fps as determined by this delta */
     ID3D12Resource*                     pInRayTracingHitDistance; /* for each effect - approximation to the amount of noise in a ray-traced color */
     ID3D12Resource*                     pInMotionVectorsReflections; /* motion vectors of reflected objects like for mirrored surfaces */
+    ID3D12Resource*                     pInTransparencyLayer; /* optional input res particle layer */
+    NVSDK_NGX_Coordinates               InTransparencyLayerSubrectBase;
+    ID3D12Resource*                     pInTransparencyLayerOpacity; /* optional input res particle opacity layer */
+    NVSDK_NGX_Coordinates               InTransparencyLayerOpacitySubrectBase;
+
 } NVSDK_NGX_D3D12_DLSSD_Eval_Params;
 
 static inline NVSDK_NGX_Result NGX_D3D12_CREATE_DLSSD_EXT(
@@ -447,7 +462,6 @@ static inline NVSDK_NGX_Result NGX_D3D12_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_MaterialId, pInDlssDEvalParams->GBufferSurface.pInAttrib[NVSDK_NGX_GBUFFER_MATERIALID]);
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_8, pInDlssDEvalParams->GBufferSurface.pInAttrib[8]);
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_9, pInDlssDEvalParams->GBufferSurface.pInAttrib[9]);
-    NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_SpecularMvec, pInDlssDEvalParams->GBufferSurface.pInAttrib[NVSDK_NGX_GBUFFER_SPECULAR_MVEC]);
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_11, pInDlssDEvalParams->GBufferSurface.pInAttrib[11]);
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_12, pInDlssDEvalParams->GBufferSurface.pInAttrib[12]);
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_13, pInDlssDEvalParams->GBufferSurface.pInAttrib[13]);
@@ -461,7 +475,7 @@ static inline NVSDK_NGX_Result NGX_D3D12_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_Position_ViewSpace, pInDlssDEvalParams->pInPositionViewSpace);
     NVSDK_NGX_Parameter_SetF(pInParams, NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, pInDlssDEvalParams->InFrameTimeDeltaInMsec);
     NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_RayTracingHitDistance, pInDlssDEvalParams->pInRayTracingHitDistance);
-    NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_MotionVectorsReflection, pInDlssDEvalParams->pInMotionVectorsReflections);
+    NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_GBuffer_SpecularMvec, pInDlssDEvalParams->pInMotionVectorsReflections);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, pInDlssDEvalParams->InColorSubrectBase.X);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, pInDlssDEvalParams->InColorSubrectBase.Y);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, pInDlssDEvalParams->InDepthSubrectBase.X);
@@ -528,6 +542,12 @@ static inline NVSDK_NGX_Result NGX_D3D12_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSSD_SpecularRayDirectionHitDistance_Subrect_Base_Y, pInDlssDEvalParams->InSpecularRayDirectionHitDistanceSubrectBase.Y);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_DLSS_WORLD_TO_VIEW_MATRIX, pInDlssDEvalParams->pInWorldToViewMatrix);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_DLSS_VIEW_TO_CLIP_MATRIX, pInDlssDEvalParams->pInViewToClipMatrix);
+    NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer, pInDlssDEvalParams->pInTransparencyLayer);
+    NVSDK_NGX_Parameter_SetD3d12Resource(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity, pInDlssDEvalParams->pInTransparencyLayerOpacity);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer_Subrect_Base_X, pInDlssDEvalParams->InTransparencyLayerSubrectBase.X);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer_Subrect_Base_Y, pInDlssDEvalParams->InTransparencyLayerSubrectBase.Y);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity_Subrect_Base_X, pInDlssDEvalParams->InTransparencyLayerOpacitySubrectBase.X);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity_Subrect_Base_Y, pInDlssDEvalParams->InTransparencyLayerOpacitySubrectBase.Y);
 
     return NVSDK_NGX_D3D12_EvaluateFeature_C(pInCmdList, pInHandle, pInParams, NULL);
 }

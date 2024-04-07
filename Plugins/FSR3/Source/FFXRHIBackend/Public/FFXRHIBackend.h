@@ -121,7 +121,7 @@ public:
 	FfxErrorCode CreateInterface(FfxInterface& OutInterface, uint32 MaxContexts) final;
 	FfxDevice GetDevice(void* device) final;
 	FfxCommandList GetCommandList(void* list) final;
-	FfxResource GetResource(void* resource, wchar_t* name, FfxResourceStates state, uint32 shaderComponentMapping) final;
+	FfxResource GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping) final;
 	FfxCommandQueue GetCommandQueue(void* cmdQueue) final;
 	FfxSwapchain GetSwapchain(void* swapChain) final;
 	FfxDevice GetNativeDevice() final;

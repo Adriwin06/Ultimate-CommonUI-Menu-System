@@ -83,6 +83,6 @@ private:
 	float AverageTime;
 	float AverageFPS;
 	uint32 Index;
+	uint32 ResetState;
 	bool bInterpolatedFrame;
-	bool bNeedsReset;
 };

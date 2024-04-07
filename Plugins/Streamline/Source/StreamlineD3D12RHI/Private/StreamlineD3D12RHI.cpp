@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -89,30 +89,42 @@ public:
 
 	HRESULT CreateSwapChainForHwnd(IDXGIFactory2* pFactory, IUnknown* pDevice, HWND hWnd, const DXGI_SWAP_CHAIN_DESC1* pDesc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullScreenDesc, IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain) override final
 	{
+		HRESULT DXGIResult = LONG_ERROR;
 		if (!StreamlineRHI->IsSwapchainHookingAllowed())
 		{
-			return pFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
+			DXGIResult = pFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
 		}
-		// TODO: what happens if a second swapchain is created while PIE is active?
-		IDXGIFactory2* SLFactory = pFactory;
-		sl::Result Result = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
-		checkf(Result == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		else
+		{
+			// TODO: what happens if a second swapchain is created while PIE is active?
+			IDXGIFactory2* SLFactory = pFactory;
+			sl::Result SLResult = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
+			checkf(SLResult == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(SLResult)));
+			DXGIResult = SLFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
+		}
 
-		return SLFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
+		StreamlineRHI->OnSwapchainCreated(ppSwapChain);
+		return DXGIResult;
 	}
 
 	HRESULT CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain) override final
 	{
+		HRESULT DXGIResult = LONG_ERROR;
 		if (!StreamlineRHI->IsSwapchainHookingAllowed())
 		{
-			return pFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+			DXGIResult = pFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
 		}
-		// TODO: what happens if a second swapchain is created while PIE is active?
-		IDXGIFactory* SLFactory = pFactory;
-		sl::Result Result = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
-		checkf(Result == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		else
+		{
+			// TODO: what happens if a second swapchain is created while PIE is active?
+			IDXGIFactory* SLFactory = pFactory;
+			sl::Result SLResult = SLUpgradeInterface(reinterpret_cast<void**>(&SLFactory));
+			checkf(SLResult == sl::Result::eOk, TEXT("%s: error upgrading IDXGIFactory (%s)"), ANSI_TO_TCHAR(__FUNCTION__), ANSI_TO_TCHAR(sl::getResultAsStr(SLResult)));
+			DXGIResult = SLFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+		}
 
-		return SLFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);
+		StreamlineRHI->OnSwapchainCreated(*ppSwapChain);
+		return DXGIResult;
 	}
 private:
 	const FStreamlineRHI* StreamlineRHI;
@@ -152,17 +164,18 @@ public:
 
 		if (IsStreamlineSupported())
 		{
-			sl::Result Result = SLisFeatureSupported(sl::kFeatureDLSS_G, SLAdapterInfo);
-			UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("SLisFeatureSupported(sl::kFeatureDLSS_G) -> (%d, %s)"), Result, ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
-			if (Result == sl::Result::eOk)
+			TTuple<bool, FString> bSwapchainProvider = IsSwapChainProviderRequired(SLAdapterInfo);
+			if (bSwapchainProvider.Get<0>())
 			{
-				UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("Registering FStreamlineD3D12DXGISwapchainProvider as IDXGISwapchainProvider"));
+				UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("Registering FStreamlineD3D12DXGISwapchainProvider as IDXGISwapchainProvider, due to %s"), *bSwapchainProvider.Get<1>());
 				CustomSwapchainProvider = MakeUnique<FStreamlineD3D12DXGISwapchainProvider>(this);
 				IModularFeatures::Get().RegisterModularFeature(IDXGISwapchainProvider::GetModularFeatureName(), CustomSwapchainProvider.Get());
+				bIsSwapchainProviderInstalled = true;
 			}
 			else
 			{
-				UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("Skip registering IDXGISwapchainProvider, DLSS-FG unavailable (%s)"), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+				UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("Skip registering IDXGISwapchainProvider, due to %s"), *bSwapchainProvider.Get<1>());
+				bIsSwapchainProviderInstalled = false;
 			}
 		}
 
@@ -181,73 +194,198 @@ public:
 		UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("%s Leave"), ANSI_TO_TCHAR(__FUNCTION__));
 	}
 
-	virtual void TagTexture(FRHICommandList& CmdList, const FRHITextureWithRect& InResource, EStreamlineResource InResourceTag, uint32 InViewID) final
+	virtual void TagTextures(FRHICommandList& CmdList, uint32 InViewID, const TArrayView<const FRHIStreamlineResource> InResources) final
 	{
-
-		if(InResource.Texture && InResource.Texture->IsValid())
+		if (!InResources.Num()) // IsEmpty is only 5.1+
 		{
+			return;
+		}
+		
 
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
+		ID3D12GraphicsCommandList* NativeCmdList = nullptr;
+#else
+		ID3D12CommandList*         NativeCmdList = nullptr;
+		FD3D12Device* D3D12Device = nullptr;
+#endif
+
+	
+
+		for (const FRHIStreamlineResource& Resource : InResources)
+		{
+			if (Resource.Texture)
+			{
+				// that's inconsistent with below, but...
+				check(Resource.Texture->IsValid());
+
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
+				NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(D3D12RHI->RHIGetResourceDeviceIndex(Resource.Texture));
+#else
+				FD3D12TextureBase* DeviceQueryD3D12Texture = GetD3D12TextureFromRHITexture(Resource.Texture);
+				D3D12Device = DeviceQueryD3D12Texture->GetParentDevice();
+				NativeCmdList = D3D12Device->GetDefaultCommandContext().CommandListHandle.CommandList();
+#endif
+
+				// TODO check that all resources have the same device index. So if that ever changes we might need to split the calls into slTag into per command list/per device index calls.
+				// for now we take any commandlist
+				break;
+			}
+		}
+
+		struct FStreamlineD3D12Transition
+		{
+			FRHITexture* Texture;
+			D3D12_RESOURCE_STATES State;
+			uint32 SubresouceIndex;
+		};
+
+		auto TransitionResource = [&](const FStreamlineD3D12Transition& Transition)
+		{
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
+			D3D12RHI->RHITransitionResource(CmdList, Transition.Texture, Transition.State, Transition.SubresouceIndex);
+#else
+
+			const FD3D12TextureBase* D3D12Texture = GetD3D12TextureFromRHITexture(Transition.Texture);
+#if ENGINE_MAJOR_VERSION == 5
+			D3D12RHI->TransitionResource(D3D12Device->GetDefaultCommandContext().CommandListHandle, D3D12Texture->GetResource(), D3D12_RESOURCE_STATE_TBD, Transition.State, Transition.SubresouceIndex, FD3D12DynamicRHI::ETransitionMode::Apply);
+#else
+			D3D12RHI->TransitionResource(D3D12Device->GetDefaultCommandContext().CommandListHandle, D3D12Texture->GetResource(), Transition.State, Transition.SubresouceIndex);
+#endif
+#endif
+		};
+
+		// adding + 1 to get to the count
+		constexpr uint32 AllocatorNum = uint32(EStreamlineResource::Last) + 1;
+
+		// if all input resources are nullptr, those arrays stay empty below
+		TArray<FStreamlineD3D12Transition, TInlineAllocator<AllocatorNum>> PreTagTransitions;
+		TArray<FStreamlineD3D12Transition, TInlineAllocator<AllocatorNum>> PostTagTransitions;
+
+		// those get filled in also for null input resource so we can "Streamline nulltag" them
+		TArray<sl::Resource, TInlineAllocator<AllocatorNum>> SLResources;
+		TArray<sl::ResourceTag, TInlineAllocator<AllocatorNum>> SLTags;
+
+		for(const FRHIStreamlineResource&  Resource : InResources)
+		{
 			sl::Resource SLResource;
 			FMemory::Memzero(SLResource);
+			SLResource.type = sl::ResourceType::eCount;
 
-			SLResource.native = InResource.Texture->GetNativeResource();
-
-			switch (InResourceTag)
-			{
-				case EStreamlineResource::Depth:
-					// note: subresources are in different states, we fix this up below
-					// subresource 0 is D3D12_RESOURCE_STATE_DEPTH_READ|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
-					// subresource 1 is D3D12_RESOURCE_STATE_DEPTH_WRITE
-					SLResource.state = D3D12_RESOURCE_STATE_DEPTH_READ|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-					break;
-				case EStreamlineResource::MotionVectors:
-					SLResource.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-					break;
-				case EStreamlineResource::HUDLessColor:
-					SLResource.state = D3D12_RESOURCE_STATE_COPY_DEST;
-					break;
-				case EStreamlineResource::UIColorAndAlpha:
-					SLResource.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-					break;
-				default:
-					checkf(false, TEXT("Unimplemented tag type (streamline plugin developer should fix)"));
-					SLResource.state = D3D12_RESOURCE_STATE_COMMON;
-					break;
-			}
-
-			sl::ResourceTag Tag;
-			Tag.resource = &SLResource;
-			Tag.type = ToSL(InResourceTag);
+			sl::ResourceTag SLTag;
+			SLTag.type = ToSL(Resource.StreamlineTag);
 			// TODO: sl::ResourceLifecycle::eValidUntilPresent would be more efficient, are there any textures where it's applicable?
-			Tag.lifecycle = sl::ResourceLifecycle::eOnlyValidNow;
-			Tag.extent = ToSL(InResource.ViewRect);
+			SLTag.lifecycle = sl::ResourceLifecycle::eOnlyValidNow;
 
-#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
-			ID3D12GraphicsCommandList* NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(D3D12RHI->RHIGetResourceDeviceIndex(InResource.Texture));
-#else
-			FD3D12TextureBase* D3D12Texture = GetD3D12TextureFromRHITexture(InResource.Texture);
-			FD3D12Device* Device = D3D12Texture->GetParentDevice();
-			ID3D12CommandList* NativeCmdList = Device->GetDefaultCommandContext().CommandListHandle.CommandList();
-#endif
-#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
-			if (InResourceTag == EStreamlineResource::Depth)
+			if(Resource.Texture && Resource.Texture->IsValid())
 			{
-				// SL doesn't support subresources in different states, so temporarily make them consistent
-				// This might lead to wasteful state transitions
-				D3D12RHI->RHITransitionResource(CmdList, InResource.Texture, D3D12_RESOURCE_STATE_DEPTH_READ|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 1);
-				SLsetTag(sl::ViewportHandle(InViewID), &Tag, 1, NativeCmdList);
-				D3D12RHI->RHITransitionResource(CmdList, InResource.Texture, D3D12_RESOURCE_STATE_DEPTH_WRITE, 1);
-			}
+				SLResource.native = Resource.Texture->GetNativeResource();
+				SLResource.type = sl::ResourceType::eTex2d;
+
+				switch (Resource.StreamlineTag)
+				{
+					case EStreamlineResource::Depth:
+						// note: subresources are in different states, so we add a transition sandwich
+						// subresource 0 is D3D12_RESOURCE_STATE_DEPTH_READ|D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE
+						// subresource 1 is D3D12_RESOURCE_STATE_DEPTH_WRITE
+
+						PreTagTransitions.Add( { Resource.Texture, D3D12_RESOURCE_STATE_DEPTH_READ | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, 1 });
+						SLResource.state = PreTagTransitions.Last().State;
+
+						PostTagTransitions.Add({ Resource.Texture, D3D12_RESOURCE_STATE_DEPTH_WRITE, 1 });
+						break;
+					case EStreamlineResource::MotionVectors:
+						SLResource.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+						break;
+					case EStreamlineResource::HUDLessColor:
+						SLResource.state = D3D12_RESOURCE_STATE_COPY_DEST;
+						break;
+					case EStreamlineResource::UIColorAndAlpha:
+						SLResource.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+						break;
+					case EStreamlineResource::Backbuffer:
+						SLResource.state = 0;
+					case EStreamlineResource::ScalingOutputColor:
+					SLResource.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+						break;
+					default:
+						checkf(false, TEXT("Unimplemented tag type (streamline plugin developer should fix)"));
+						SLResource.state = D3D12_RESOURCE_STATE_COMMON;
+						break;
+				}
+
+				SLTag.extent = ToSL(Resource.ViewRect);
+
+			} // if resource is valid
 			else
-#endif
 			{
-				SLsetTag(sl::ViewportHandle(InViewID), &Tag, 1, NativeCmdList);
+				// explicitely nulltagging so SL removes it from it's internal book keeping
+				SLResource.native = nullptr;
 			}
-		}
-		else
+
+			// order matters here so we first put the resource into our array and then point the sltag at the resource in the array
+			// Note: we have an TInline Allocator so our memory is pre-allocated so we should not have a re-allocation here (which then would invalidate pointers previously stored)
+			SLResources.Add(SLResource);
+			SLTag.resource = &SLResources.Last();
+			SLTags.Add(SLTag);
+		} 
+		
+
+		// transition any resources before
+		for (FStreamlineD3D12Transition& Transition : PreTagTransitions)
 		{
-			TagNullTexture(InResourceTag, InViewID);
+			TransitionResource(Transition);
 		}
+
+
+		//flush transitions
+		// if we nulltag D3D12Device is nullptr and PreTagTransitions  is empty
+		if (PreTagTransitions.Num())
+		{
+		
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
+		// TODO 5.1+ support
+#else
+			D3D12Device->GetDefaultCommandContext().CommandListHandle.FlushResourceBarriers();
+#endif
+		}
+
+		// tag all the things
+		// note that NativeCmdList might be null if we only have resources to "Streamline nulltag"
+
+		SLsetTag(sl::ViewportHandle(InViewID), SLTags.GetData(), SLTags.Num(), NativeCmdList);
+
+		// then transition back to what was before
+		for (FStreamlineD3D12Transition& Transition : PostTagTransitions)
+		{
+			TransitionResource(Transition);
+		}
+
+		// TODO flush transitions again?
+	}
+
+	virtual void* GetCommandBuffer(FRHICommandList& CmdList, FRHITexture* Texture) override final
+	{
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
+		ID3D12GraphicsCommandList* NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(D3D12RHI->RHIGetResourceDeviceIndex(Texture));
+#else
+		FD3D12TextureBase* D3D12Texture = GetD3D12TextureFromRHITexture(Texture);
+		FD3D12Device* Device = D3D12Texture->GetParentDevice();
+		ID3D12CommandList* NativeCmdList = Device->GetDefaultCommandContext().CommandListHandle.CommandList();
+#endif
+		return static_cast<void*>(NativeCmdList);
+	}
+
+
+	void PostStreamlineFeatureEvaluation(FRHICommandList& CmdList, FRHITexture* Texture) final
+	{
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI
+		const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(Texture);
+		D3D12RHI->RHIFinishExternalComputeWork(DeviceIndex, D3D12RHI->RHIGetGraphicsCommandList(DeviceIndex));
+#else
+		FD3D12Device* Device = D3D12RHI->GetAdapter().GetDevice(CmdList.GetGPUMask().ToIndex());
+		Device->GetCommandContext().StateCache.ForceSetComputeRootSignature();
+		Device->GetCommandContext().StateCache.GetDescriptorCache()->SetCurrentCommandList(Device->GetCommandContext().CommandListHandle);
+#endif
 	}
 
 	virtual const sl::AdapterInfo* GetAdapterInfo() override final
@@ -260,6 +398,10 @@ public:
 		return true;
 	}
 	
+	virtual bool IsDeepDVCSupportedByRHI() const override final
+	{
+		return true;
+	}	
 
 	virtual void APIErrorHandler(const sl::APIError& LastError) final
 	{
@@ -310,10 +452,25 @@ public:
 #endif
 	}
 
+	virtual bool IsStreamlineSwapchainProxy(void* NativeSwapchain) const override final
+	{
+		TRefCountPtr<IUnknown> NativeInterface;
+		const sl::Result Result = SLgetNativeInterface(NativeSwapchain, IID_PPV_ARGS_Helper(NativeInterface.GetInitReference()));
+
+		if (Result == sl::Result::eOk)
+		{
+			return NativeInterface != NativeSwapchain;
+		}
+		else
+		{
+			UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("SLgetNativeInterface(%p) failed (%d, %s)"), NativeSwapchain,  Result, ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		}
+		return false;
+	}
+	
 
 protected:
 
-	
 private:
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
 	ID3D12DynamicRHI* D3D12RHI = nullptr;
@@ -332,7 +489,7 @@ private:
 void FStreamlineD3D12RHIModule::StartupModule()
 {
 	auto CVarInitializePlugin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.InitializePlugin"));
-	if (CVarInitializePlugin && !CVarInitializePlugin->GetBool())
+	if (CVarInitializePlugin && !CVarInitializePlugin->GetBool() ||  (FParse::Param(FCommandLine::Get(), TEXT("slno"))))
 	{
 		UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("Initialization of StreamlineD3D12RHI is disabled."));
 		return;

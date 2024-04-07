@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -71,7 +71,20 @@ void GBufferResolvePixelShader(
 	FGBufferData GBuffer = GetGBufferDataUint(uint2(SvPosition.xy + InputViewPort_ViewportMin), true);
 #if DIFFUSE_SPECULAR_ALBEDO
 
-	OutDiffuseAlbedo = float4(GBuffer.DiffuseColor, 1.0f);
+	float3 DiffuseColor = GBuffer.DiffuseColor;
+	float3 SpecularColor = GBuffer.SpecularColor;
+
+	if (UseSubsurfaceProfile(GBuffer.ShadingModelID))
+	{
+		// this is a bit odd, but the diffuse signal is multiplied by this without any conversion tied to metalness
+		// See apply code in PostprocessSubsurface
+		DiffuseColor = GBuffer.StoredBaseColor;
+
+		// the correct value here is a bit debatable, as the skin computes with one value, then applies with another
+		SpecularColor = ComputeF0(GBuffer.Specular, GBuffer.StoredBaseColor, GBuffer.Metallic);
+		//SpecularColor = 1.0;
+	}
+
 
 	float3 WorldPos = ReconstructWorldPositionFromDepth(ViewportUVToBufferUV(InUV), GBuffer.Depth);
 	float3 RayDirection = normalize(WorldPos - LWCHackToFloat(PrimaryView.WorldCameraOrigin));
@@ -79,7 +92,9 @@ void GBufferResolvePixelShader(
 	float NoV = saturate(dot(-RayDirection, GBuffer.WorldNormal));
 	float x = NoV * NoV;
 	NoV = x / (x + (1 - NoV) * (1 - NoV));
-	float3 F = EnvBRDFApproxRTG(GBuffer.SpecularColor, Square(GBuffer.Roughness), NoV * 0.75f);
+	float3 F = EnvBRDFApproxRTG(SpecularColor, Square(GBuffer.Roughness), NoV * 0.75f);
+
+	OutDiffuseAlbedo = float4(DiffuseColor, 1.0f);
 	OutSpecularAlbedo = float4(F, 1.0f);
 	OutNormal = float4(GBuffer.WorldNormal, GBuffer.Roughness);
 	OutRoughness = GBuffer.Roughness;

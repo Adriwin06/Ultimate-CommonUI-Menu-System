@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -10,6 +10,7 @@
 */
 #pragma once
 
+#include "StreamlineRHI.h"
 #include "sl.h"
 #include "sl_helpers.h"
 
@@ -55,7 +56,9 @@ inline sl::Extent ToSL(const FIntRect& InRect)
 
 	check(InRect.Width() >= 0);
 	check(InRect.Height() >= 0);
-	return { uint32_t(InRect.Min.X), uint32_t(InRect.Min.Y), uint32_t(InRect.Width()), uint32_t(InRect.Height()) };
+	// sl::Extent has ^top^ first in the struct definion and ^left^ second, i.e. YX for the offset, so we need to swap Y and X :|
+	return { uint32_t(InRect.Min.Y /* Y first intentionally*/), uint32_t(InRect.Min.X /* X second intentionally*/), 
+		uint32_t(InRect.Width()), uint32_t(InRect.Height())};
 };
 
 inline sl::BufferType ToSL(EStreamlineResource InResourceTag)
@@ -68,6 +71,8 @@ inline sl::BufferType ToSL(EStreamlineResource InResourceTag)
 	case EStreamlineResource::MotionVectors: return sl::kBufferTypeMotionVectors;
 	case EStreamlineResource::HUDLessColor: return sl::kBufferTypeHUDLessColor;
 	case EStreamlineResource::UIColorAndAlpha: return sl::kBufferTypeUIColorAndAlpha;
+	case EStreamlineResource::Backbuffer: return sl::kBufferTypeBackbuffer;
+	case EStreamlineResource::ScalingOutputColor: return sl::kBufferTypeScalingOutputColor;
 	}
 }
 

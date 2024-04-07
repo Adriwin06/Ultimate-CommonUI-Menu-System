@@ -31,7 +31,6 @@ FfxFloat32 ComputeSampleDepthClip(FfxInt32x2 iPxSamplePos, FfxFloat32 fPreviousD
 
     // Depth separation logic ref: See "Minimum Triangle Separation for Correct Z-Buffer Occlusion"
     // Intention: worst case of formula in Figure4 combined with Ksep factor in Section 4
-    // TODO: check intention and improve, some banding visible
     const FfxFloat32 fHalfViewportWidth = RenderSize().x * 0.5f;
     FfxFloat32       fDepthThreshold    = ffxMax(fCurrentDepthViewSpace, fPrevNearestDepthViewSpace);
 

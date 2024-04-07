@@ -705,7 +705,7 @@ FRDGTexture* FFXBackendState::GetRDGTexture(FRDGBuilder& GraphBuilder, uint32 In
 		}
 		else if (!RDG && Resources[Index].Resource)
 		{
-#if UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT
+#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT) && RHI_ENABLE_RESOURCE_INFO
 			FRHIResourceInfo Info;
 			Resources[Index].Resource->GetResourceInfo(Info);
 			RDG = RegisterExternalTexture(GraphBuilder, (FRHITexture*)Resources[Index].Resource, *Info.Name.ToString());
@@ -861,7 +861,7 @@ FfxCommandList FFXRHIBackend::GetCommandList(void* list)
 {
 	return (FfxCommandList)list;
 }
-FfxResource FFXRHIBackend::GetResource(void* resource, wchar_t* name, FfxResourceStates state, uint32 shaderComponentMapping)
+FfxResource FFXRHIBackend::GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping)
 {
 	check(false);
 	FfxResource Result = GetNativeResource((FRHITexture*)resource, state);

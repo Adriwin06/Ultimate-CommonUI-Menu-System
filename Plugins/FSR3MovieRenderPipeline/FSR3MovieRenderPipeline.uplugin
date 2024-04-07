@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "3.0.2",
+	"VersionName": "3.0.4",
 	"FriendlyName": "FidelityFX Super Resolution 3 Movie Render Pipeline Support",
 	"Description": "Plugin that enables FidelityFX Super Resolution 3 within the Movie Render Pipeline.",
 	"Category": "Rendering",

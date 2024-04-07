@@ -189,6 +189,20 @@ TAutoConsoleVariable<int32> CVarFSR3QuantizeInternalTextures(
 	ECVF_RenderThreadSafe
 );
 
+TAutoConsoleVariable<float> CVarFSR3ReactiveMaskPreDOFTranslucencyScale(
+	TEXT("r.FidelityFX.FSR3.ReactiveMaskPreDOFTranslucencyScale"),
+	0.8f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.8), scales how much contribution pre-Depth-of-Field translucency color makes to the reactive mask. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<int32> CVarFSR3ReactiveMaskPreDOFTranslucencyMax(
+	TEXT("r.FidelityFX.FSR3.ReactiveMaskPreDOFTranslucencyMax"),
+	0,
+	TEXT("Toggle to determine whether to use the max(SceneColorPostDepthOfField - SceneColorPreDepthOfField) or length(SceneColorPostDepthOfField - SceneColorPreDepthOfField) to determine the contribution of Pre-Depth-of-Field translucency. Default is 0."),
+	ECVF_RenderThreadSafe
+);
+
 
 //------------------------------------------------------------------------------------------------------
 // Console variables for Frame Interpolation.

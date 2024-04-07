@@ -279,7 +279,7 @@ public:
 	{
 		return ffxGetCommandListDX12((ID3D12CommandList*) list);
 	}
-	FfxResource GetResource(void* resource, wchar_t* name, FfxResourceStates state, uint32 shaderComponentMapping) final
+	FfxResource GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping) final
 	{
 		return ffxGetResourceDX12((ID3D12Resource*)resource, name, state);
 	}
@@ -837,7 +837,15 @@ public:
 				*ppSwapChain = RawSwapChain;
 				if (bOverrideSwapChain)
 				{
-					CustomPresent->SetMode(EFFXFrameInterpolationPresentModeNative);
+					bool bAllowAsyncWorkloads = (CVarFSR3AllowAsyncWorkloads.GetValueOnAnyThread() != 0);
+					if (bAllowAsyncWorkloads)
+					{
+						CustomPresent->SetMode(EFFXFrameInterpolationPresentModeNative);
+					}
+					else
+					{
+						CustomPresent->SetUseFFXSwapchain(true);
+					}
 				}
 			}
 			else

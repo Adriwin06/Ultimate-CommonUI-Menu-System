@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -129,13 +129,16 @@ float UStreamlineLibraryReflex::GetRenderLatencyInMs()
 	return 0.f;
 }
 
-
-
 void UStreamlineLibraryReflex::Startup()
 {
-
+#if WITH_STREAMLINE
+	UStreamlineLibrary::RegisterFeatureSupport(UStreamlineFeature::Reflex, UStreamlineLibraryReflex::QueryReflexSupport());
+#endif
 }
+
 void UStreamlineLibraryReflex::Shutdown()
 {
+#if WITH_STREAMLINE
 
+#endif
 }

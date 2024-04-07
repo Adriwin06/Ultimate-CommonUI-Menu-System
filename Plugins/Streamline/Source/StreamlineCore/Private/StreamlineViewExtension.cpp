@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -13,7 +13,9 @@
 
 #include "StreamlineCorePrivate.h"
 #include "StreamlineDLSSG.h"
+#include "StreamlineDeepDVC.h"
 #include "StreamlineRHI.h"
+#include "StreamlineAPI.h"
 
 #include "ClearQuad.h"
 #include "Runtime/Launch/Resources/Version.h"
@@ -21,8 +23,9 @@
 #include "SceneView.h"
 #include "SceneTextureParameters.h"
 #include "VelocityCombinePass.h"
-
-
+// TODO, clean up as described below
+#include "sl_helpers.h"
+#include "sl_dlss_g.h"
 #define LOCTEXT_NAMESPACE "FStreamlineViewExtension"
 
 #if defined (ENGINE_STREAMLINE_VERSION) && (ENGINE_STREAMLINE_VERSION >= 1)
@@ -30,6 +33,9 @@
 #else
 #define ENGINE_SUPPORTS_CLEARQUADALPHA ((ENGINE_MAJOR_VERSION == 5) && (ENGINE_MINOR_VERSION >= 2))
 #endif
+
+
+TArray<FStreamlineViewExtension::FTrackedView> FStreamlineViewExtension::TrackedViews;
 
 
 static TAutoConsoleVariable<bool> CVarStreamlineTagSceneColorWithoutHUD(
@@ -40,8 +46,8 @@ static TAutoConsoleVariable<bool> CVarStreamlineTagSceneColorWithoutHUD(
 
 static TAutoConsoleVariable<bool> CVarStreamlineTagEditorSceneColorWithoutHUD(
 	TEXT("r.Streamline.Editor.TagSceneColorWithoutHUD"),
-	false,
-	TEXT("Pass scene color without HUD into DLSS Frame Generation in the editor (default = false)\n"),
+	true,
+	TEXT("Pass scene color without HUD into DLSS Frame Generation in the editor (default = true)\n"),
 	ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarStreamlineDilateMotionVectors(
@@ -70,10 +76,19 @@ static TAutoConsoleVariable<float> CVarStreamlineCustomCameraFarPlane(
 	ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarStreamlineViewIdOverride(
-	TEXT("r.Streamline.ViewIdOverride"), 1,
-	TEXT("Replace the correct ViewID with 0 for bringup\n")
+	TEXT("r.Streamline.ViewIdOverride"), -1,
+	TEXT("Replace the view id passed into Streamline based on\n")
+	TEXT("-1: Automatic, based on the state of r.Streamline.ViewIndexToTag (default)\n")
 	TEXT("0: use ViewState.UniqueID \n")
-	TEXT("1: on set view ID to 0 (default)\n"),
+	TEXT("1: overrride to 0 )\n"),
+	ECVF_Default);
+
+static TAutoConsoleVariable<int32> CVarStreamlineViewIndexToTag(
+	TEXT("r.Streamline.ViewIndexToTag"), 0,
+	TEXT("Which view of a view family to tag\n")
+	TEXT("-1: all views\n")
+	TEXT("0: first view (default) \n")
+	TEXT("1..n: nth view, typically up to 3 when having 4 player split screen view families\n"),
 	ECVF_Default);
 
 static TAutoConsoleVariable<bool> CVarStreamlineClearColorAlpha(
@@ -84,6 +99,24 @@ static TAutoConsoleVariable<bool> CVarStreamlineClearColorAlpha(
 
 
 DECLARE_GPU_STAT(Streamline)
+DECLARE_GPU_STAT(StreamlineDeepDVC)
+
+
+FDelegateHandle FStreamlineViewExtension::OnPreResizeWindowBackBufferHandle;
+FDelegateHandle FStreamlineViewExtension::OnSlateWindowDestroyedHandle;
+
+bool HasViewIdOverride()
+{
+	if (CVarStreamlineViewIdOverride->GetInt() == -1)
+	{
+		return CVarStreamlineViewIndexToTag->GetInt() != -1;
+	}
+	else
+	{
+		return CVarStreamlineViewIdOverride->GetInt() == 1;
+	}
+
+}
 
 FStreamlineViewExtension::FStreamlineViewExtension(const FAutoRegister& AutoRegister, FStreamlineRHI* InStreamlineRHIExtensions)
 	: FSceneViewExtensionBase(AutoRegister)
@@ -97,15 +130,47 @@ FStreamlineViewExtension::FStreamlineViewExtension(const FAutoRegister& AutoRegi
 	};
 
 	IsActiveThisFrameFunctions.Add(IsActiveFunctor);
+	{
+		check(FSlateApplication::IsInitialized());
+		FSlateRenderer* SlateRenderer = FSlateApplication::Get().GetRenderer();
 
+		OnPreResizeWindowBackBufferHandle = SlateRenderer->OnPreResizeWindowBackBuffer().AddRaw(this, &FStreamlineViewExtension::UntrackViewsForBackbuffer);
+		
+		OnSlateWindowDestroyedHandle = FSlateApplication::Get().GetRenderer()->OnSlateWindowDestroyed().AddLambda(
+			[this] (void* InViewport) {
+			
+				FViewportRHIRef ViewportReference = *(FViewportRHIRef*)InViewport;
+				void* NativeSwapchain = ViewportReference->GetNativeSwapChain();
+				StreamlineRHIExtensions->OnSwapchainCreated(NativeSwapchain);
+			}
+		);
+
+		// ShutdownModule is too late for this
+		FSlateApplication::Get().OnPreShutdown().AddLambda(
+			[]()
+			{
+				FSlateRenderer* SlateRenderer = FSlateApplication::Get().GetRenderer();
+				check(SlateRenderer);
+
+
+				UE_LOG(LogStreamline, Log, TEXT("Unregistering of OnPreResizeWindowBackBuffer callback during FSlateApplication::OnPreShutdown"));
+				SlateRenderer->OnPreResizeWindowBackBuffer().Remove(OnPreResizeWindowBackBufferHandle);
+
+				UE_LOG(LogStreamline, Log, TEXT("Unregistering of OnSlateWindowDestroyed callback during FSlateApplication::OnPreShutdown"));
+				SlateRenderer->OnSlateWindowDestroyed().Remove(OnSlateWindowDestroyedHandle);
+			}
+		);
+	}
 }
 
 void FStreamlineViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
+
 }
 
 void FStreamlineViewExtension::SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView)
 {
+
 }
 
 void FStreamlineViewExtension::SetupViewPoint(APlayerController* Player, FMinimalViewInfo& InViewInfo)
@@ -117,6 +182,219 @@ void FStreamlineViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFam
 {
 	BeginRenderViewFamilyDLSSG(InViewFamily);
 }
+
+
+void FStreamlineViewExtension::LogTrackedViews(const TCHAR* CallSite)
+{
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+	const FString ViewRectString = FString::JoinBy(TrackedViews, TEXT(", "), [](const FTrackedView& State)
+	{ 
+		FString TextureName = TEXT("Call me nobody");
+		FString TextureDimensionAsString = TEXT("HerpxDerp");
+
+		if (FRHITexture* Texture = State.Texture)
+		{
+			if (Texture && Texture->IsValid())
+			{
+				TextureName = FString::Printf(TEXT("%s %p"), *Texture->GetName().ToString(), Texture->GetTexture2D());
+#if (ENGINE_MAJOR_VERSION  == 4)
+				TextureDimensionAsString = Texture->GetSizeXYZ().ToString();
+#else
+				TextureDimensionAsString = Texture->GetSizeXY().ToString();
+#endif
+			}
+		}
+		return FString::Printf(TEXT("%u %s (%ux%u) %s %s"), State.ViewKey, *State.ViewRect.ToString(), State.ViewRect.Width(), State.ViewRect.Height(), *TextureName, *TextureDimensionAsString);
+	}
+	);
+
+	UE_LOG(LogStreamline, Log, TEXT("%2u %s %s"), TrackedViews.Num(), CallSite, *ViewRectString);
+#endif
+}
+
+
+
+const bool IsProperGraphicsView(const FSceneView& InView)
+{
+	if (InView.bIsSceneCapture)
+	{
+		return false;
+	}
+
+	// MRQ
+	if (InView.bIsOfflineRender)
+	{
+		return false;
+	}
+
+	// TODO this might need work once we render FG in the main editor view
+	if (!InView.bIsGameView)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void FStreamlineViewExtension::AddTrackedView(const FSceneView& InView)
+{
+	check(InView.bIsViewInfo);
+	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(InView);
+
+	const uint32 NewViewKey = InView.GetViewKey();
+	if (!IsProperGraphicsView(InView))
+	{
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+		if (InView.bIsSceneCapture)
+		{
+			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return InView.bIsSceneCapture Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), NewViewKey, *CurrentThreadName()));
+		}
+
+		if (!InView.bIsGameView)
+		{
+			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return !InView.bIsGameView Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), NewViewKey, *CurrentThreadName()));
+		}
+#endif
+		return;
+	}
+
+	FTextureRHIRef TargetTexture = nullptr;
+
+	// in game mode we don't seem to have a rendertarget... 
+	if (const FRenderTarget* Target = InView.Family->RenderTarget; Target && Target->GetRenderTargetTexture().IsValid())
+	{
+		TargetTexture = Target->GetRenderTargetTexture();
+	}
+
+	FTrackedView* FoundTrackedView = TrackedViews.FindByPredicate([NewViewKey](const FTrackedView& State) { return State.ViewKey == NewViewKey; });
+
+	if (!FoundTrackedView)
+	{
+		TrackedViews.Emplace();
+		FoundTrackedView = &TrackedViews.Last();
+		FoundTrackedView->ViewKey = NewViewKey;
+	}
+	
+	if (TargetTexture && TargetTexture->GetName() != TEXT("HitProxyTexture"))
+	{
+
+		check( (TargetTexture->GetName() == TEXT("BufferedRT"))
+			|| (TargetTexture->GetName() == TEXT("BackbufferReference"))
+			|| (TargetTexture->GetName() == TEXT("FD3D11Viewport::GetSwapChainSurface")) // (⊙_⊙)？
+			||	(ENGINE_MAJOR_VERSION == 4) 
+			|| ((ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 1)));
+		FoundTrackedView->Texture = TargetTexture;
+	}
+
+	check(!ViewInfo.ViewRect.IsEmpty());
+	FoundTrackedView->ViewRect = ViewInfo.ViewRect;
+
+	check(!ViewInfo.UnscaledViewRect.IsEmpty());
+	FoundTrackedView->UnscaledViewRect = ViewInfo.UnscaledViewRect;
+
+	check(!ViewInfo.UnconstrainedViewRect.IsEmpty());
+	FoundTrackedView->UnconstrainedViewRect = ViewInfo.UnconstrainedViewRect;
+
+	FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s Key=%u Target=%p, %s"), ANSI_TO_TCHAR(__FUNCTION__), NewViewKey, TargetTexture.GetReference()->GetTexture2D(), *CurrentThreadName()));
+}	
+
+void FStreamlineViewExtension::UntrackViewsForBackbuffer(void* InBackBuffer)
+{
+	check(IsInGameThread());
+	if (InBackBuffer)
+	{
+		FViewportRHIRef ViewportReference = *(FViewportRHIRef*)InBackBuffer;
+
+		if (ViewportReference)
+		{
+			const void* NativeBackbufferTexture = ViewportReference->GetNativeBackBufferTexture();
+			TrackedViews.RemoveAllSwap([NativeBackbufferTexture](const FTrackedView& TrackedView)
+			{
+					bool bRemove = false;
+					if (TrackedView.Texture && TrackedView.Texture.IsValid())
+					{
+						const void* NativeTracked = TrackedView.Texture->GetNativeResource();
+
+						if (NativeTracked == NativeBackbufferTexture)
+						{
+							bRemove = true;
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+							UE_LOG(LogStreamline, Log, TEXT("Untracking backbuffer %s native %p ViewKey = %u"), *TrackedView.Texture->GetName().ToString(), NativeTracked, TrackedView.ViewKey);
+#endif
+						}
+					}
+					return bRemove;
+			});
+		}
+	}
+}
+
+void FStreamlineViewExtension::PreRenderViewFamily_RenderThread(FGraphBuilderOrCmdList& GraphBuilderOrCmd, FSceneViewFamily& InViewFamily)
+{
+	// we should be done with older frames so remove those frame ids
+	
+	TArray<uint32> StaleViews;
+	TArray<uint32> ActiveViews;
+	FramesWhereStreamlineConstantsWereSet.RemoveAllSwap([&StaleViews, &ActiveViews](TTuple<uint64, uint32>  Item)
+	{
+		const uint64 FrameCounterRenderThread = GFrameCounterRenderThread;
+		// D3D12 RHI has this unaccessible static const uint32 WindowsDefaultNumBackBuffers = 3; so adding some slack 🤞
+		constexpr uint64 MaxFramesInFlight = 3 + 2;
+		// we add here since so we don't have to deal with subtracting uint64 and overflows
+		bool bRemove = FrameCounterRenderThread > Item.Get<0>() + MaxFramesInFlight;
+			
+		if (bRemove)
+		{
+			StaleViews.AddUnique(Item.Get<1>());
+		}
+		else
+		{
+			ActiveViews.AddUnique(Item.Get<1>());
+		}
+		
+		return bRemove;
+	}
+	);
+
+	StaleViews.RemoveAllSwap([&ActiveViews](uint32 Item) { return ActiveViews.Contains(Item); });
+	
+	for (uint32 StaleView : StaleViews)
+	{
+
+		// an alternative to this could be to add "GetCommandListFromEither" function in the header...
+#if ENGINE_MAJOR_VERSION == 4 
+		GraphBuilderOrCmd.
+#else
+		GraphBuilderOrCmd.RHICmdList.
+#endif
+		EnqueueLambda([this, StaleView](FRHICommandList& Cmd)
+		{
+		
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+			UE_LOG(LogStreamline, Log, TEXT("%s %s freeing resources for View Id %u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), StaleView);
+#endif
+
+			StreamlineRHIExtensions->ReleaseStreamlineResourcesForAllFeatures(StaleView);
+		});
+	}
+}
+
+void FStreamlineViewExtension::PreRenderView_RenderThread(FGraphBuilderOrCmdList&, FSceneView& InView)
+{
+
+}
+
+void FStreamlineViewExtension::PostRenderView_RenderThread(FGraphBuilderOrCmdList&, FSceneView& InView)
+{
+}
+
+void FStreamlineViewExtension::PostRenderViewFamily_RenderThread(FGraphBuilderOrCmdList&, FSceneViewFamily& InViewFamily)
+{
+
+}
+
+
+
 
 void FStreamlineViewExtension::SubscribeToPostProcessingPass(EPostProcessingPass Pass, FAfterPassCallbackDelegateArray& InOutPassCallbacks, bool bIsPassEnabled)
 {
@@ -134,12 +412,7 @@ SHADER_PARAMETER_RDG_TEXTURE(Texture2D, Depth)
 SHADER_PARAMETER_RDG_TEXTURE(Texture2D, Velocity)
 SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorWithoutHUD)
 
-// Fake output to trigger pass execution
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorAfterTonemap)
-#else
-RDG_TEXTURE_ACCESS(SceneColorAfterTonemap, ERHIAccess::UAVCompute)
-#endif
+
 END_SHADER_PARAMETER_STRUCT()
 
 FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& View, const FPostProcessMaterialInputs& InOutInputs)
@@ -147,8 +420,31 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 	check(IsInRenderingThread());
 	check(View.bIsViewInfo);
 
-	if (View.bIsSceneCapture)
+	AddTrackedView(View);
+
+	const int CVarViewIndexToTag = CVarStreamlineViewIndexToTag.GetValueOnRenderThread();
+	const bool bTagThisView = ( -1 == CVarViewIndexToTag) || (CVarViewIndexToTag == GetViewIndex(&View));
+
+	if (FramesWhereStreamlineConstantsWereSet.Contains( MakeTuple(GFrameCounterRenderThread, View.GetViewKey())) || !bTagThisView || !IsProperGraphicsView(View))
 	{
+
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+		if (FramesWhereStreamlineConstantsWereSet.Contains(MakeTuple(GFrameCounterRenderThread, View.GetViewKey())))
+		{
+			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return FramesWhereStreamlineConstantsWereSet.Contains(GFrameCounterRenderThread) Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
+		}
+
+		if (View.bIsSceneCapture)
+		{
+			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return View.bIsSceneCapture Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
+		}
+
+		if (!View.bIsGameView)
+		{
+			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return !View.bIsGameView Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
+		}
+#endif
+
 		// no point in running DLSS-FG for scene captures if the engine can't use the extra frames anyway. Just pass through the appropriate texture
 		if (InOutInputs.OverrideOutput.IsValid())
 		{
@@ -160,9 +456,15 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		}
 	}
 
+	FramesWhereStreamlineConstantsWereSet.AddUnique(MakeTuple(GFrameCounterRenderThread, View.GetViewKey()));
+
+	FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
+
+
+
 	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(View);
 	const FScreenPassTexture& SceneColor = InOutInputs.Textures[(uint32)EPostProcessMaterialInput::SceneColor];
-	const uint32 ViewID = CVarStreamlineViewIdOverride.GetValueOnAnyThread() ? 0 : ViewInfo.GetViewKey();
+	const uint32 ViewID = HasViewIdOverride() ? 0 : ViewInfo.GetViewKey();
 	const uint64 FrameID = GFrameCounterRenderThread;
 	const FIntRect ViewRect = ViewInfo.ViewRect;
 	const FIntRect SecondaryViewRect = FIntRect(FIntPoint::ZeroValue, ViewInfo.GetSecondaryViewRectSize());
@@ -175,7 +477,7 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		ViewRect.Min.X, ViewRect.Min.Y,
 		ViewRect.Max.X, ViewRect.Max.Y
 	);
-	if (ShouldTagStreamlineBuffers())
+	if (ShouldTagStreamlineBuffersForDLSSFG())
 	{
 		const uint64 FrameNumber = GFrameNumberRenderThread;
 
@@ -224,16 +526,10 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		if(bTagSceneColorWithoutHUD)
 		{
 			FRDGTextureDesc Desc = SceneColor.Texture->Desc;
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-			Desc.TargetableFlags |= (TexCreate_ShaderResource | TexCreate_UAV);
-			Desc.TargetableFlags &= ~TexCreate_Presentable;
-#else
 			EnumAddFlags(Desc.Flags, TexCreate_ShaderResource | TexCreate_UAV);
 			EnumRemoveFlags(Desc.Flags, TexCreate_Presentable);
 			EnumRemoveFlags(Desc.Flags, TexCreate_ResolveTargetable);
-		
-#endif
-			SLSceneColorWithoutHUD = GraphBuilder.CreateTexture(Desc, TEXT("Streamline.SceneColorAfterTonemap"));
+			SLSceneColorWithoutHUD = GraphBuilder.CreateTexture(Desc, TEXT("Streamline.SceneColorWithoutHUD"));
 			AddDrawTexturePass(GraphBuilder, ViewInfo, SceneColor.Texture, SLSceneColorWithoutHUD, FIntPoint::ZeroValue, FIntPoint::ZeroValue, FIntPoint::ZeroValue);
 		}
 
@@ -248,8 +544,6 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 			PassParameters->SceneColorWithoutHUD = SLSceneColorWithoutHUD;
 		}
 
-		// That's the dummy parameter to get RDG to execut the pass
-		PassParameters->SceneColorAfterTonemap = SceneColor.Texture;
 
 		FRHIStreamlineArguments StreamlineArguments = {};
 		FMemory::Memzero(&StreamlineArguments, sizeof(StreamlineArguments));
@@ -259,8 +553,7 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 
 		// TODO STREAMLINE check for other conditions, similar to DLSS
 		StreamlineArguments.bReset = View.bCameraCut;
-		StreamlineArguments.bIsNotRenderingGameFrames = false;
-	
+		
 		StreamlineArguments.bIsDepthInverted = true;
 
 		StreamlineArguments.JitterOffset = { float(ViewInfo.TemporalJitterPixels.X), float(ViewInfo.TemporalJitterPixels.Y) }; // LWC_TODO: Precision loss
@@ -304,47 +597,111 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 		GraphBuilder.AddPass(
 		RDG_EVENT_NAME("Streamline Common %dx%d FrameId=%u ViewID=%u", ViewRect.Width(), ViewRect.Height(), StreamlineArguments.FrameId, StreamlineArguments.ViewId),
 			PassParameters,
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-			ERDGPassFlags::Compute,
-#else
 			ERDGPassFlags::Compute | ERDGPassFlags::Raster | ERDGPassFlags::SkipRenderPass | ERDGPassFlags::NeverCull,
-#endif
-			[LocalStreamlineRHIExtensions, PassParameters, StreamlineArguments, ViewRect, SecondaryViewRect, bTagSceneColorWithoutHUD](FRHICommandListImmediate& RHICmdList) mutable
+			[LocalStreamlineRHIExtensions, PassParameters, StreamlineArguments, ViewRect, SecondaryViewRect, SceneColor, bTagSceneColorWithoutHUD](FRHICommandListImmediate& RHICmdList) mutable
 		{
+
+			// first the constants
+			RHICmdList.EnqueueLambda(
+			[LocalStreamlineRHIExtensions, StreamlineArguments](FRHICommandListImmediate& Cmd) mutable
+			{
+					LocalStreamlineRHIExtensions->SetStreamlineData(Cmd, StreamlineArguments);
+			});
+
+			TArray<FRHIStreamlineResource> TexturesToTag;
 			check(PassParameters->Depth);
 			PassParameters->Depth->MarkResourceAsUsed();
-			StreamlineArguments.InputDepth = { PassParameters->Depth->GetRHI(), ViewRect };
+			TexturesToTag.Add( { PassParameters->Depth->GetRHI(), ViewRect , EStreamlineResource::Depth } );
 
 			// motion vectors are in the top left corner after the Velocity Combine pass
 			check(PassParameters->Velocity)
 			PassParameters->Velocity->MarkResourceAsUsed();
-			StreamlineArguments.InputMotionVectors = { PassParameters->Velocity->GetRHI(), FIntRect(FIntPoint::ZeroValue, PassParameters->Velocity->Desc.Extent) };
+			TexturesToTag.Add({ PassParameters->Velocity->GetRHI(), FIntRect(FIntPoint::ZeroValue, PassParameters->Velocity->Desc.Extent), EStreamlineResource::MotionVectors });
 
 			if (bTagSceneColorWithoutHUD)
 			{
-				check(PassParameters->SceneColorWithoutHUD);
+				check( PassParameters->SceneColorWithoutHUD);
 				PassParameters->SceneColorWithoutHUD->MarkResourceAsUsed();
-				StreamlineArguments.InputHUDLessColor = { PassParameters->SceneColorWithoutHUD->GetRHI(), SecondaryViewRect };
 			}
 
-			// output dummy to trigger RDG pass exeution
-			check(PassParameters->SceneColorAfterTonemap);
-			PassParameters->SceneColorAfterTonemap->MarkResourceAsUsed();
-
+			// we always tag this so the downstream code can "nulltag" it
+			TexturesToTag.Add({ bTagSceneColorWithoutHUD ? PassParameters->SceneColorWithoutHUD->GetRHI() : nullptr, SceneColor.ViewRect, EStreamlineResource::HUDLessColor});
 			
+	
+			// then tagging the resources
+			const uint32 ViewId = StreamlineArguments.ViewId;
 			RHICmdList.EnqueueLambda(
-				[LocalStreamlineRHIExtensions, StreamlineArguments](FRHICommandListImmediate& Cmd) mutable
+			[LocalStreamlineRHIExtensions, ViewId, TexturesToTag](FRHICommandListImmediate& Cmd) mutable
 			{
-				LocalStreamlineRHIExtensions->SetStreamlineData(Cmd, StreamlineArguments);
+				LocalStreamlineRHIExtensions->TagTextures(Cmd, ViewId, TexturesToTag);
 			});
 		});
 	}
 
-	// this is always executed so we can turn DLSS-G off at the SL side (after we skipped the work above)
-	AddStreamlineDLSSGStateRenderPass(GraphBuilder, ViewID, SecondaryViewRect);
+	// this is always executed if DLSS-G is supported so we can turn DLSS-G off at the SL side (after we skipped the work above)
+	if (IsStreamlineDLSSGSupported())
+	{
+		AddStreamlineDLSSGStateRenderPass(GraphBuilder, ViewID, SecondaryViewRect);
+	}
+
+
+
+	// DeepDVC render pass
+	if(IsDeepDVCActive())
+	{
+		RDG_GPU_STAT_SCOPE(GraphBuilder, StreamlineDeepDVC);
+		RDG_EVENT_SCOPE(GraphBuilder, "Streamline DeepDVC %dx%d [%d,%d -> %d,%d]",
+			// TODO STREAMLINE register the StreamLineRHI work with FGPUProfiler so this get registered as work
+			SceneColor.ViewRect.Width(), SceneColor.ViewRect.Height(),
+			SceneColor.ViewRect.Min.X, SceneColor.ViewRect.Min.Y,
+			SceneColor.ViewRect.Max.X, SceneColor.ViewRect.Max.Y
+		);
+
+		// we wont need to run this always since (unlike FG) we skip the whole evaluate pass
+
+		AddStreamlineDeepDVCStateRenderPass(GraphBuilder, ViewID, SecondaryViewRect, SLDeepDVCIntensityFromCvar(), SLDeepDVCSaturationBoostFromCvar());
+		
+		FRDGTextureRef SLSceneColorWithoutHUD = SceneColor.Texture;
+
+
+
+		// This is still WIP:
+		// 
+		// DeepDVC is accessing the input/output resources as an UAV.
+		// The scenecolor resource is not created by the engine with a ETextureCreateFlags::UAV
+		// This is by the -d3ddebug layers 
+		// D3D12 ERROR : ID3D12Device::CreateUnorderedAccessView : A UnorderedAccessView cannot be created of a Resource that did not specify the D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS Flag.[STATE_CREATION ERROR #340: CREATEUNORDEREDACCESSVIEW_INVALIDRESOURCE]
+		// D3D12 : **BREAK** enabled for the previous message, which was : [ERROR STATE_CREATION #340: CREATEUNORDEREDACCESSVIEW_INVALIDRESOURCE]
+		// To avoid that, wwe'll DeepDVC into an intermediate, UAV compatible resource and copy there & back again, like the good hobbits we are.
+		// However when a Streamline swapchain provider is setup (say for DLSS-FG) we "know" (#yolo) that the the proxy backbuffer resources are "UAV compatible"
+		// Then we can elide that copy
+
+		//const bool bHasImplicitUAVCompatibilityViaStreamlneSwapChainProvider = StreamlineRHIExtensions->IsSwapchainProviderInstalled();
+		const bool bHasImplicitUAVCompatibilityViaStreamlneSwapChainProvider = false;
+
+		const bool bIsUAVCompatible = EnumHasAllFlags(SceneColor.Texture->Desc.Flags, TexCreate_UAV);
+		const bool bNeedsCopies =!(bIsUAVCompatible || bHasImplicitUAVCompatibilityViaStreamlneSwapChainProvider);
+
+		if (bNeedsCopies)
+		{
+			FRDGTextureDesc DeepDVCIntermediateDesc = SceneColor.Texture->Desc;
+			EnumAddFlags(DeepDVCIntermediateDesc.Flags, TexCreate_ShaderResource | TexCreate_UAV);
+			EnumRemoveFlags(DeepDVCIntermediateDesc.Flags, TexCreate_ResolveTargetable | TexCreate_Presentable);
+			SLSceneColorWithoutHUD = GraphBuilder.CreateTexture(DeepDVCIntermediateDesc, TEXT("Streamline.SceneColorWithoutHUD.DeepDVC"));
+			AddDrawTexturePass(GraphBuilder, ViewInfo, SceneColor.Texture, SLSceneColorWithoutHUD, FIntPoint::ZeroValue, FIntPoint::ZeroValue, FIntPoint::ZeroValue);
+		}
+		
+		AddStreamlineDeepDVCEvaluateRenderPass(StreamlineRHIExtensions, GraphBuilder, ViewID, SceneColor.ViewRect, SLSceneColorWithoutHUD);
+		
+		if (bNeedsCopies)
+		{
+			AddDrawTexturePass(GraphBuilder, ViewInfo, SLSceneColorWithoutHUD, SceneColor.Texture, FIntPoint::ZeroValue, FIntPoint::ZeroValue, FIntPoint::ZeroValue);
+		}
+	}
+
 
 #if ENGINE_SUPPORTS_CLEARQUADALPHA
-	if (ShouldTagStreamlineBuffers() &&  CVarStreamlineClearColorAlpha.GetValueOnRenderThread())
+	if (ShouldTagStreamlineBuffersForDLSSFG() &&  CVarStreamlineClearColorAlpha.GetValueOnRenderThread())
 	{
 		auto* PassParameters = GraphBuilder.AllocParameters<FRenderTargetParameters>();
 		PassParameters->RenderTargets[0] = FRenderTargetBinding(SceneColor.Texture, ERenderTargetLoadAction::ENoAction);

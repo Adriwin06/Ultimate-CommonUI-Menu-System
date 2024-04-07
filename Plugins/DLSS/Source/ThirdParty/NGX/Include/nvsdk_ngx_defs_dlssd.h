@@ -32,6 +32,19 @@ typedef enum NVSDK_NGX_DLSS_Depth_Type
     NVSDK_NGX_DLSS_Depth_Type_HW = 1,     // HW Depth
 } NVSDK_NGX_DLSS_Depth_Type;
 
+
+typedef enum NVSDK_NGX_RayReconstruction_Hint_Render_Preset
+{
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_Default,     // default behavior, may or may not change after OTA
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_A,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_B,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_C,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_D,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_F,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_G,
+} NVSDK_NGX_RayReconstruction_Hint_Render_Preset;
+
 #define NVSDK_NGX_Parameter_DLSS_Denoise_Mode "DLSS.Denoise.Mode"
 #define NVSDK_NGX_Parameter_DLSS_Roughness_Mode "DLSS.Roughness.Mode"
 #define NVSDK_NGX_Parameter_DiffuseAlbedo  "DLSS.Input.DiffuseAlbedo"
@@ -90,5 +103,11 @@ typedef enum NVSDK_NGX_DLSS_Depth_Type
 #define NVSDK_NGX_Parameter_DLSSDOptimalSettingsCallback "DLSSDOptimalSettingsCallback"
 #define NVSDK_NGX_Parameter_DLSSDGetStatsCallback        "DLSSDGetStatsCallback"
 
+#define NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_DLAA "RayReconstruction.Hint.Render.Preset.DLAA"
+#define NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Quality "RayReconstruction.Hint.Render.Preset.Quality"
+#define NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced "RayReconstruction.Hint.Render.Preset.Balanced"
+#define NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance "RayReconstruction.Hint.Render.Preset.Performance"
+#define NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance "RayReconstruction.Hint.Render.Preset.UltraPerformance"
+#define NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraQuality "RayReconstruction.Hint.Render.Preset.UltraQuality"
 
 #endif // NVSDK_NGX_DEFS_DLSSD_H

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -326,6 +326,16 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 		DlssEvalParams.Feature.pInColor = D3D12RHI->RHIGetResource(InArguments.InputColor);
 		DlssEvalParams.Feature.InSharpness = InArguments.Sharpness;
 
+		
+		D3D12_RESOURCE_BARRIER BarrierDesc = {};
+		BarrierDesc.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		BarrierDesc.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		BarrierDesc.Transition.pResource = DlssEvalParams.Feature.pInOutput;
+		BarrierDesc.Transition.Subresource = 0;
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		D3DGraphicsCommandList->ResourceBarrier(1, &BarrierDesc);
+
 		NVSDK_NGX_Result ResultEvaluate = NGX_D3D12_EVALUATE_DLSS_EXT(
 			D3DGraphicsCommandList,
 			InDLSSState->DLSSFeature->Feature,
@@ -333,6 +343,12 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 			&DlssEvalParams
 		);
 		checkf(NVSDK_NGX_SUCCEED(ResultEvaluate), TEXT("NGX_D3D12_EVALUATE_DLSS_EXT failed! (%u %s), %s"), ResultEvaluate, GetNGXResultAsString(ResultEvaluate), *InDLSSState->DLSSFeature->Desc.GetDebugDescription());
+
+		
+		BarrierDesc.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		BarrierDesc.Transition.StateAfter = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		D3DGraphicsCommandList->ResourceBarrier(1, &BarrierDesc);
+		
 	}
 	else
 	{

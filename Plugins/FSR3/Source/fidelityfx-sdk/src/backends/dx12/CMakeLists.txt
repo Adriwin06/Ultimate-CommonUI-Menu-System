@@ -166,9 +166,7 @@ file(GLOB PUBLIC_SHADERS
     "${FFX_GPU_PATH}/fsr3upscaler/*.hlsl"
     "${FFX_GPU_PATH}/fsr1/*.h"
     "${FFX_GPU_PATH}/fsr1/*.hlsl"
-    "${FFX_GPU_PATH}/spd/*.h"
-    "${FFX_GPU_PATH}/spd/*.hlsl"
-    	)
+	)
 
 file(GLOB_RECURSE PRIVATE_SHADERS
     "${CMAKE_CURRENT_SOURCE_DIR}/shaders/*.hlsl")

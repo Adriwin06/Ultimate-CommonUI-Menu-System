@@ -88,6 +88,10 @@ typedef struct NVSDK_NGX_VK_DLSSD_Eval_Params
     float                               InFrameTimeDeltaInMsec; /* helps in determining the amount to denoise or anti-alias based on the speed of the object from motion vector magnitudes and fps as determined by this delta */
     NVSDK_NGX_Resource_VK *             pInRayTracingHitDistance; /* for each effect - approximation to the amount of noise in a ray-traced color */
     NVSDK_NGX_Resource_VK *             pInMotionVectorsReflections; /* motion vectors of reflected objects like for mirrored surfaces */
+    NVSDK_NGX_Resource_VK*              pInTransparencyLayer; /* optional input res particle layer */
+    NVSDK_NGX_Coordinates               InTransparencyLayerSubrectBase;
+    NVSDK_NGX_Resource_VK*              pInTransparencyLayerOpacity; /* optional input res particle opacity layer */
+    NVSDK_NGX_Coordinates               InTransparencyLayerOpacitySubrectBase;
 } NVSDK_NGX_VK_DLSSD_Eval_Params;
 
 static inline NVSDK_NGX_Result NGX_VULKAN_CREATE_DLSSD_EXT1(
@@ -152,6 +156,8 @@ static inline NVSDK_NGX_Result NGX_VULKAN_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_ENSURE_VK_IMAGEVIEW(pInDlssDEvalParams->pInSpecularRayDirection);
     NVSDK_NGX_ENSURE_VK_IMAGEVIEW(pInDlssDEvalParams->pInDiffuseRayDirectionHitDistance);
     NVSDK_NGX_ENSURE_VK_IMAGEVIEW(pInDlssDEvalParams->pInSpecularRayDirectionHitDistance);
+    NVSDK_NGX_ENSURE_VK_IMAGEVIEW(pInDlssDEvalParams->pInTransparencyLayer);
+    NVSDK_NGX_ENSURE_VK_IMAGEVIEW(pInDlssDEvalParams->pInTransparencyLayerOpacity);
 
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_Color, pInDlssDEvalParams->pInColor);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_Output, pInDlssDEvalParams->pInOutput);
@@ -175,7 +181,7 @@ static inline NVSDK_NGX_Result NGX_VULKAN_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_MaterialId, pInDlssDEvalParams->GBufferSurface.pInAttrib[NVSDK_NGX_GBUFFER_MATERIALID]);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_8, pInDlssDEvalParams->GBufferSurface.pInAttrib[8]);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_9, pInDlssDEvalParams->GBufferSurface.pInAttrib[9]);
-    NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_SpecularMvec, pInDlssDEvalParams->GBufferSurface.pInAttrib[NVSDK_NGX_GBUFFER_SPECULAR_MVEC]);
+    NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_SpecularMvec, pInDlssDEvalParams->pInMotionVectorsReflections);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_11, pInDlssDEvalParams->GBufferSurface.pInAttrib[11]);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_12, pInDlssDEvalParams->GBufferSurface.pInAttrib[12]);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_GBuffer_Atrrib_13, pInDlssDEvalParams->GBufferSurface.pInAttrib[13]);
@@ -189,7 +195,6 @@ static inline NVSDK_NGX_Result NGX_VULKAN_EVALUATE_DLSSD_EXT(
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_Position_ViewSpace, pInDlssDEvalParams->pInPositionViewSpace);
     NVSDK_NGX_Parameter_SetF(pInParams, NVSDK_NGX_Parameter_FrameTimeDeltaInMsec, pInDlssDEvalParams->InFrameTimeDeltaInMsec);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_RayTracingHitDistance, pInDlssDEvalParams->pInRayTracingHitDistance);
-    NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_MotionVectorsReflection, pInDlssDEvalParams->pInMotionVectorsReflections);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_X, pInDlssDEvalParams->InColorSubrectBase.X);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Color_Subrect_Base_Y, pInDlssDEvalParams->InColorSubrectBase.Y);
     NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_Input_Depth_Subrect_Base_X, pInDlssDEvalParams->InDepthSubrectBase.X);
@@ -258,6 +263,13 @@ static inline NVSDK_NGX_Result NGX_VULKAN_EVALUATE_DLSSD_EXT(
 
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_DLSS_WORLD_TO_VIEW_MATRIX, pInDlssDEvalParams->pInWorldToViewMatrix);
     NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_DLSS_VIEW_TO_CLIP_MATRIX, pInDlssDEvalParams->pInViewToClipMatrix);
+    NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer, pInDlssDEvalParams->pInTransparencyLayer);
+    NVSDK_NGX_Parameter_SetVoidPointer(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity, pInDlssDEvalParams->pInTransparencyLayerOpacity);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer_Subrect_Base_X, pInDlssDEvalParams->InTransparencyLayerSubrectBase.X);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayer_Subrect_Base_Y, pInDlssDEvalParams->InTransparencyLayerSubrectBase.Y);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity_Subrect_Base_X, pInDlssDEvalParams->InTransparencyLayerOpacitySubrectBase.X);
+    NVSDK_NGX_Parameter_SetUI(pInParams, NVSDK_NGX_Parameter_DLSS_TransparencyLayerOpacity_Subrect_Base_Y, pInDlssDEvalParams->InTransparencyLayerOpacitySubrectBase.Y);
+
 
     return NVSDK_NGX_VULKAN_EvaluateFeature_C(InCmdList, pInHandle, pInParams, NULL);
 }

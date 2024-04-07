@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -25,7 +25,9 @@ class FStreamlineLatencyBase
 protected:
 
 	static bool bStreamlineReflexSupported;
+	static bool bStreamlinePCLSupported;
 	static bool IsStreamlineReflexSupported();
+	static bool IsStreamlinePCLSupported();
 };
 
 class FStreamlineMaxTickRateHandler : public IMaxTickRateHandlerModule, public FStreamlineLatencyBase

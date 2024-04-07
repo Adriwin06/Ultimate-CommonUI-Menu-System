@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -93,18 +93,18 @@ STREAMLINERHI_API void LogStreamlineFeatureSupport(sl::Feature Feature, const sl
 	UE_LOG(LogStreamlineRHI, Log, TEXT("SLisFeatureSupported(%s) -> (%d, %s)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), SupportedResult, ANSI_TO_TCHAR(sl::getResultAsStr(SupportedResult)));
 
 	// putting this here since the alternative of having FStreamlineRHI compute & store that was annoying since it would mean to have sl.h be a public include
+	if (SupportedResult != sl::Result::eErrorFeatureMissing)
+	{
+		sl::FeatureVersion Version;
+		sl::Result VersionResult = SLgetFeatureVersion(Feature, Version);
+		UE_LOG(LogStreamlineRHI, Log, TEXT("SLgetFeatureVersion(%s)  versionSL = %s, versionNGX = %s -> (%d, %s)"),
+			ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), ANSI_TO_TCHAR(Version.versionSL.toStr().c_str()), ANSI_TO_TCHAR(Version.versionNGX.toStr().c_str()), VersionResult, ANSI_TO_TCHAR(sl::getResultAsStr(VersionResult)));
 
-	sl::FeatureVersion Version;
-	sl::Result VersionResult = SLgetFeatureVersion(Feature, Version);
-	UE_LOG(LogStreamlineRHI, Log, TEXT("SLgetFeatureVersion(%s)  versionSL = %s, versionNGX = %s -> (%d, %s)"),
-		ANSI_TO_TCHAR(Version.versionSL.toStr().c_str()), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), ANSI_TO_TCHAR(Version.versionNGX.toStr().c_str()), VersionResult, ANSI_TO_TCHAR(sl::getResultAsStr(VersionResult)));
-
-	sl::FeatureRequirements Requirements;
-	sl::Result RequirementsResult = SLgetFeatureRequirements(Feature, Requirements);
-	UE_LOG(LogStreamlineRHI, Log, TEXT("SLgetFeatureRequirements(%s) -> (%d, %s)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), RequirementsResult, ANSI_TO_TCHAR(sl::getResultAsStr(RequirementsResult)));
-	LogStreamlineFeatureRequirements(Feature, Requirements);
-
-
+		sl::FeatureRequirements Requirements;
+		sl::Result RequirementsResult = SLgetFeatureRequirements(Feature, Requirements);
+		UE_LOG(LogStreamlineRHI, Log, TEXT("SLgetFeatureRequirements(%s) -> (%d, %s)"), ANSI_TO_TCHAR(sl::getFeatureAsStr(Feature)), RequirementsResult, ANSI_TO_TCHAR(sl::getResultAsStr(RequirementsResult)));
+		LogStreamlineFeatureRequirements(Feature, Requirements);
+	}
 }
 
 void LogStreamlineFeatureRequirements(sl::Feature Feature, const sl::FeatureRequirements& Requirements)
@@ -149,14 +149,24 @@ namespace
 	bool bIsStreamlineFunctionPointersLoaded = false;
 }
 
-static FString CurrentThreadName()
+FString CurrentThreadName()
 {
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25)
-	return FThreadManager::Get().GetThreadName(FPlatformTLS::GetCurrentThreadId());
-#else
-	return FThreadManager::GetThreadName(FPlatformTLS::GetCurrentThreadId());
-#endif
+	const uint32 ThreadId = FPlatformTLS::GetCurrentThreadId();
+	const FString ThreadName = FThreadManager::GetThreadName(ThreadId);
+	return FString::Printf(TEXT("%s (tid=%u)"),*ThreadName, ThreadId);
 }
+
+
+
+ void LogStreamlineFunctionCall(const FString& Function, const FString& Arguments)
+ {
+#if LOG_SL_FUNCTIONS
+	 if (LogStreamlineFunctions())
+	 {
+		 UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s %s"), *Function, *CurrentThreadName(), *Arguments);
+	 }
+#endif
+ }
 
 STREAMLINERHI_API bool AreStreamlineFunctionsLoaded()
 {
@@ -247,6 +257,85 @@ sl::Result SLsetFeatureLoaded(sl::Feature feature, bool loaded)
 	return Ptr_setFeatureLoaded(feature, loaded);
 }
 
+namespace sl
+{
+
+
+	template<typename T>
+	T* findStruct(const void* ptr)
+	{
+		auto base = static_cast<const BaseStructure*>(ptr);
+		while (base && base->structType != T::s_structType)
+		{
+			base = base->next;
+		}
+		return (T*)base;
+	}
+
+	template<typename T>
+	T* findStruct(void* ptr)
+	{
+		auto base = static_cast<const BaseStructure*>(ptr);
+		while (base && base->structType != T::s_structType)
+		{
+			base = base->next;
+		}
+		return (T*)base;
+	}
+
+	//! Find a struct of type T, but stop the search if we find a struct of type S
+	template<typename T, typename S>
+	T* findStruct(void* ptr)
+	{
+		auto base = static_cast<const BaseStructure*>(ptr);
+		while (base && base->structType != T::s_structType)
+		{
+			base = base->next;
+
+			// If we find a struct of type S, we know should stop the search
+			if (base->structType == S::s_structType)
+			{
+				return nullptr;
+			}
+		}
+		return (T*)base;
+	}
+
+	template<typename T>
+	T* findStruct(const void** ptr, uint32_t count)
+	{
+		const BaseStructure* base{};
+		for (uint32_t i = 0; base == nullptr && i < count; i++)
+		{
+			base = static_cast<const BaseStructure*>(ptr[i]);
+			while (base && base->structType != T::s_structType)
+			{
+				base = base->next;
+			}
+		}
+		return (T*)base;
+	}
+
+	template<typename T>
+	bool findStructs(const void** ptr, uint32_t count, std::vector<T*>& structs)
+	{
+		for (uint32_t i = 0; i < count; i++)
+		{
+			auto base = static_cast<const BaseStructure*>(ptr[i]);
+			while (base)
+			{
+				if (base->structType == T::s_structType)
+				{
+					structs.push_back((T*)base);
+				}
+				base = base->next;
+			}
+		}
+		return structs.size() > 0;
+	}
+
+}
+
 sl::Result SLevaluateFeature(sl::Feature feature, const sl::FrameToken& frame, const sl::BaseStructure** inputs, uint32_t numInputs, sl::CommandBuffer* cmdBuffer)
 {
 	check(IsStreamlineSupported());
@@ -256,8 +345,18 @@ sl::Result SLevaluateFeature(sl::Feature feature, const sl::FrameToken& frame, c
 #if LOG_SL_FUNCTIONS
 	if (LogStreamlineFunctions())
 	{
-		UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s feature=%s (%u) frame=%u, numInputs=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(),
-			 ANSI_TO_TCHAR(sl::getFeatureAsStr(feature)), feature, static_cast<uint32_t>(frame), numInputs);
+		FString ViewportHandle;
+
+		auto viewport = sl::findStruct<sl::ViewportHandle>(inputs);
+	
+		if (viewport) 
+		{
+			ViewportHandle = FString::FromInt(viewport->operator unsigned int());
+
+		}
+	
+		UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s feature=%s (%u) frame=%u, numInputs=%u, {viewport=%s} "), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(),
+			 ANSI_TO_TCHAR(sl::getFeatureAsStr(feature)), feature, static_cast<uint32_t>(frame), numInputs, *ViewportHandle);
 	}
 #endif
 
@@ -309,8 +408,20 @@ sl::Result SLsetTag(const sl::ViewportHandle& viewport, const sl::ResourceTag* t
 	{
 		if (numTags > 0)
 		{
-			UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s tag=%s (1/%u), viewport=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(),
-				ANSI_TO_TCHAR(sl::getBufferTypeAsStr(tags[0].type)), numTags, static_cast<uint32_t>(viewport));
+			const FString Tags = FString::JoinBy(MakeArrayView(tags, numTags), TEXT(", "),	[](const sl::ResourceTag Tag) 
+				{ return FString::Printf(TEXT("%s(%u) [left=%u, top=%u, width=%u, height=%u] "), ANSI_TO_TCHAR(sl::getBufferTypeAsStr(Tag.type)), Tag.type,
+					Tag.extent.left, Tag.extent.top, Tag.extent.width, Tag.extent.height
+					
+					); 
+				}
+			);
+
+			UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s tags=%s (%u), viewport=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(),
+				*Tags, numTags, static_cast<uint32_t>(viewport));
+
+
+			
+
 		}
 	}
 #endif
@@ -377,7 +488,9 @@ sl::Result SLsetConstants(const sl::Constants& values, const sl::FrameToken& fra
 #if LOG_SL_FUNCTIONS
 	if (LogStreamlineFunctions())
 	{
-		UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s frame=%u, viewport=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), static_cast<uint32_t>(frame),
+		// cameraAspectRatio and mvecScale (derived from 1/ ViewRect size) are typically different for each view  thus useful to debug "same view different constants per frame errors"
+		UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s frame=%u, values.cameraAspectRatio=%0.2f 1/mvecScale=%0.0f x %0.0f viewport=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), static_cast<uint32_t>(frame),
+			values.cameraAspectRatio, 1.0f/values.mvecScale.x, 1.0f / values.mvecScale.y,
 			static_cast<uint32_t>(viewport));
 	}
 #endif

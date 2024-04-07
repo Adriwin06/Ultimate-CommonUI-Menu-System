@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -24,6 +24,7 @@
 
 #include "sl_helpers.h"
 #include "sl_reflex.h"
+#include "sl_pcl.h"
 #include "StreamlineAPI.h"
 #include "StreamlineCore.h"
 #include "StreamlineCorePrivate.h"
@@ -49,7 +50,7 @@ static TAutoConsoleVariable<int32> CVarStreamlineReflexEnable(
 static TAutoConsoleVariable<int32> CVarStreamlineReflexEnableLatencyMarkers(
 	TEXT("t.Streamline.Reflex.EnableLatencyMarkers"),
 	1,
-	TEXT("Enable Streamline Reflex Latency metrics. (default = 1)\n")
+	TEXT("Enable Streamline PC Latency metrics. (default = 1)\n")
 	TEXT("0: Disabled\n")
 	TEXT("1: Enabled)\n"),
 	ECVF_RenderThreadSafe);
@@ -65,7 +66,7 @@ static TAutoConsoleVariable<int32> CVarStreamlineReflexAuto(
 static TAutoConsoleVariable<bool> CVarStreamlineReflexEnableInEditor(
 	TEXT("t.Streamline.Reflex.EnableInEditor"),
 	true,
-	TEXT("Enable Streamline Reflex in the editor. (default = 1)\n")
+	TEXT("Enable Streamline Reflex and PC Latency in the editor. (default = 1)\n")
 	TEXT("0: Disabled\n")
 	TEXT("1: Enabled)\n"),
 	ECVF_RenderThreadSafe);
@@ -115,13 +116,47 @@ bool FStreamlineLatencyBase::IsStreamlineReflexSupported()
 		const sl::AdapterInfo* AdapterInfo = FStreamlineCoreModule::GetStreamlineRHI()->GetAdapterInfo();
 		sl::Result Result = SLisFeatureSupported(sl::kFeatureReflex, *AdapterInfo);
 		bStreamlineReflexSupported = Result == sl::Result::eOk;
-		//UE_LOG(LogStreamline, Log, TEXT("%s Streamline Reflex supported %u (%u, %s)"), ANSI_TO_TCHAR(__FUNCTION__), bStreamlineReflexSupported,
-		//	Result, ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
-		bStreamlineReflexSupportedInitialized = true;
 		LogStreamlineFeatureSupport(sl::kFeatureReflex, *AdapterInfo);
-
+		
+		bStreamlineReflexSupportedInitialized = true;
 	}
+
 	return bStreamlineReflexSupported;
+}
+
+bool FStreamlineLatencyBase::bStreamlinePCLSupported = false;
+bool FStreamlineLatencyBase::IsStreamlinePCLSupported()
+{
+	if (!FApp::CanEverRender())
+	{
+		return false;
+	}
+
+	if (!IsStreamlineSupported())
+	{
+		return false;
+	}
+
+#if WITH_EDITOR
+	if (GIsEditor && !CVarStreamlineReflexEnableInEditor.GetValueOnAnyThread())
+	{
+		return false;
+	}
+#endif
+
+	static bool bStreamlinePCLSupportedInitialized = false;
+
+	if (!bStreamlinePCLSupportedInitialized)
+	{
+		const sl::AdapterInfo* AdapterInfo = FStreamlineCoreModule::GetStreamlineRHI()->GetAdapterInfo();
+		sl::Result Result = SLisFeatureSupported(sl::kFeaturePCL, *AdapterInfo);
+		bStreamlinePCLSupported = (Result == sl::Result::eOk);
+		LogStreamlineFeatureSupport(sl::kFeaturePCL, *AdapterInfo);
+
+		bStreamlinePCLSupportedInitialized = true;
+	}
+
+	return bStreamlinePCLSupported;
 }
 
 void FStreamlineMaxTickRateHandler::Initialize()
@@ -449,39 +484,40 @@ void FStreamlineLatencyMarkers::Tick(float DeltaTime)
 	}
 }
 
-void FStreamlineLatencyMarkers::SetInputSampleLatencyMarker(uint64 FrameNumber)
+void FStreamlineLatencyMarkers::SetInputSampleLatencyMarker(uint64)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::eInputSample, FrameNumber);
+	//The engine calls this every frame, so making the log less chatty 
+	//UE_LOG(LogStreamline, Warning, TEXT("FStreamlineLatencyMarkers::SetInputSampleLatencyMarker is no longer supported"));
 }
 
 void FStreamlineLatencyMarkers::SetSimulationLatencyMarkerStart(uint64 FrameNumber)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::eSimulationStart, FrameNumber);
+	SetCustomLatencyMarker(uint32(sl::PCLMarker::eSimulationStart), FrameNumber);
 }
 
 void FStreamlineLatencyMarkers::SetSimulationLatencyMarkerEnd(uint64 FrameNumber)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::eSimulationEnd, FrameNumber);
+	SetCustomLatencyMarker(uint32(sl::PCLMarker::eSimulationEnd), FrameNumber);
 }
 
 void FStreamlineLatencyMarkers::SetRenderSubmitLatencyMarkerStart(uint64 FrameNumber)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::eRenderSubmitStart, FrameNumber);
+	SetCustomLatencyMarker(uint32(sl::PCLMarker::eRenderSubmitStart), FrameNumber);
 }
 
 void FStreamlineLatencyMarkers::SetRenderSubmitLatencyMarkerEnd(uint64 FrameNumber)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::eRenderSubmitEnd, FrameNumber);
+	SetCustomLatencyMarker(uint32(sl::PCLMarker::eRenderSubmitEnd), FrameNumber);
 }
 
 void FStreamlineLatencyMarkers::SetPresentLatencyMarkerStart(uint64 FrameNumber)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::ePresentStart, FrameNumber);
+	SetCustomLatencyMarker(uint32(sl::PCLMarker::ePresentStart), FrameNumber);
 }
 
 void FStreamlineLatencyMarkers::SetPresentLatencyMarkerEnd(uint64 FrameNumber)
 {
-	SetCustomLatencyMarker(sl::ReflexMarker::ePresentEnd, FrameNumber);
+	SetCustomLatencyMarker(uint32(sl::PCLMarker::ePresentEnd), FrameNumber);
 
 	// we are calling this here since that's right after present.
 	GetDLSSGStatusFromStreamline();
@@ -491,7 +527,7 @@ void FStreamlineLatencyMarkers::SetFlashIndicatorLatencyMarker(uint64 FrameNumbe
 {
 	if (GetFlashIndicatorEnabled())
 	{
-		SetCustomLatencyMarker(sl::ReflexMarker::eTriggerFlash, FrameNumber );
+		SetCustomLatencyMarker(uint32(sl::PCLMarker::eTriggerFlash), FrameNumber );
 	}
 
 }
@@ -500,11 +536,11 @@ void FStreamlineLatencyMarkers::SetCustomLatencyMarker(uint32 MarkerId, uint64 F
 {
 	if (GetEnabled())
 	{
-		sl::ReflexMarker Marker = static_cast<sl::ReflexMarker>(MarkerId);
+		sl::PCLMarker Marker = static_cast<sl::PCLMarker>(MarkerId);
 		sl::FrameToken* FrameToken = FStreamlineCoreModule::GetStreamlineRHI()->GetFrameToken(FrameNumber);
-		sl::Result Result = CALL_SL_FEATURE_FN(sl::kFeatureReflex, slReflexSetMarker, Marker, *FrameToken);
-		checkf(Result == sl::Result::eOk, TEXT("slReflexSetMarker failed MarkerId=%s (%s)"),
-			ANSI_TO_TCHAR(sl::getReflexMarkerAsStr(Marker)), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		sl::Result Result = CALL_SL_FEATURE_FN(sl::kFeaturePCL, slPCLSetMarker, Marker, *FrameToken);
+		checkf(Result == sl::Result::eOk, TEXT("slPCLSetMarker failed MarkerId=%s (%s)"),
+			ANSI_TO_TCHAR(sl::getPCLMarkerAsStr(Marker)), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
 	}
 }
 
@@ -512,16 +548,16 @@ bool FStreamlineLatencyMarkers::ProcessMessage(HWND hwnd, uint32 msg, WPARAM wPa
 {
 	if (GetEnabled())
 	{
-		sl::ReflexState LatencySettings{};
-		sl::Result Result = CALL_SL_FEATURE_FN(sl::kFeatureReflex, slReflexGetState, LatencySettings);
-		checkf(Result == sl::Result::eOk, TEXT("slReflexGetState failed (%s)"), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+		sl::PCLState LatencySettings{};
+		sl::Result Result = CALL_SL_FEATURE_FN(sl::kFeaturePCL, slPCLGetState, LatencySettings);
+		checkf(Result == sl::Result::eOk, TEXT("slPCLGetState failed (%s)"), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
 
 		if(LatencySettings.statsWindowMessage == msg)
 		{
-			// Latency ping based on custom message, command buffer is not needed hence null
+			// Latency ping based on custom message
 			sl::FrameToken* FrameToken = FStreamlineCoreModule::GetStreamlineRHI()->GetFrameToken(GFrameCounter);
-			Result = CALL_SL_FEATURE_FN(sl::kFeatureReflex, slReflexSetMarker, sl::ReflexMarker::ePCLatencyPing, *FrameToken);
-			checkf(Result == sl::Result::eOk, TEXT("slReflexSetMarker ePCLatencyPing failed (%s)"), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
+			Result = CALL_SL_FEATURE_FN(sl::kFeaturePCL, slPCLSetMarker, sl::PCLMarker::ePCLatencyPing, *FrameToken);
+			checkf(Result == sl::Result::eOk, TEXT("slPCLSetMarker ePCLatencyPing failed (%s)"), ANSI_TO_TCHAR(sl::getResultAsStr(Result)));
 			return true;
 		}
 	}
@@ -546,7 +582,7 @@ bool FStreamlineLatencyMarkers::GetEnabled()
 
 bool FStreamlineLatencyMarkers::GetAvailable()
 {
-	return IsStreamlineReflexSupported();
+	return IsStreamlinePCLSupported();
 }
 
 void FStreamlineLatencyMarkers::SetFlashIndicatorEnabled(bool bInEnabled)

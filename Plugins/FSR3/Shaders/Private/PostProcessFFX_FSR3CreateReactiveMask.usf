@@ -28,6 +28,7 @@
 // SHADER RESOURCES
 //
 // =====================================================================================
+Texture2D InputSeparateTranslucency;
 Texture2D GBufferB;
 Texture2D GBufferD;
 Texture2D ReflectionTexture;
@@ -54,6 +55,8 @@ float ReactiveHistoryTranslucencyBias;
 float ReactiveHistoryTranslucencyLumaBias;
 float ReactiveMaskTranslucencyBias;
 float ReactiveMaskTranslucencyLumaBias;
+float ReactiveMaskPreDOFTranslucencyScale;
+uint ReactiveMaskPreDOFTranslucencyMax;
 float ReactiveMaskTranslucencyMaxDistance;
 float ForceLitReactiveValue;
 uint ReactiveShadingModelID;
@@ -84,6 +87,7 @@ void MainCS(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_Group
 
 		TexelUV = (float2(ThreadId.xy) + 0.5f) / (View.BufferSizeAndInvSize.xy + View.ViewRectMin.xy);
 		float4 Reflection = ReflectionTexture.SampleLevel(Sampler, TexelUV, 0);
+		float4 Translucency = InputSeparateTranslucency.SampleLevel(Sampler, TexelUV, 0);
 		if (LumenSpecularCurrentFrame == 0)
 		{
 			float4 EncodedVelocity = InputVelocity[ThreadId];
@@ -137,7 +141,8 @@ void MainCS(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_Group
 		}
 
 		float3 Delta = abs(FullSceneColor - SceneColorNoAlpha).xyz;
-		float4 Translucency = float4(Delta, 1.f - Luminance(Delta));
+		float PreDOFTranslucency = saturate(ReactiveMaskPreDOFTranslucencyMax ? max(Delta.x, max(Delta.y, Delta.z)) : length(Delta)) * ReactiveMaskPreDOFTranslucencyScale;
+		Translucency.xyz = max(Translucency.xyz, PreDOFTranslucency);
 		
 		// Add a falloff for roughness based on the largest capture radius, this is a cheat as we aren't using the actual capture position
 		float WorldDepth = ConvertFromDeviceZ(CurrentDepth);

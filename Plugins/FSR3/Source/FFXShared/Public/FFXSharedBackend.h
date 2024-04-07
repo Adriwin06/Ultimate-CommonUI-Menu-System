@@ -66,7 +66,7 @@ public:
 	virtual FfxErrorCode CreateInterface(FfxInterface& OutInterface, uint32 MaxContexts) = 0;
 	virtual FfxDevice GetDevice(void* device) = 0;
 	virtual FfxCommandList GetCommandList(void* list) = 0;
-	virtual FfxResource GetResource(void* resource, wchar_t* name, FfxResourceStates state, uint32 shaderComponentMapping) = 0;
+	virtual FfxResource GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping) = 0;
 	virtual FfxCommandQueue GetCommandQueue(void* cmdQueue) = 0;
 	virtual FfxSwapchain GetSwapchain(void* swapChain) = 0;
 	virtual FfxDevice GetNativeDevice() = 0;

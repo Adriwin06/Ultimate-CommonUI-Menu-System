@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -29,7 +29,14 @@ class FStreamlineVelocityCombineCS : public FGlobalShader
 public:
 	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 	{
-		return 	IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+		// Only cook for the platforms/RHIs where DLSS-FG is supported, which is DX11,DX12 [on Win64]
+		return 	IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5) &&
+				IsPCPlatform(Parameters.Platform) &&
+#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION <= 26)
+				IsD3DPlatform(Parameters.Platform, false);
+#else
+				IsD3DPlatform(Parameters.Platform);
+#endif
 	}
 
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -81,21 +88,12 @@ FRDGTextureRef AddStreamlineVelocityCombinePass(
 	const FIntRect InputViewRect = View.ViewRect;
 	const FIntRect OutputViewRect = FIntRect( FIntPoint::ZeroValue, bDilateMotionVectors ? View.GetSecondaryViewRectSize() : View.ViewRect.Size());
 	FRDGTextureDesc CombinedVelocityDesc =
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-	FRDGTextureDesc::Create2DDesc(
-#else
+
 	FRDGTextureDesc::Create2D(
-#endif
 		OutputViewRect.Size(),
 		PF_G16R16F,
 		FClearValueBinding::Black,
-#if (ENGINE_MAJOR_VERSION == 4) && (ENGINE_MINOR_VERSION == 25) 
-		TexCreate_None,
-		TexCreate_ShaderResource | TexCreate_RenderTargetable | TexCreate_UAV,
-		/* bInForceSeparateTargetAndShaderResource = */ false);
-#else
 		TexCreate_ShaderResource | TexCreate_UAV);
-#endif
 	const TCHAR* OutputName = TEXT("Streamline.CombinedVelocity");
 
 	FRDGTextureRef CombinedVelocityTexture = GraphBuilder.CreateTexture(
