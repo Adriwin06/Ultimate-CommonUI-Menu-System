@@ -8,6 +8,7 @@
   - VERY complete "Options" menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings, Audio/Volume settings (Music, Ambient, SFX, Voice, Controller Speaker, etc)
   - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level
   - Main menu with background map & camera movements
+  - Beautiful animated character selection menu
   - Pause menu (press ² or escape if in standalone mode)
   - Full controller support (navigate between widget, change settings, etc)
   - Partial French localization
