@@ -13,7 +13,7 @@
   - Full controller support (navigate between widget, change settings, etc)
   - Partial French localization
   - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
-  - No canvas panel is used, so the performance is pretty good since canvas panels have high performance demands
+  - Practically no canvas panel is used, so the performances are pretty good since canvas panels have high performance demands
   - Easy integration in your own project. For more informations, check out the [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki/Integrate-to-your-own-project)
 
 ## Goal
@@ -26,6 +26,7 @@ The plugins that are used in the menu need to be installed in order for this to 
 | [NVIDIA DLSS 3.5](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS 3.5 is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
 | [AMD FidelityFX Super Resolution 3](https://gpuopen.com/learn/ue-fsr3/)  |  The AMD FidelityFX Super Resolution 3 (FSR 3) plugin for Unreal Engine provides an open source, high-quality solution for producing high resolution frames from lower resolution inputs and a frame interpolation technique which can increase the frame rate up to twice the input rate to improve smoothness of animations and frame pacing.  |
 | [Intel Xe Super Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
+| [Async Loading Screen](https://github.com/truong-bui/AsyncLoadingScreen)  |  Async Loading Screen allows you to easily configure a Loading Screen System in the project settings, and automatically add a Loading Screen whenever you open a new level. Async Loading Screen also comes with pre-design UI layouts and default icons that make it easy to custom your loading screen in a few minutes.  |
 
 ## Access the Menu
   - Main Menu: The main menu is launched automatically.
