@@ -30,15 +30,11 @@
 #include "xess_debug.h"
 #include "Windows/HideWindowsPlatformTypes.h"
 
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-#include "ID3D12DynamicRHI.h"  // for ID3D12DynamicRHI
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-#include "D3D12RHIPrivate.h"   // for FD3D12DynamicRHI
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
-
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
+#include "RenderGraphResources.h"
 #include "Misc/Paths.h"
+#include "XeSSUnrealIncludes.h"
 #include "XeSSUtil.h"
 
 // The UE module
@@ -80,13 +76,11 @@ static TAutoConsoleVariable<float> CVarXeSSOptimalScreenPercentage(
 	TEXT("Optimal screen percentage for current XeSS quality."),
 	ECVF_ReadOnly);
 
-#if XESS_WITH_AUTO_EXPOSURE
 static TAutoConsoleVariable<int32> CVarXeSSAutoExposure(
 	TEXT("r.XeSS.AutoExposure"),
 	1,
 	TEXT("[default: 1] Use XeSS internal auto exposure."),
 	ECVF_Default | ECVF_RenderThreadSafe);
-#endif // XESS_WITH_AUTO_EXPOSURE
 
 // Temporary workaround for missing resource barrier flush in UE5
 inline void ForceBeforeResourceTransition(ID3D12GraphicsCommandList& D3D12CmdList, const xess_d3d12_execute_params_t& ExecuteParams)
@@ -154,28 +148,18 @@ float FXeSSRHI::GetOptimalResolutionFraction(const xess_quality_settings_t InQua
 uint32 FXeSSRHI::GetXeSSInitFlags()
 {
 	uint32 InitFlags = XESS_INIT_FLAG_HIGH_RES_MV;
-#if XESS_WITH_AUTO_EXPOSURE
 	if (CVarXeSSAutoExposure->GetBool())
 	{
 		InitFlags |= XESS_INIT_FLAG_ENABLE_AUTOEXPOSURE;
 	}
-#endif // XESS_WITH_AUTO_EXPOSURE
 	return InitFlags;
 }
 
 FXeSSRHI::FXeSSRHI(FDynamicRHI* DynamicRHI)
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-	: D3D12RHI(static_cast<ID3D12DynamicRHI*>(DynamicRHI))
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-	: D3D12RHI(static_cast<FD3D12DynamicRHI*>(DynamicRHI))
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+	: D3D12RHI(static_cast<XeSSUnreal::XD3D12DynamicRHI*>(DynamicRHI))
 {
 	// TODO: use device index
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-	ID3D12Device* Direct3DDevice = D3D12RHI->RHIGetDevice(0);
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-	ID3D12Device* Direct3DDevice = D3D12RHI->GetAdapter(0).GetD3DDevice();
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+	ID3D12Device* Direct3DDevice = XeSSUnreal::GetDevice(D3D12RHI, 0);
 
 	check(D3D12RHI);
 	check(Direct3DDevice);
@@ -223,14 +207,14 @@ FXeSSRHI::FXeSSRHI(FDynamicRHI* DynamicRHI)
 
 	// Register callback to handle frame capture requests
 	CVarXeSSFrameDumpStart->AsVariable()->SetOnChangedCallback(FConsoleVariableDelegate::CreateLambda([this](IConsoleVariable* InVariable)
+	{
+		if (!CVarXeSSEnabled->AsVariableInt()->GetValueOnGameThread())
 		{
-			if (!CVarXeSSEnabled->AsVariableInt()->GetValueOnGameThread())
-			{
-				UE_LOG(LogXeSS, Error, TEXT("XeSS is not enabled - please make sure r.XeSS.Enabled is set to 1 before starting frame capture."));
-				return;
-			}
-			TriggerFrameCapture(InVariable->GetInt());
-		}));
+			UE_LOG(LogXeSS, Error, TEXT("XeSS is not enabled - please make sure r.XeSS.Enabled is set to 1 before starting frame capture."));
+			return;
+		}
+		TriggerFrameCapture(InVariable->GetInt());
+	}));
 
 	// Handle value set by ini file
 	HandleXeSSEnabledSet(CVarXeSSEnabled->AsVariable());
@@ -298,16 +282,9 @@ void FXeSSRHI::RHIExecuteXeSS(const FXeSSExecuteArguments& InArguments)
 	}
 
 	xess_d3d12_execute_params_t ExecuteParams{};
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-	ExecuteParams.pColorTexture = D3D12RHI->RHIGetResource(InArguments.ColorTexture);
-	ExecuteParams.pVelocityTexture = D3D12RHI->RHIGetResource(InArguments.VelocityTexture);
-	ExecuteParams.pOutputTexture = D3D12RHI->RHIGetResource(InArguments.OutputTexture);
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-	ExecuteParams.pColorTexture = GetD3D12TextureFromRHITexture(InArguments.ColorTexture)->GetResource()->GetResource();
-	ExecuteParams.pVelocityTexture = GetD3D12TextureFromRHITexture(InArguments.VelocityTexture)->GetResource()->GetResource();
-	ExecuteParams.pOutputTexture = GetD3D12TextureFromRHITexture(InArguments.OutputTexture)->GetResource()->GetResource();
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
-
+	ExecuteParams.pColorTexture = XeSSUnreal::GetResource(D3D12RHI, InArguments.ColorTexture);
+	ExecuteParams.pVelocityTexture = XeSSUnreal::GetResource(D3D12RHI, InArguments.VelocityTexture);
+	ExecuteParams.pOutputTexture = XeSSUnreal::GetResource(D3D12RHI, InArguments.OutputTexture);
 	ExecuteParams.jitterOffsetX = InArguments.JitterOffsetX;
 	ExecuteParams.jitterOffsetY = InArguments.JitterOffsetY;
 	ExecuteParams.resetHistory = InArguments.bCameraCut;
@@ -410,21 +387,20 @@ void FXeSSRHI::TriggerFrameCapture(int FrameCount) const
 	}
 }
 
-#if ENGINE_MAJOR_VERSION >= 5
-void FXeSSRHI::TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, FRHIBuffer* DummyBuffer) const
+void FXeSSRHI::TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, TRDGBufferAccess<ERHIAccess::UAVCompute> DummyBufferAccess) const
 {
-	// Using the dummy structured buffer to trigger a resource transition
+#if ENGINE_MAJOR_VERSION >= 5
+	FRHIBuffer* DummyBuffer = DummyBufferAccess->GetRHI();
+	// Using the dummy buffer to trigger a resource transition
 	RHICmdList.LockBuffer(DummyBuffer, 0, sizeof(float), EResourceLockMode::RLM_WriteOnly);
 	RHICmdList.UnlockBuffer(DummyBuffer);
-}
-#else // ENGINE_MAJOR_VERSION >= 5
-void FXeSSRHI::TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, FRHIStructuredBuffer* DummyBuffer) const
-{
+#else
+	FRHIStructuredBuffer* DummyBuffer = DummyBufferAccess->GetRHIStructuredBuffer();
 	// Using the dummy structured buffer to trigger a resource transition
 	RHICmdList.LockStructuredBuffer(DummyBuffer, 0, sizeof(float), EResourceLockMode::RLM_WriteOnly);
 	RHICmdList.UnlockStructuredBuffer(DummyBuffer);
-}
 #endif // ENGINE_MAJOR_VERSION >= 5
+}
 
 void FXeSSRHI::HandleXeSSEnabledSet(IConsoleVariable* Variable)
 {

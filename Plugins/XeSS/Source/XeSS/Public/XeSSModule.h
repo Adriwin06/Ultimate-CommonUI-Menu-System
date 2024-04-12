@@ -26,8 +26,9 @@
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleInterface.h"
-#include "XeSSRHI.h"
-#include "XeSSUpscaler.h"
+
+class FXeSSRHI;
+class FXeSSUpscaler;
 
 class FXeSSPlugin : public IModuleInterface
 {
@@ -40,10 +41,4 @@ public:
 	virtual FXeSSRHI* GetXeSSRHI() const;
 	virtual FXeSSUpscaler* GetXeSSUpscaler() const;
 	virtual bool IsXeSSSupported() const;
-private:
-	TUniquePtr<FXeSSUpscaler> XeSSUpscaler;
-	TUniquePtr<FXeSSRHI> XeSSRHI;
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-	TSharedPtr<FXeSSUpscalerViewExtension, ESPMode::ThreadSafe> XeSSUpscalerViewExtension;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 };

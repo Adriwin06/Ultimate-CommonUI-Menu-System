@@ -33,10 +33,10 @@ namespace XeSSUtil
 	constexpr int32 ON_SCREEN_MESSAGE_KEY_INCORRECT_SCREEN_PERCENTAGE = 1;
 	constexpr int32 ON_SCREEN_MESSAGE_KEY_NOT_SUPPORT_RHI = 2;
 
-	constexpr int32 XESS_QUALITY_SETTING_BASE_VALUE = XESS_QUALITY_SETTING_PERFORMANCE - 1;
-	constexpr int32 XESS_QUALITY_SETTING_MIN = XESS_QUALITY_SETTING_PERFORMANCE;
-	constexpr int32 XESS_QUALITY_SETTING_MAX = XESS_QUALITY_SETTING_ULTRA_QUALITY;
-	constexpr int32 XESS_QUALITY_SETTING_COUNT = XESS_QUALITY_SETTING_ULTRA_QUALITY - XESS_QUALITY_SETTING_BASE_VALUE + 1;
+	// QUALITY EDIT:
+	constexpr int32 XESS_QUALITY_SETTING_MIN = XESS_QUALITY_SETTING_ULTRA_PERFORMANCE;
+	constexpr int32 XESS_QUALITY_SETTING_MAX = XESS_QUALITY_SETTING_AA;
+	constexpr int32 XESS_QUALITY_SETTING_COUNT = XESS_QUALITY_SETTING_MAX - XESS_QUALITY_SETTING_MIN + 1;
 
 	inline bool IsValid(xess_quality_settings_t QualitySetting)
 	{
@@ -46,29 +46,24 @@ namespace XeSSUtil
 	inline int32 ToIndex(xess_quality_settings_t QualitySetting)
 	{
 		check(IsValid(QualitySetting));
-		return QualitySetting - XESS_QUALITY_SETTING_BASE_VALUE;
+		return QualitySetting - XESS_QUALITY_SETTING_MIN;
 	}
 
 	inline int32 ToCVarInt(xess_quality_settings_t QualitySetting)
 	{
 		check(IsValid(QualitySetting));
-		return QualitySetting - XESS_QUALITY_SETTING_BASE_VALUE;
+		return QualitySetting - XESS_QUALITY_SETTING_MIN;
 	}
 
 	inline xess_quality_settings_t ToXeSSQualitySetting(int32 CVarInt)
 	{
-		xess_quality_settings_t QualitySetting = static_cast<xess_quality_settings_t>(XESS_QUALITY_SETTING_BASE_VALUE + CVarInt);
+		xess_quality_settings_t QualitySetting = static_cast<xess_quality_settings_t>(XESS_QUALITY_SETTING_MIN + CVarInt);
 
-		switch (QualitySetting)
+		if (IsValid(QualitySetting))
 		{
-		case XESS_QUALITY_SETTING_PERFORMANCE:
-		case XESS_QUALITY_SETTING_BALANCED:
-		case XESS_QUALITY_SETTING_QUALITY:
-		case XESS_QUALITY_SETTING_ULTRA_QUALITY:
 			return QualitySetting;
-		default:
-			return XESS_QUALITY_SETTING_BALANCED;
 		}
+		return XESS_QUALITY_SETTING_BALANCED;
 	}
 
 	inline void AddErrorMessageToScreen(const FString& ErrorMessage, int32 Key = ON_SCREEN_MESSAGE_KEY_DEFAULT)

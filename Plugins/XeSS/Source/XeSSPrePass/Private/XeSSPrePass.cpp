@@ -30,6 +30,7 @@
 #include "Modules/ModuleManager.h"
 #include "Runtime/Launch/Resources/Version.h"
 #include "ScenePrivate.h"
+#include "XeSSUnreal.h"
 
 #if XESS_ENGINE_VERSION_GEQ(5, 2)
 #include "DataDrivenShaderPlatformInfo.h"
@@ -47,17 +48,9 @@ class FXeSSVelocityFlattenCS : public FGlobalShader
 	SHADER_USE_PARAMETER_STRUCT(FXeSSVelocityFlattenCS, FGlobalShader);
 
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
-#if ENGINE_MAJOR_VERSION < 5
-		SHADER_PARAMETER(FVector4, InputSceneSize)
-
-		SHADER_PARAMETER(FVector4, OutputViewportSize)
-		SHADER_PARAMETER(FVector4, OutputViewportRect)
-#else
 		SHADER_PARAMETER(FVector4f, InputSceneSize)
-
 		SHADER_PARAMETER(FVector4f, OutputViewportSize)
 		SHADER_PARAMETER(FVector4f, OutputViewportRect)
-#endif
 
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthTexture)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, GBufferVelocityTexture)
@@ -65,24 +58,18 @@ class FXeSSVelocityFlattenCS : public FGlobalShader
 		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, ViewUniformBuffer)
 
 		// Temporal upsample specific parameters.
-#if ENGINE_MAJOR_VERSION < 5
-		SHADER_PARAMETER(FVector2D, InputViewMin)
-		SHADER_PARAMETER(FVector4, InputViewSize)
-		SHADER_PARAMETER(FVector2D, TemporalJitterPixels)
-#else
 		SHADER_PARAMETER(FVector2f, InputViewMin)
 		SHADER_PARAMETER(FVector4f, InputViewSize)
 		SHADER_PARAMETER(FVector2f, TemporalJitterPixels)
-#endif
 
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, OutVelocityTex)
-		END_SHADER_PARAMETER_STRUCT()
+	END_SHADER_PARAMETER_STRUCT()
 
-		static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
-		{
-			FPermutationDomain PermutationVector(Parameters.PermutationId);
-			return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
-		}
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		FPermutationDomain PermutationVector(Parameters.PermutationId);
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
 
 	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
 	{
@@ -133,29 +120,16 @@ FRDGTextureRef AddVelocityFlatteningXeSSPass(
 		PassParameters->SceneDepthTexture = InSceneDepthTexture;
 		PassParameters->GBufferVelocityTexture = InVelocityTexture;
 
-#if ENGINE_MAJOR_VERSION < 5
-		PassParameters->OutputViewportSize = FVector4(
-			DestRect.Width(), DestRect.Height(), 1.0f / float(DestRect.Width()), 1.0f / float(DestRect.Height()));
-		PassParameters->OutputViewportRect = FVector4(DestRect.Min.X, DestRect.Min.Y, DestRect.Max.X, DestRect.Max.Y);
-#else
 		PassParameters->OutputViewportSize = FVector4f(
 			DestRect.Width(), DestRect.Height(), 1.0f / float(DestRect.Width()), 1.0f / float(DestRect.Height()));
 		PassParameters->OutputViewportRect = FVector4f(DestRect.Min.X, DestRect.Min.Y, DestRect.Max.X, DestRect.Max.Y);
-#endif
 
 		// Temporal upsample specific shader parameters.
 		{
-#if ENGINE_MAJOR_VERSION < 5
-			PassParameters->TemporalJitterPixels = View.TemporalJitterPixels;
-			PassParameters->InputViewMin = FVector2D(InputViewRect.Min.X, InputViewRect.Min.Y);
-			PassParameters->InputViewSize = FVector4(
-				InputViewRect.Width(), InputViewRect.Height(), 1.0f / InputViewRect.Width(), 1.0f / InputViewRect.Height());
-#else
 			PassParameters->TemporalJitterPixels = FVector2f(View.TemporalJitterPixels);
 			PassParameters->InputViewMin = FVector2f(InputViewRect.Min.X, InputViewRect.Min.Y);
 			PassParameters->InputViewSize = FVector4f(
 				InputViewRect.Width(), InputViewRect.Height(), 1.0f / InputViewRect.Width(), 1.0f / InputViewRect.Height());
-#endif
 		}
 
 		// UAVs

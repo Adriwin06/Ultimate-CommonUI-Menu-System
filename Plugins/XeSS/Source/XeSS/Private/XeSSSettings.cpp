@@ -89,3 +89,5 @@ void UXeSSSettings::PostEditChangeProperty(FPropertyChangedEvent& PropertyChange
 	}
 }
 #endif
+
+#undef LOCTEXT_NAMESPACE

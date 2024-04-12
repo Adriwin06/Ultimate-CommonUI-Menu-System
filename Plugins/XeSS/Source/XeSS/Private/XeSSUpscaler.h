@@ -35,8 +35,10 @@
 #if XESS_ENGINE_VERSION_GEQ(5, 3)
 #include "TemporalUpscaler.h"		// for ITemporalUpscaler
 struct FTemporalAAHistory;
+typedef UE::Renderer::Private::ITemporalUpscaler::FInputs XPassInputs;
 #else // XESS_ENGINE_VERSION_GEQ(5, 3)
 #include "PostProcess/TemporalAA.h"  // for ITemporalUpscaler
+typedef ITemporalUpscaler::FPassInputs XPassInputs;
 #endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 
 class FXeSSRHI;
@@ -54,7 +56,7 @@ struct FXeSSPassParameters
 	FRDGTexture* SceneDepthTexture = nullptr;
 	FRDGTexture* SceneVelocityTexture = nullptr;
 
-	FXeSSPassParameters(const FViewInfo& View);
+	FXeSSPassParameters(const FViewInfo& View, const XPassInputs& PassInputs);
 
 	/** Returns the texture resolution that will be output. */
 	FIntPoint GetOutputExtent() const;
@@ -72,7 +74,7 @@ class XESSPLUGIN_API FXeSSUpscaler final : public ITemporalUpscaler, public ICus
 #endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 {
 public:
-	FXeSSUpscaler(FXeSSRHI* XeSSRHI);
+	FXeSSUpscaler(FXeSSRHI* InXeSSRHI);
 	virtual ~FXeSSUpscaler();
 
 	// Inherited via ITemporalUpscaler
@@ -82,7 +84,7 @@ public:
 	virtual FOutputs AddPasses(
 		FRDGBuilder& GraphBuilder,
 		const FSceneView& View,
-		const FInputs& Inputs) const final;
+		const FInputs& PassInputs) const final;
 #elif XESS_ENGINE_VERSION_GEQ(5, 0)
 	virtual FOutputs AddPasses(
 		FRDGBuilder& GraphBuilder,
@@ -99,7 +101,6 @@ public:
 		FIntRect* OutSceneColorHalfResViewRect) const final;
 #endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 
-	// TODO: refactor to return void
 	FRDGTextureRef AddMainXeSSPass(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& View,
@@ -146,7 +147,9 @@ private:
 class XESSPLUGIN_API FXeSSUpscalerViewExtension : public FSceneViewExtensionBase
 {
 public:
-	FXeSSUpscalerViewExtension(const FAutoRegister& AutoRegister) : FSceneViewExtensionBase(AutoRegister) {}
+	FXeSSUpscalerViewExtension(const FAutoRegister& AutoRegister, FXeSSUpscaler* InXeSSUpscaler) : 
+		FSceneViewExtensionBase(AutoRegister),
+		XeSSUpscaler(InXeSSUpscaler) {}
 	virtual bool IsActiveThisFrame_Internal(const FSceneViewExtensionContext& Context) const override;
 	// The only choice for `FSceneViewFamily::SetTemporalUpscalerInterface` (limited by engine code)
 	virtual void BeginRenderViewFamily(FSceneViewFamily& ViewFamily) override;
@@ -154,8 +157,6 @@ public:
 	virtual void SetupView(FSceneViewFamily& ViewFamily, FSceneView& View) override {};
 	// Empty implementation for pure virtual
 	virtual void SetupViewFamily(FSceneViewFamily& ViewFamily) override {};
-
-	void SetXeSSUpscaler(FXeSSUpscaler* InXeSSUpscaler) { XeSSUpscaler = InXeSSUpscaler; }
 private:
 	FXeSSUpscaler* XeSSUpscaler = nullptr;
 };

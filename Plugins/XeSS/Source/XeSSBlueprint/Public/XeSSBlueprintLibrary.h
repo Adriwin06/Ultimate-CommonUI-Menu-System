@@ -31,14 +31,18 @@
 class FXeSSRHI;
 class FXeSSUpscaler;
 
+// QUALITY EDIT:
 UENUM(BlueprintType)
 enum class EXeSSQualityMode : uint8
 {
-	Off              UMETA(DisplayName = "Off"),
-	Performance      UMETA(DisplayName = "Performance"),
-	Balanced         UMETA(DisplayName = "Balanced"),
-	Quality          UMETA(DisplayName = "Quality"),
-	UltraQuality     UMETA(DisplayName = "Ultra Quality"),
+	Off					UMETA(DisplayName = "Off"),
+	UltraPerformance	UMETA(DisplayName = "Ultra Performance"),
+	Performance			UMETA(DisplayName = "Performance"),
+	Balanced			UMETA(DisplayName = "Balanced"),
+	Quality				UMETA(DisplayName = "Quality"),
+	UltraQuality		UMETA(DisplayName = "Ultra Quality"),
+	UltraQualityPlus	UMETA(DisplayName = "Ultra Quality Plus"),
+	AntiAliasing		UMETA(DisplayName = "Anti-Aliasing"),
 };
 
 UCLASS(Blueprintable, BlueprintType, meta = (DisplayName = "XeSS Blueprint Library"))

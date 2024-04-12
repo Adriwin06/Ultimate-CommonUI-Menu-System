@@ -29,6 +29,8 @@
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "Windows/WindowsHWrapper.h"
+#include "XeSSRHI.h"
+#include "XeSSUpscaler.h"
 #include "XeSSUtil.h"
 
 #define LOCTEXT_NAMESPACE "FXeSSPlugin"
@@ -39,6 +41,12 @@ static TAutoConsoleVariable<FString> CVarXeSSVersion(
 	TEXT("Unknown"),
 	TEXT("Show XeSS SDK's version"),
 	ECVF_ReadOnly);
+
+static TUniquePtr<FXeSSUpscaler> XeSSUpscaler;
+static TUniquePtr<FXeSSRHI> XeSSRHI;
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
+static TSharedPtr<FXeSSUpscalerViewExtension, ESPMode::ThreadSafe> XeSSUpscalerViewExtension;
+#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 
 void FXeSSPlugin::StartupModule()
 {
@@ -110,8 +118,7 @@ void FXeSSPlugin::StartupModule()
 		XeSSUpscaler.Reset(new FXeSSUpscaler(XeSSRHI.Get()));
 		check(XeSSUpscaler);
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
-		XeSSUpscalerViewExtension = FSceneViewExtensions::NewExtension<FXeSSUpscalerViewExtension>();
-		XeSSUpscalerViewExtension->SetXeSSUpscaler(XeSSUpscaler.Get());
+		XeSSUpscalerViewExtension = FSceneViewExtensions::NewExtension<FXeSSUpscalerViewExtension>(XeSSUpscaler.Get());
 #endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 	}
 	else

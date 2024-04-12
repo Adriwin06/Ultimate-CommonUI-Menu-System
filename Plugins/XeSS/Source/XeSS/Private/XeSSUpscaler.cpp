@@ -33,6 +33,7 @@
 #include "XeSSPrePass.h"
 #include "XeSSRHI.h"
 #include "XeSSSettings.h"
+#include "XeSSUnreal.h"
 #include "XeSSUtil.h"
 
 #if XESS_ENGINE_VERSION_GEQ(5, 3)
@@ -59,14 +60,18 @@ static TAutoConsoleVariable<int32> CVarXeSSEnabled(
 	TEXT("[default: 0] Set to 1 to use XeSS instead of TAAU or any other upscaling method."),
 	ECVF_Default | ECVF_RenderThreadSafe);
 
+// QUALITY EDIT:
 static TAutoConsoleVariable<int32> CVarXeSSQuality(
 	TEXT("r.XeSS.Quality"),
 	2,
-	TEXT("[default:2] Set XeSS quality setting.")
+	TEXT("[default: 2] Set XeSS quality setting.")
+	TEXT(" 0: Ultra Performance")
 	TEXT(" 1: Performance")
-	TEXT(" 2: Balanced (default)")
+	TEXT(" 2: Balanced")
 	TEXT(" 3: Quality")
-	TEXT(" 4: Ultra Quality"),
+	TEXT(" 4: Ultra Quality")
+	TEXT(" 5: Ultra Quality Plus")
+	TEXT(" 6: Anti-Aliasing"),
 	ECVF_Default | ECVF_RenderThreadSafe);
 
 static TAutoConsoleVariable<int32> CVarXeSSPreExposure(
@@ -77,9 +82,16 @@ static TAutoConsoleVariable<int32> CVarXeSSPreExposure(
 
 DECLARE_GPU_STAT_NAMED(XeSS, TEXT("XeSS"));
 
-FXeSSPassParameters::FXeSSPassParameters(const FViewInfo& View)
+FXeSSPassParameters::FXeSSPassParameters(const FViewInfo& View, const XPassInputs& PassInputs)
 	: InputViewRect(View.ViewRect)
 	, OutputViewRect(FIntPoint::ZeroValue, View.GetSecondaryViewRectSize())
+#if XESS_ENGINE_VERSION_GEQ(5, 3)
+	, SceneColorTexture(PassInputs.SceneColor.Texture)
+	, SceneDepthTexture(PassInputs.SceneDepth.Texture)
+#else // XESS_ENGINE_VERSION_GEQ(5, 3)
+	, SceneColorTexture(PassInputs.SceneColorTexture)
+	, SceneDepthTexture(PassInputs.SceneDepthTexture)
+#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 { }
 
 FIntPoint FXeSSPassParameters::GetOutputExtent() const
@@ -162,11 +174,7 @@ BEGIN_SHADER_PARAMETER_STRUCT(FXeSSShaderParameters, )
 	// Only used as WA to force Resource Transition Barrier
 	RDG_BUFFER_ACCESS(DummyBuffer, ERHIAccess::UAVCompute)
 
-#if ENGINE_MAJOR_VERSION < 5
-	SHADER_PARAMETER(FVector2D, JitterOffset)
-#else // ENGINE_MAJOR_VERSION < 5
 	SHADER_PARAMETER(FVector2f, JitterOffset)
-#endif // ENGINE_MAJOR_VERSION < 5
 	SHADER_PARAMETER(uint32, bCameraCut)
 	SHADER_PARAMETER(int32, QualitySetting)
 	SHADER_PARAMETER(uint32, InitFlags)
@@ -218,11 +226,7 @@ FRDGTextureRef FXeSSUpscaler::AddMainXeSSPass(
 	PassParameters->InputColor = Inputs.SceneColorTexture;
 	PassParameters->InputVelocity = Inputs.SceneVelocityTexture;
 
-#if ENGINE_MAJOR_VERSION < 5
-	PassParameters->JitterOffset = View.TemporalJitterPixels;
-#else // ENGINE_MAJOR_VERSION < 5
 	PassParameters->JitterOffset = FVector2f(View.TemporalJitterPixels);
-#endif // ENGINE_MAJOR_VERSION < 5
 	PassParameters->bCameraCut = bCameraCut;
 	PassParameters->SceneColorOutput = FRDGTextureAccess(OutputSceneColor, ERHIAccess::UAVCompute);
 	PassParameters->QualitySetting = CVarXeSSQuality.GetValueOnAnyThread();
@@ -280,13 +284,7 @@ FRDGTextureRef FXeSSUpscaler::AddMainXeSSPass(
 			}
 
 			// Make sure all resource transitions barriers are executed before RHIExecuteXeSS is called
-
-#if ENGINE_MAJOR_VERSION >= 5
-			LocalXeSSRHI->TriggerResourceTransitions(RHICmdList, PassParameters->DummyBuffer->GetRHI());
-#else // ENGINE_MAJOR_VERSION >= 5
-			LocalXeSSRHI->TriggerResourceTransitions(RHICmdList, PassParameters->DummyBuffer->GetRHIStructuredBuffer());
-#endif // ENGINE_MAJOR_VERSION >= 5
-
+			LocalXeSSRHI->TriggerResourceTransitions(RHICmdList, PassParameters->DummyBuffer);
 			RHICmdList.EnqueueLambda(
 				[LocalXeSSRHI, ExecArgsXeSS](FRHICommandListImmediate& Cmd)
 				{
@@ -310,7 +308,7 @@ FRDGTextureRef FXeSSUpscaler::AddMainXeSSPass(
 ITemporalUpscaler::FOutputs FXeSSUpscaler::AddPasses(
 	FRDGBuilder& GraphBuilder,
 	const FSceneView& View,
-	const FInputs& Inputs) const
+	const FInputs& PassInputs) const
 #elif XESS_ENGINE_VERSION_GEQ(5, 0)
 ITemporalUpscaler::FOutputs FXeSSUpscaler::AddPasses(
 	FRDGBuilder& GraphBuilder,
@@ -328,8 +326,6 @@ void FXeSSUpscaler::AddPasses(
 #endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 {
 	RDG_EVENT_SCOPE(GraphBuilder, "XeSS Pass");
-	FRDGTextureRef SceneColorTexture;
-	FRDGTextureRef SceneDepthTexture;
 	FRDGTextureRef SceneVelocityTexture;
 
 #if XESS_ENGINE_VERSION_GEQ(5, 3)
@@ -340,12 +336,8 @@ void FXeSSUpscaler::AddPasses(
 
 	const FViewInfo& ViewInfo = static_cast<const FViewInfo&>(View);
 
-	SceneColorTexture = Inputs.SceneColor.Texture;
-	SceneDepthTexture = Inputs.SceneDepth.Texture;
-	SceneVelocityTexture = Inputs.SceneVelocity.Texture;
+	SceneVelocityTexture = PassInputs.SceneVelocity.Texture;
 #else // XESS_ENGINE_VERSION_GEQ(5, 3)
-	SceneColorTexture = PassInputs.SceneColorTexture;
-	SceneDepthTexture = PassInputs.SceneDepthTexture;
 	SceneVelocityTexture = PassInputs.SceneVelocityTexture;
 
 	#if XESS_ENGINE_VERSION_GEQ(5, 0)
@@ -365,17 +357,11 @@ void FXeSSUpscaler::AddPasses(
 
 #endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 
-	const FRDGTextureRef UpscaledSceneVelocityTexture = AddVelocityFlatteningXeSSPass(GraphBuilder,
-		SceneDepthTexture,
+	FXeSSPassParameters XeSSMainParameters(ViewInfo, PassInputs);
+	XeSSMainParameters.SceneVelocityTexture = AddVelocityFlatteningXeSSPass(GraphBuilder,
+		XeSSMainParameters.SceneDepthTexture,
 		SceneVelocityTexture,
 		ViewInfo);
-
-	FXeSSPassParameters XeSSMainParameters(ViewInfo);
-	XeSSMainParameters.SceneColorTexture = SceneColorTexture;
-	XeSSMainParameters.SceneDepthTexture = SceneDepthTexture;
-	XeSSMainParameters.SceneVelocityTexture = UpscaledSceneVelocityTexture;
-
-	const FIntRect SecondaryViewRect = XeSSMainParameters.OutputViewRect;
 
 	const FTemporalAAHistory& InputHistory = ViewInfo.PrevViewInfo.TemporalAAHistory;
 	FTemporalAAHistory& OutputHistory = ViewInfo.ViewState->PrevFrameViewInfo.TemporalAAHistory;
@@ -387,19 +373,16 @@ void FXeSSUpscaler::AddPasses(
 		InputHistory,
 		&OutputHistory);
 
-#if XESS_ENGINE_VERSION_GEQ(5, 3)
-	Outputs.FullRes.Texture = XeSSOutput;
-	Outputs.FullRes.ViewRect = SecondaryViewRect;
-	Outputs.NewHistory = DummyHistory;
-	return Outputs;
-#elif XESS_ENGINE_VERSION_GEQ(5, 0)
-	// TODO: refactor to merge with 5_3 path
+#if XESS_ENGINE_VERSION_GEQ(5, 0)
 	if (!XeSSOutput)
 	{
 		return Outputs;
 	}
 	Outputs.FullRes.Texture = XeSSOutput;
-	Outputs.FullRes.ViewRect = SecondaryViewRect;
+	Outputs.FullRes.ViewRect = XeSSMainParameters.OutputViewRect;
+	#if XESS_ENGINE_VERSION_GEQ(5, 3)
+	Outputs.NewHistory = DummyHistory;
+	#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
 	return Outputs;
 #else // XESS_ENGINE_VERSION_GEQ(5, 0)
 	// HACK: Fix crash issue when activated with other upscaler plugins at the same time
@@ -408,8 +391,8 @@ void FXeSSUpscaler::AddPasses(
 		return;
 	}
 	*OutSceneColorTexture = XeSSOutput;
-	*OutSceneColorViewRect = SecondaryViewRect;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
+	*OutSceneColorViewRect = XeSSMainParameters.OutputViewRect;
+#endif // XESS_ENGINE_VERSION_GEQ(5, 0)
 }
 
 #if XESS_ENGINE_VERSION_LSS(5, 1)
@@ -495,9 +478,9 @@ void FXeSSUpscaler::SetupViewFamily(FSceneViewFamily& ViewFamily)
 
 FXeSSRHI* FXeSSUpscaler::UpscalerXeSSRHI;
 
-FXeSSUpscaler::FXeSSUpscaler(FXeSSRHI* XeSSRHI)
+FXeSSUpscaler::FXeSSUpscaler(FXeSSRHI* InXeSSRHI)
 {
-	UpscalerXeSSRHI = XeSSRHI;
+	UpscalerXeSSRHI = InXeSSRHI;
 
 #if XESS_ENGINE_VERSION_GEQ(5, 3)
 	DummyHistory = new FXeSSHistory(this);
@@ -511,30 +494,30 @@ FXeSSUpscaler::FXeSSUpscaler(FXeSSRHI* XeSSRHI)
 #endif // XESS_ENGINE_VERSION_LSS(5, 1)
 
 	CVarXeSSPreExposure->AsVariable()->SetOnChangedCallback(FConsoleVariableDelegate::CreateLambda([this](IConsoleVariable* InVariable)
-		{
-			auto CVarEyeAdaptationPreExposureOverride = IConsoleManager::Get().FindConsoleVariable(TEXT("r.EyeAdaptation.PreExposureOverride"));
-			auto SetByFlag = ECVF_SetByConsole; // Use the highest priority to avoid failure
+	{
+		auto CVarEyeAdaptationPreExposureOverride = IConsoleManager::Get().FindConsoleVariable(TEXT("r.EyeAdaptation.PreExposureOverride"));
+		auto SetByFlag = ECVF_SetByConsole; // Use the highest priority to avoid failure
 
-			if (InVariable->GetBool())
-			{
-				CVarEyeAdaptationPreExposureOverride->Set(0.f, SetByFlag);
-			}
-			else
-			{
-				CVarEyeAdaptationPreExposureOverride->Set(1.f, SetByFlag);
-			}
+		if (InVariable->GetBool())
+		{
+			CVarEyeAdaptationPreExposureOverride->Set(0.f, SetByFlag);
+		}
+		else
+		{
+			CVarEyeAdaptationPreExposureOverride->Set(1.f, SetByFlag);
+		}
 #if ENGINE_MAJOR_VERSION == 4
-			auto CVarUsePreExposure = IConsoleManager::Get().FindConsoleVariable(TEXT("r.UsePreExposure"));
-			if (InVariable->GetBool())
-			{
-				CVarUsePreExposure->Set(1, SetByFlag);
-			}
-			else
-			{
-				CVarUsePreExposure->Set(0, SetByFlag);
-			}
+		auto CVarUsePreExposure = IConsoleManager::Get().FindConsoleVariable(TEXT("r.UsePreExposure"));
+		if (InVariable->GetBool())
+		{
+			CVarUsePreExposure->Set(1, SetByFlag);
+		}
+		else
+		{
+			CVarUsePreExposure->Set(0, SetByFlag);
+		}
 #endif // ENGINE_MAJOR_VERSION == 4
-		}));
+	}));
 
 }
 
@@ -585,13 +568,6 @@ bool FXeSSUpscalerViewExtension::IsActiveThisFrame_Internal(const FSceneViewExte
 				float MaxUpsampleScreenPercentage = XeSSUpscaler->GetMaxUpsampleResolutionFraction() * 100.f;
 				float CurrentScreenPercentage = ScreenPercentage->GetFloat();
 
-				if (FMath::IsNearlyEqual(CurrentScreenPercentage, 100.f, SCREEN_PERCENTAGE_ERROR_TOLERANCE)) {
-					XeSSUtil::AddErrorMessageToScreen(
-						TEXT("XeSS is intentionally turned off with screen percentage: 100. Don't forget to set 'r.ScreenPercentage'."),
-						XeSSUtil::ON_SCREEN_MESSAGE_KEY_INCORRECT_SCREEN_PERCENTAGE
-					);
-					return false;
-				}
 				if (CurrentScreenPercentage >= MinUpsampleScreenPercentage &&
 					CurrentScreenPercentage <= MaxUpsampleScreenPercentage ||
 					FMath::IsNearlyEqual(CurrentScreenPercentage, MinUpsampleScreenPercentage, SCREEN_PERCENTAGE_ERROR_TOLERANCE) ||

@@ -35,6 +35,16 @@ bool UXeSSBlueprintLibrary::bXeSSSupported = false;
 #if USE_XESS
 FXeSSRHI* UXeSSBlueprintLibrary::XeSSRHI = nullptr;
 FXeSSUpscaler* UXeSSBlueprintLibrary::XeSSUpscaler = nullptr;
+// QUALITY EDIT:
+static TMap<EXeSSQualityMode, xess_quality_settings_t> EnabledQualityMap = {
+	{EXeSSQualityMode::UltraPerformance, XESS_QUALITY_SETTING_ULTRA_PERFORMANCE},
+	{EXeSSQualityMode::Performance, XESS_QUALITY_SETTING_PERFORMANCE},
+	{EXeSSQualityMode::Balanced, XESS_QUALITY_SETTING_BALANCED},
+	{EXeSSQualityMode::Quality, XESS_QUALITY_SETTING_QUALITY},
+	{EXeSSQualityMode::UltraQuality, XESS_QUALITY_SETTING_ULTRA_QUALITY},
+	{EXeSSQualityMode::UltraQualityPlus, XESS_QUALITY_SETTING_ULTRA_QUALITY_PLUS},
+	{EXeSSQualityMode::AntiAliasing, XESS_QUALITY_SETTING_AA},
+};
 
 static FString GetDisplayName(EXeSSQualityMode QualityMode)
 {
@@ -53,24 +63,14 @@ static xess_quality_settings_t ToXeSSQualitySetting(EXeSSQualityMode QualityMode
 {
 	xess_quality_settings_t QualitySetting = XESS_QUALITY_SETTING_BALANCED;
 
-	switch (QualityMode)
+	if (EnabledQualityMap.Contains(QualityMode))
 	{
-	case EXeSSQualityMode::Performance:
-		QualitySetting = XESS_QUALITY_SETTING_PERFORMANCE;
-		break;
-	case EXeSSQualityMode::Balanced:
-		QualitySetting = XESS_QUALITY_SETTING_BALANCED;
-		break;
-	case EXeSSQualityMode::Quality:
-		QualitySetting = XESS_QUALITY_SETTING_QUALITY;
-		break;
-	case EXeSSQualityMode::UltraQuality:
-		QualitySetting = XESS_QUALITY_SETTING_ULTRA_QUALITY;
-		break;
-	default:
+		QualitySetting = EnabledQualityMap[QualityMode];
+	}
+	else
+	{
 		FFrame::KismetExecutionMessage(*FString::Printf(TEXT("ToXeSSQualitySetting called with invalid enum value (%d) %s"),
 			int32(QualityMode), *GetDisplayName(QualityMode)), ELogVerbosity::Error);
-		break;
 	}
 	return QualitySetting;
 }
@@ -79,21 +79,16 @@ static EXeSSQualityMode ToXeSSQualityMode(int32 CVarInt)
 {
 	xess_quality_settings_t QualitySetting = XeSSUtil::ToXeSSQualitySetting(CVarInt);
 
-	switch (QualitySetting)
+	for (const auto& Pair : EnabledQualityMap)
 	{
-	case XESS_QUALITY_SETTING_PERFORMANCE:
-		return EXeSSQualityMode::Performance;
-	case XESS_QUALITY_SETTING_BALANCED:
-		return EXeSSQualityMode::Balanced;
-	case XESS_QUALITY_SETTING_QUALITY:
-		return EXeSSQualityMode::Quality;
-	case XESS_QUALITY_SETTING_ULTRA_QUALITY:
-		return EXeSSQualityMode::UltraQuality;
-	default:
-		FFrame::KismetExecutionMessage(*FString::Printf(TEXT("ToXeSSQualityMode called with invalid value (%d)"),
-			CVarInt), ELogVerbosity::Error);
-		return EXeSSQualityMode::Off;
+		if (Pair.Value == QualitySetting) 
+		{
+			return Pair.Key;
+		}
 	}
+	FFrame::KismetExecutionMessage(*FString::Printf(TEXT("ToXeSSQualityMode called with invalid value (%d)"),
+		CVarInt), ELogVerbosity::Error);
+	return EXeSSQualityMode::Off;
 }
 
 #endif

@@ -24,10 +24,8 @@
 
 #include "Runtime/Launch/Resources/Version.h"
 
-#define XESS_WITH_AUTO_EXPOSURE 0   // TODO: remove it
-
 #define XESS_ENGINE_VERSION_GEQ(Major, Minor) \
-    (ENGINE_MAJOR_VERSION == Major && ENGINE_MINOR_VERSION >= Minor) || ENGINE_MAJOR_VERSION > Major
+    ((ENGINE_MAJOR_VERSION == Major && ENGINE_MINOR_VERSION >= Minor) || ENGINE_MAJOR_VERSION > Major)
 
 #define XESS_ENGINE_VERSION_LSS(Major, Minor) \
-    (ENGINE_MAJOR_VERSION == Major && ENGINE_MINOR_VERSION < Minor) || ENGINE_MAJOR_VERSION < Major
+    ((ENGINE_MAJOR_VERSION == Major && ENGINE_MINOR_VERSION < Minor) || ENGINE_MAJOR_VERSION < Major)

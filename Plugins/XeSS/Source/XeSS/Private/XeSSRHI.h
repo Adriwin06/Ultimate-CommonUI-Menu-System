@@ -25,23 +25,17 @@
 #include "XeSSMacros.h"
 
 #include "CoreMinimal.h"
+#include "RHI.h"
+#include "ShaderParameterMacros.h"
+#include "XeSSUnreal.h"
 #include "xess.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogXeSS, Verbose, All);
 
-class FD3D12DynamicRHI;
 class FDynamicRHI;
-class FRHICommandList;
 class FRHICommandListImmediate;
-class FRHIBuffer;
 class FRHITexture;
 class IConsoleVariable;
-struct ID3D12Device;
-struct ID3D12DynamicRHI;
-
-#if ENGINE_MAJOR_VERSION < 5
-class FRHIStructuredBuffer;
-#endif // ENGINE_MAJOR_VERSION < 5
 
 struct XESSPLUGIN_API FXeSSInitArguments
 {
@@ -82,11 +76,7 @@ public:
 	float GetOptimalResolutionFraction(const xess_quality_settings_t InQualitySetting);
 	uint32 GetXeSSInitFlags();
 
-#if ENGINE_MAJOR_VERSION >= 5
-	void TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, FRHIBuffer* DummyBuffer) const;
-#else // ENGINE_MAJOR_VERSION >= 5
-	void TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, FRHIStructuredBuffer* DummyBuffer) const;
-#endif // ENGINE_MAJOR_VERSION >= 5
+	void TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, TRDGBufferAccess<ERHIAccess::UAVCompute> DummyBufferAccess) const;
 
 	bool IsXeSSInitialized() { return bXeSSInitialized; }
 	void HandleXeSSEnabledSet(IConsoleVariable* Variable);
@@ -95,11 +85,7 @@ private:
 	void InitResolutionFractions();
 	void TriggerFrameCapture(int FrameCount) const;
 
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-	ID3D12DynamicRHI* D3D12RHI = nullptr;
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-	FD3D12DynamicRHI* D3D12RHI = nullptr;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+	XeSSUnreal::XD3D12DynamicRHI* D3D12RHI = nullptr;
 	FXeSSInitArguments InitArgs;
 
 	xess_context_handle_t XeSSContext = nullptr;
