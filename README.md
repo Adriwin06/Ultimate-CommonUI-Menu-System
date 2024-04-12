@@ -5,7 +5,8 @@
 ## Features 
   - Full WIP game menu system
   - Easy prompt system
-  - VERY complete "Options" menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings, Audio/Volume settings (Music, Ambient, SFX, Voice, Controller Speaker, etc)
+  - VERY complete "Options" menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings, Audio/Volume settings (Music, Ambient, SFX, Voice, Controller Speaker, etc), input mapping, etc
+  - WIP details panel that displays information about the hovered setting. It's not finished because there is a lot of information to add for each setting, so it takes quite a lot of time
   - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level
   - Main menu with background map & camera movements
   - Beautiful animated character selection menu
@@ -44,7 +45,7 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
 
 ## To do
-  - Add other settings like controls, audio device, audio mode, color blind mode, etc.
+  - Add other settings like audio device, audio mode, color blind mode, etc.
   - Add Enhanced Input system (for scrolling in the menu with left thumbstick on a controller & more)
   - Fix all bugs.
 
