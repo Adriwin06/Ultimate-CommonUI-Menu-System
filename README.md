@@ -5,7 +5,7 @@
 ## Features 
   - Full WIP game menu system
   - Easy prompt system
-  - VERY complete "Options" menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings, Audio/Volume settings (Music, Ambient, SFX, Voice, Controller Speaker, etc), input mapping, etc
+  - VERY complete "Options" menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings that follows their UI Guidelines, Audio/Volume settings (Music, Ambient, SFX, Voice, Controller Speaker, etc), input mapping, etc
   - WIP details panel that displays information about the hovered setting. It's not finished because there is a lot of information to add for each setting, so it takes quite a lot of time
   - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level
   - Main menu with background map & camera movements
@@ -20,8 +20,9 @@
 ## Goal
 The goal of this project is to make the ultimate game menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for everyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as many options as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build your own menu by using this one as a base. You can check out the WIP [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki) for more informations. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants. I will then create a branch with all community changes.
 
-## Requirements
-The plugins that are used in the menu need to be installed in order for this to properly work. Fortunately, they are now included in the project files. Here is a table of these plugins: 
+## Plugins Used
+If you have a missing plugins error, it's probably because I forgot to disable the plugins that I use to developp this project and makes my worflow easier, but they are absolutely not requiered.
+The plugins that are used in the menu need to be installed in order for this to properly work. Fortunately, they are now included in the project files.  Here is a table of these plugins: 
 | Name | Description |
 | ------------- | ------------- |
 | [NVIDIA DLSS 3.7](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS 3.5 is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
@@ -45,6 +46,7 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
 
 ## To do
+  - Make more settings use command lines instead of Post Process Volume.
   - Add other settings like audio device, audio mode, color blind mode, etc.
   - Add Enhanced Input system (for scrolling in the menu with left thumbstick on a controller & more)
   - Fix all bugs.
