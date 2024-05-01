@@ -38,7 +38,7 @@ The plugins that are used in the menu need to be installed in order for this to 
   - You can use this freely in you project
   - You have to credit me
 
-## Recommandations
+## Recommendations
 I recommend launching the game in "Standalone Game" mode instead of "Selected Viewport" or "New Editor Window (PIE)" mode. This way, if it crashes, it won't crash the whole engine, and you can change resolution settings, fullscreen, etc, and actually see the changes. And it's better because it's closer to what players will experience.
 
 ## Known Bugs
@@ -46,9 +46,10 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
 
 ## To do
-  - Make more settings use command lines instead of Post Process Volume.
-  - Add other settings like audio device, audio mode, color blind mode, etc.
+  - Make more settings use command lines instead of Post Process Volume
+  - Add other settings like audio device, audio mode, color blind mode, etc
   - Add Enhanced Input system (for scrolling in the menu with left thumbstick on a controller & more)
+  - Add a photo mode and gallery with path tracing support if possible
   - Fix all bugs.
 
 ### To maybe do in C++
