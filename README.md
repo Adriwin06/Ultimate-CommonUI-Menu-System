@@ -1,6 +1,7 @@
 # Ultimate UE5 CommonUI Full Game Menu System
 
 ### THIS IS STILL IN DEVELOPMENT AND IS ABSOLUTELY NOT FINISHED.
+Especially this Enhanced Input branch. It is still an experimental feature, and its integration in this branch is also experimental because there are a lot of bugs and problems. You can use it if you know what you are doing, and if you make it work better, I would be happy if you do a pull request.
 
 ## Features 
   - Full WIP game menu system
