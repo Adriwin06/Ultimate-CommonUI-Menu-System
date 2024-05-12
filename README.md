@@ -1,6 +1,8 @@
 # Ultimate UE5 CommonUI Full Game Menu System
 
-### THIS IS STILL IN DEVELOPMENT AND IS ABSOLUTELY NOT FINISHED.
+<img src="https://i.imgur.com/uzxaYqd.png" width=49%> <img src="https://i.imgur.com/afaZQmT.png" width=49%>
+
+Please note that this project is still in development.
 
 ## Features 
   - Full WIP game menu system
@@ -17,6 +19,10 @@
   - Practically no canvas panel is used, so the performances are pretty good since canvas panels have high performance demands
   - Easy integration in your own project. For more informations, check out the [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki/Integrate-to-your-own-project)
 
+## Try it yourself
+I highly recommend trying it yourself. I regularly publish releases with packaged versions so you don't need to have Unreal Engine installed to try it. Just download, extract, and launch the .exe. I'm also working on integrating it into the City Sample to showcase its capabilities in a real game. Additionally, I'm adding more gameplay features so it's not boring, and you can truly experience the Matrix.
+
+
 ## Goal
 The goal of this project is to make the ultimate game menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for everyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as many options as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build your own menu by using this one as a base. You can check out the WIP [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki) for more informations. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants. I will then create a branch with all community changes.
 
@@ -25,10 +31,15 @@ If you have a missing plugins error, it's probably because I forgot to disable t
 The plugins that are used in the menu need to be installed in order for this to properly work. Fortunately, they are now included in the project files.  Here is a table of these plugins: 
 | Name | Description |
 | ------------- | ------------- |
-| [NVIDIA DLSS 3.7](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS 3.5 is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
+| [NVIDIA DLSS 3.7](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS 3.7 is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
 | [AMD FidelityFX Super Resolution 3](https://gpuopen.com/learn/ue-fsr3/)  |  The AMD FidelityFX Super Resolution 3 (FSR 3) plugin for Unreal Engine provides an open source, high-quality solution for producing high resolution frames from lower resolution inputs and a frame interpolation technique which can increase the frame rate up to twice the input rate to improve smoothness of animations and frame pacing.  |
 | [Intel Xe Super Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 | [Async Loading Screen](https://github.com/truong-bui/AsyncLoadingScreen)  |  Async Loading Screen allows you to easily configure a Loading Screen System in the project settings, and automatically add a Loading Screen whenever you open a new level. Async Loading Screen also comes with pre-design UI layouts and default icons that make it easy to custom your loading screen in a few minutes.  |
+
+This was external Plugins, but I use other plugins integrated in the Engine:
+  - Common UI
+  - Cine Camera Rigs
+  - Steam Controller
 
 ## Access the Menu
   - Main Menu: The main menu is launched automatically.
@@ -49,7 +60,7 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Make more settings use command lines instead of Post Process Volume
   - Add other settings like audio device, audio mode, color blind mode, etc
   - Add Enhanced Input system (for scrolling in the menu with left thumbstick on a controller & more)
-  - Add a photo mode and gallery with path tracing support if possible
+  - Add comparaison images for each settings, and custom description widgets when it's needed
   - Fix all bugs.
 
 ### To maybe do in C++
