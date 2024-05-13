@@ -20,8 +20,9 @@ Please note that this project is still in development.
   - Easy integration in your own project. For more informations, check out the [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki/Integrate-to-your-own-project)
 
 ## Try it yourself
-I highly recommend trying it yourself. I regularly publish releases with packaged versions so you don't need to have Unreal Engine installed to try it. Just download, extract, and launch the .exe. I'm also working on integrating it into the City Sample to showcase its capabilities in a real game. Additionally, I'm adding more gameplay features so it's not boring, and you can truly experience the Matrix.
+I highly recommend trying it yourself. I regularly publish releases with packaged versions so you don't need to have Unreal Engine installed to try it. Just download, extract, and launch the .exe. I'm also working on integrating it into the City Sample to showcase its capabilities in a real game. Additionally, I'm adding more gameplay features so it's not boring, and you can truly experience the Matrix. 
 
+You can already experience this City Sample build in it current stage by clicking on the [Google Drive link](https://drive.google.com/file/d/1oqVVWh9xc0bn1s7C-WmTVzkSu3oSzeKz) in the [latest Release](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/releases).
 
 ## Goal
 The goal of this project is to make the ultimate game menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for everyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as many options as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build your own menu by using this one as a base. You can check out the WIP [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki) for more informations. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants. I will then create a branch with all community changes.
@@ -57,9 +58,10 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
 
 ## To do
+  - Fix keyboard navigation with arrow keys
   - Make more settings use command lines instead of Post Process Volume
-  - Add other settings like audio device, audio mode, color blind mode, etc
-  - Add Enhanced Input system (for scrolling in the menu with left thumbstick on a controller & more)
+  - Add other settings like audio device, audio mode, color blind mode, etc and settings from the NvRTX branch
+  - Enhance Enhanced Input system implementation (Available in experimental version in [this branch](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/tree/Enhanced-Inputs))
   - Add comparaison images for each settings, and custom description widgets when it's needed
   - Fix all bugs.
 
