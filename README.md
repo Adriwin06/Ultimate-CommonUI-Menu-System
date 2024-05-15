@@ -14,6 +14,7 @@ Please note that this project is still in development.
   - Beautiful animated character selection menu
   - Pause menu (press ² or escape if in standalone mode)
   - Full controller support (navigate between widget, change settings, etc)
+  - Simple notification system
   - Partial French localization
   - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
   - Practically no canvas panel is used, so the performances are pretty good since canvas panels have high performance demands
