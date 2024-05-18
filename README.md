@@ -1,19 +1,18 @@
-# Ultimate UE5 CommonUI Full Game Menu System
+# UCMS - Ultimate CommonUI Menu System
 
 <img src="https://i.imgur.com/uzxaYqd.png" width=49%> <img src="https://i.imgur.com/afaZQmT.png" width=49%>
 
-Please note that this project is still in development.
-
 ## Features 
-  - Full WIP game menu system
+  - Full game menu system
   - Easy prompt system
   - VERY complete "Options" menu, like there is probably too much settings for a normal user, with engine settings, Post Process Volume Settings, display settings, TSR/DLSS/FSR/XeSS settings that follows their UI Guidelines, Audio/Volume settings (Music, Ambient, SFX, Voice, Controller Speaker, etc), input mapping, etc
-  - WIP details panel that displays information about the hovered setting. It's not finished because there is a lot of information to add for each setting, so it takes quite a lot of time
+  - Details panel that displays information about the hovered setting. It's not finished because there is a lot of information to add for each setting, so it takes quite a lot of time
   - Save system that saves all settings when you quit/reopen the game. They now got reapplied automatically at launch and when openning a level
   - Main menu with background map & camera movements
   - Beautiful animated character selection menu
   - Pause menu (press ² or escape if in standalone mode)
   - Full controller support (navigate between widget, change settings, etc)
+  - Keyboard arrows navigation (validate with space)
   - Simple notification system
   - Partial French localization
   - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
@@ -38,7 +37,7 @@ The plugins that are used in the menu need to be installed in order for this to 
 | [Intel Xe Super Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 | [Async Loading Screen](https://github.com/truong-bui/AsyncLoadingScreen)  |  Async Loading Screen allows you to easily configure a Loading Screen System in the project settings, and automatically add a Loading Screen whenever you open a new level. Async Loading Screen also comes with pre-design UI layouts and default icons that make it easy to custom your loading screen in a few minutes.  |
 
-This was external Plugins, but I use other plugins integrated in the Engine:
+This was external plugins, but I use other plugins integrated in the Engine:
   - Common UI
   - Cine Camera Rigs
   - Steam Controller
@@ -47,20 +46,18 @@ This was external Plugins, but I use other plugins integrated in the Engine:
   - Main Menu: The main menu is launched automatically.
   - Pause Menu: Press "²", "Escape" or "Start"/"Options" on a controller in-game to access the pause menu.
 
-## Conditions
-  - You can use this freely in you project
-  - You have to credit me
+## Conditions of Use
+  - You can use this freely in your projects
+  - You have to credit me:
+    - It can be "UCMS Base UI" or anything you want but you need to add at least the name of this project.
 
 ## Recommendations
 I recommend launching the game in "Standalone Game" mode instead of "Selected Viewport" or "New Editor Window (PIE)" mode. This way, if it crashes, it won't crash the whole engine, and you can change resolution settings, fullscreen, etc, and actually see the changes. And it's better because it's closer to what players will experience.
 
 ## Known Bugs
-  - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power and AO Quality settings are not functioning. The issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box.
-  - Controller navigation is still far from perfect inside the option menu. Sometimes you can't navigate all the way down or up, and occasionally the focus exits the settings panel and goes to the top settings tab list.
+  - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power and AO Quality settings are not working. The issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. It seems like it is an Engine bug.
 
 ## To do
-  - Fix keyboard navigation with arrow keys
-  - Make more settings use command lines instead of Post Process Volume
   - Add other settings like audio device, audio mode, color blind mode, etc and settings from the NvRTX branch
   - Enhance Enhanced Input system implementation (Available in experimental version in [this branch](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/tree/Enhanced-Inputs))
   - Add comparaison images for each settings, and custom description widgets when it's needed
