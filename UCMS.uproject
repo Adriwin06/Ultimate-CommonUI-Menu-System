@@ -1,26 +1,12 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.3",
+	"EngineAssociation": "{0C120601-4134-03C3-FC6C-39BB3857413D}",
 	"Category": "",
 	"Description": "",
 	"Plugins": [
 		{
 			"Name": "CommonUI",
 			"Enabled": true
-		},
-		{
-			"Name": "FSR3",
-			"Enabled": true,
-			"SupportedTargetPlatforms": [
-				"Win64"
-			]
-		},
-		{
-			"Name": "FSR3MovieRenderPipeline",
-			"Enabled": true,
-			"SupportedTargetPlatforms": [
-				"Win64"
-			]
 		},
 		{
 			"Name": "XeSS",
@@ -62,6 +48,14 @@
 		},
 		{
 			"Name": "SteamController",
+			"Enabled": true
+		},
+		{
+			"Name": "Reflex",
+			"Enabled": true
+		},
+		{
+			"Name": "NRD",
 			"Enabled": true
 		}
 	],
