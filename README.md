@@ -41,7 +41,7 @@ Here is a table of these plugins:
 | ------------- | ------------- | ------------- |
 | [AMD FidelityFX Super Resolution 3](https://gpuopen.com/learn/ue-fsr3/)  |  The AMD FidelityFX Super Resolution 3 (FSR 3) plugin for Unreal Engine provides an open source, high-quality solution for producing high resolution frames from lower resolution inputs and a frame interpolation technique which can increase the frame rate up to twice the input rate to improve smoothness of animations and frame pacing.  | I couldn't rebuild it so I removed it. I haven't removed it's settings because you may be able to properly rebuild it and make it work. Therefore, it's settings won't do anyhing |
 | [Intel Xe Super Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  | I rebuilded it |
-| [Async Loading Screen](https://github.com/truong-bui/AsyncLoadingScreen)  |  Async Loading Screen allows you to easily configure a Loading Screen System in the project settings, and automatically add a Loading Screen whenever you open a new level. Async Loading Screen also comes with pre-design UI layouts and default icons that make it easy to custom your loading screen in a few minutes.  | i rebuilded it |
+| [Async Loading Screen](https://github.com/truong-bui/AsyncLoadingScreen)  |  Async Loading Screen allows you to easily configure a Loading Screen System in the project settings, and automatically add a Loading Screen whenever you open a new level. Async Loading Screen also comes with pre-design UI layouts and default icons that make it easy to custom your loading screen in a few minutes.  | I rebuilded it |
 
 This was external plugins, but I use other plugins integrated in the Engine:
   - Common UI
@@ -63,6 +63,7 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
 
 ## Known Bugs
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power and AO Quality settings are not working. The issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. It seems like it is an Engine bug.
+  - There is issues with Ray Tracing Shadows, RTXDI and Restir UI compatibility, where some of thses settings overwrite others. Right now it's a mess but I will fix it later.
 
 ## To do
   - Add other settings like audio device, audio mode, color blind mode, etc
