@@ -735,7 +735,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 		const bool bReleaseMemoryOnDelete = CVarNGXDLSSReleaseMemoryOnDelete.GetValueOnRenderThread() != 0;
 
 		//if r.PostProcessing.PropagateAlpha is not enabled no reason incur a 20% pref cost upscaling alpha channel.
-		auto PropagateAlphaCVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.PostProcessing.PropagateAlpha"));
+		static auto PropagateAlphaCVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.PostProcessing.PropagateAlpha"));
 		check(PropagateAlphaCVar);
 
 		const bool bEnableAlphaUpscaling = (CVarNGXEnableAlphaUpscaling.GetValueOnRenderThread()) &&
@@ -929,12 +929,17 @@ bool FDLSSUpscaler::IsDLSSActive() const
 
 void FDLSSUpscaler::SetupViewFamily(FSceneViewFamily& ViewFamily)
 {
-	FIntPoint TargetSize = ViewFamily.RenderTarget->GetSizeXY();
-	if ((TargetSize.X < 32) || (TargetSize.Y < 32))
+	const FIntPoint MinViewportSize(32, 32);
+
+	for (const FSceneView* View : ViewFamily.Views)
 	{
-		UE_LOG(LogDLSS, Warning, TEXT("Could not setup DLSS upscaler for unsupported target resolution (%d,%d). Minimum is (32,32)"), TargetSize.X, TargetSize.Y);
-		return;
+		if (View->UnscaledViewRect.Width() < MinViewportSize.X || View->UnscaledViewRect.Height() < MinViewportSize.Y)
+		{
+			UE_LOG(LogDLSS, Warning, TEXT("Could not setup DLSS upscaler for a view with UnscaledViewRect size (%d,%d). Minimum is (%d,%d)"), View->UnscaledViewRect.Width() , View->UnscaledViewRect.Height(), MinViewportSize.X, MinViewportSize.Y);
+			return;
+		}
 	}
+
 	const ISceneViewFamilyScreenPercentage* ScreenPercentageInterface = ViewFamily.GetScreenPercentageInterface();
 	float DesiredResolutionFraction = ScreenPercentageInterface->GetResolutionFractionsUpperBound()[GDynamicPrimaryResolutionFraction];
 

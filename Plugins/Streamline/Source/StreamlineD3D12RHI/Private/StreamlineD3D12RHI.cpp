@@ -89,7 +89,7 @@ public:
 
 	HRESULT CreateSwapChainForHwnd(IDXGIFactory2* pFactory, IUnknown* pDevice, HWND hWnd, const DXGI_SWAP_CHAIN_DESC1* pDesc, const DXGI_SWAP_CHAIN_FULLSCREEN_DESC* pFullScreenDesc, IDXGIOutput* pRestrictToOutput, IDXGISwapChain1** ppSwapChain) override final
 	{
-		HRESULT DXGIResult = LONG_ERROR;
+		HRESULT DXGIResult = E_FAIL;
 		if (!StreamlineRHI->IsSwapchainHookingAllowed())
 		{
 			DXGIResult = pFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
@@ -103,13 +103,13 @@ public:
 			DXGIResult = SLFactory->CreateSwapChainForHwnd(pDevice, hWnd, pDesc, pFullScreenDesc, pRestrictToOutput, ppSwapChain);
 		}
 
-		StreamlineRHI->OnSwapchainCreated(ppSwapChain);
+		StreamlineRHI->OnSwapchainCreated(*ppSwapChain);
 		return DXGIResult;
 	}
 
 	HRESULT CreateSwapChain(IDXGIFactory* pFactory, IUnknown* pDevice, DXGI_SWAP_CHAIN_DESC* pDesc, IDXGISwapChain** ppSwapChain) override final
 	{
-		HRESULT DXGIResult = LONG_ERROR;
+		HRESULT DXGIResult = E_FAIL;
 		if (!StreamlineRHI->IsSwapchainHookingAllowed())
 		{
 			DXGIResult = pFactory->CreateSwapChain(pDevice, pDesc, ppSwapChain);

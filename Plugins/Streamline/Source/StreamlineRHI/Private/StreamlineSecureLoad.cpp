@@ -21,14 +21,16 @@
 #include "Windows/AllowWindowsPlatformTypes.h" 
 THIRD_PARTY_INCLUDES_START
 
-
-#if (NTDDI_VERSION < NTDDI_WIN8)
 #pragma push_macro("NTDDI_VERSION")
+#if (NTDDI_VERSION < NTDDI_WIN8)
 #undef NTDDI_VERSION
 #define NTDDI_VERSION NTDDI_WIN8
 	//this header cannot be directly imported because of current _WIN32_WINNT less then 0x0602 (the value assigned in UEBuildWindows.cs:139)
 	//the macro code added from couple interface declarations, it doesn't affect to any imported function
-#include <shobjidl.h> 
+#include <shobjidl.h>
+#else
+#include <shobjidl.h>
+#endif
 
 #include <windows.h>
 #include <Softpub.h>
@@ -36,9 +38,6 @@ THIRD_PARTY_INCLUDES_START
 #include <wintrust.h>
 #include <inttypes.h>
 #pragma pop_macro("NTDDI_VERSION")
-#else
-#include <shobjidl.h> 
-#endif
 
 THIRD_PARTY_INCLUDES_END
 

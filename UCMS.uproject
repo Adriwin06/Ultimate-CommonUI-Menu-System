@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.3",
+	"EngineAssociation": "5.4",
 	"Category": "",
 	"Description": "",
 	"Plugins": [
@@ -53,20 +53,6 @@
 		{
 			"Name": "Reflex",
 			"Enabled": true
-		},
-		{
-			"Name": "FSR3MovieRenderPipeline",
-			"Enabled": true,
-			"SupportedTargetPlatforms": [
-				"Win64"
-			]
-		},
-		{
-			"Name": "FSR3",
-			"Enabled": true,
-			"SupportedTargetPlatforms": [
-				"Win64"
-			]
 		}
 	],
 	"TargetPlatforms": [

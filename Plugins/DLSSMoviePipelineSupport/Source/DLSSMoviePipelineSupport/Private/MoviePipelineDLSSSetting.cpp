@@ -41,7 +41,7 @@ void UMoviePipelineDLSSSetting::SetupViewFamily(FSceneViewFamily& ViewFamily)
 		float OptimalScreenPercentage;
 		{
 			// find optimal screen percentage for quality mode
-			FVector2D DummyScreenRes;
+			FVector2D DummyScreenRes{};
 			bool bDummyFixed;
 			float DummyMin, DummyMax, DummySharpness;
 			UDLSSLibrary::GetDLSSModeInformation(MRQHelpers::EMoviePipelineDLSSQualityToUDLSSMode(DLSSQuality), DummyScreenRes,

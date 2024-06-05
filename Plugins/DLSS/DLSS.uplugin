@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 38,
-	"VersionName": "3.7.0b",
+	"Version": 40,
+	"VersionName": "3.7.2",
 	"FriendlyName": "NVIDIA DLSS Super Resolution/Ray Reconstruction/DLAA",
 	"Description": "NVIDIA Deep Learning Super Sampling Super Resolution and Ray Reconstruction",
 	"Category": "Rendering",
@@ -10,7 +10,7 @@
 	"DocsURL": "",
 	"MarketplaceURL": "https://www.unrealengine.com/marketplace/en-US/product/nvidia-dlss",
 	"SupportURL": "mailto:DLSS-Support@nvidia.com",
-	"EngineVersion": "5.3.0",
+	"EngineVersion": "5.4.0",
 	"CanContainContent": true,
 	"Installed": true,
 	"Modules": [
