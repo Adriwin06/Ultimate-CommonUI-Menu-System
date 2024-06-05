@@ -32,6 +32,7 @@ There are currently 3 different branches:
 
 - [NvRTX](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX): This branch will be the most frequently updated and has the most settings, as it includes many settings from the [NvRTX branch](https://developer.nvidia.com/game-engines/unreal-engine/rtx-branch) of Unreal Engine.
 - [main](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main): This is the default branch and the one you should use if your game is not using the [NvRTX Branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX) of Unreal Enigne.
+- [5.4](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.4): This branch is based on the main branch and is a port to Unreal Engine 5.4, with new Unreal Engine 5.4 specific settings. It will merged to main when the FSR3 plugin become available for Unreal Engine 5.4.
 - [Enhanced Inputs](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/Enhanced-Inputs): This branch is experimental and updates are very rare, so it will almost always be outdated compared to the other branches. Here, I experiment and try to make Enhanced Inputs work with CommonUI.
 
 ## Plugins Used
