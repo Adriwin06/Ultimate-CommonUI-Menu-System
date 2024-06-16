@@ -166,21 +166,21 @@ void UXeSSBlueprintLibrary::SetXeSSQualityMode(EXeSSQualityMode QualityMode)
 
 	if (QualityMode == EXeSSQualityMode::Off)
 	{
-		CVarXeSSEnabled->Set(0, ECVF_SetByCode);
+		CVarXeSSEnabled->SetWithCurrentPriority(0);
 
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
 		// Only set if not in editor(no effect by default)
 		if (!GIsEditor) 
 		{
-			CVarScreenPercentage->Set(100.f, ECVF_SetByCode);
+			CVarScreenPercentage->SetWithCurrentPriority(100.f);
 		}
 #endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 
 		return;
 	}
 
-	CVarXeSSQuality->Set(XeSSUtil::ToCVarInt(ToXeSSQualitySetting(QualityMode)), ECVF_SetByCode);
-	CVarXeSSEnabled->Set(1, ECVF_SetByCode);
+	CVarXeSSQuality->SetWithCurrentPriority(XeSSUtil::ToCVarInt(ToXeSSQualitySetting(QualityMode)));
+	CVarXeSSEnabled->SetWithCurrentPriority(1);
 
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
 	// Only set if not in editor(no effect by default)
@@ -189,7 +189,7 @@ void UXeSSBlueprintLibrary::SetXeSSQualityMode(EXeSSQualityMode QualityMode)
 		float ScreenPercentage = 100.f;
 		if (GetXeSSQualityModeInformation(QualityMode, ScreenPercentage)) 
 		{
-			CVarScreenPercentage->Set(ScreenPercentage, ECVF_SetByCode);
+			CVarScreenPercentage->SetWithCurrentPriority(ScreenPercentage);
 		}
 	}
 #endif // XESS_ENGINE_VERSION_GEQ(5, 1)

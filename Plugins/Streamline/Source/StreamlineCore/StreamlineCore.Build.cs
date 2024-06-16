@@ -16,14 +16,12 @@ public class StreamlineCore : ModuleRules
 	public StreamlineCore(ReadOnlyTargetRules Target) : base(Target)
 	{
 		// For UE 4.2x compat
-#if UE_5_3_OR_LATER
-		if ((CppStandard is null) || (CppStandard < CppStandardVersion.Cpp17) )
-#else
+#if !UE_5_0_OR_LATER
 		if (CppStandard < CppStandardVersion.Cpp17)
-#endif
 		{
 			CppStandard = CppStandardVersion.Cpp17;
 		}
+#endif
 
 
 		

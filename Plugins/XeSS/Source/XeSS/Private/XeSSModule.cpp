@@ -36,7 +36,7 @@
 #define LOCTEXT_NAMESPACE "FXeSSPlugin"
 DEFINE_LOG_CATEGORY(LogXeSS);
 
-static TAutoConsoleVariable<FString> CVarXeSSVersion(
+TAutoConsoleVariable<FString> GCVarXeSSVersion(
 	TEXT("r.XeSS.Version"),
 	TEXT("Unknown"),
 	TEXT("Show XeSS SDK's version"),
@@ -102,7 +102,7 @@ void FXeSSPlugin::StartupModule()
 
 	TStringBuilder<32> VersionStringBuilder;
 	VersionStringBuilder << "XeSS version: " << XeSSLibVersion.major << "." << XeSSLibVersion.minor << "." << XeSSLibVersion.patch;
-	CVarXeSSVersion->Set(VersionStringBuilder.GetData());
+	GCVarXeSSVersion->Set(VersionStringBuilder.GetData());
 
 	UE_LOG(LogXeSS, Log, TEXT("Loading XeSS library %d.%d.%d on %s RHI %s"),
 		XeSSLibVersion.major, XeSSLibVersion.minor, XeSSLibVersion.patch,

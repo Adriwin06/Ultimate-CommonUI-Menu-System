@@ -82,7 +82,11 @@ public class XeSSPlugin : ModuleRules
 		AddEngineThirdPartyPrivateStaticDependencies(Target, "DX12");
 		AddEngineThirdPartyPrivateStaticDependencies(Target, "NVAPI");
 		AddEngineThirdPartyPrivateStaticDependencies(Target, "NVAftermath");
-		AddEngineThirdPartyPrivateStaticDependencies(Target, "IntelMetricsDiscovery");
+		// IntelMetricsDiscovery no longer used since Unreal 5.4
+		if (EngineMajorVersion < 5 || EngineMajorVersion == 5 && EngineMinorVersion < 4)
+		{
+			AddEngineThirdPartyPrivateStaticDependencies(Target, "IntelMetricsDiscovery");
+		}
 		AddEngineThirdPartyPrivateStaticDependencies(Target, "IntelExtensionsFramework");
 	}
 }

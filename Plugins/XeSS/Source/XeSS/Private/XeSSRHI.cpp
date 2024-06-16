@@ -37,6 +37,7 @@
 #include "XeSSUnrealIncludes.h"
 #include "XeSSUtil.h"
 
+extern TAutoConsoleVariable<FString> GCVarXeSSVersion;
 // The UE module
 DEFINE_LOG_CATEGORY_STATIC(LogXeSSRHI, Log, All);
 
@@ -183,15 +184,13 @@ FXeSSRHI::FXeSSRHI(FDynamicRHI* DynamicRHI)
 		return;
 	}
 
-	static const auto CVarVersion = IConsoleManager::Get().FindConsoleVariable(TEXT("r.XeSS.Version"));
-
 	// Append XeFX library info to version string when running on Intel
 	if (XeFXLibVersion.major != XeFXLibVersion.minor != XeFXLibVersion.patch != 0)
 	{
 		TStringBuilder<32> VersionStringBuilder;
-		VersionStringBuilder << CVarVersion->GetString() << " XeFX version: "
+		VersionStringBuilder << GCVarXeSSVersion->GetString() << " XeFX version: "
 			<< XeFXLibVersion.major << "." << XeFXLibVersion.minor << "." << XeFXLibVersion.patch;
-		CVarVersion->Set(VersionStringBuilder.GetData());
+		GCVarXeSSVersion->Set(VersionStringBuilder.GetData());
 
 		UE_LOG(LogXeSSRHI, Log, TEXT("Loading Intel XeFX library %d.%d.%d"),
 			XeFXLibVersion.major, XeFXLibVersion.minor, XeFXLibVersion.patch);

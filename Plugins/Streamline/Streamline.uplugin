@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 109,
-	"VersionName": "1.3.0-SL2.4.0",
+	"Version": 111,
+	"VersionName": "1.3.2-SL2.4.10",
 	"FriendlyName": "NVIDIA DLSS Frame Generation",
 	"Description": "NVIDIA DLSS Frame Generation and Reflex (Streamline)",
 	"Category": "Rendering",
@@ -10,7 +10,7 @@
 	"DocsURL": "",
 	"MarketplaceURL": "https://www.unrealengine.com/marketplace/en-US/product/nvidia-dlss",
 	"SupportURL": "mailto:DLSS-Support@nvidia.com",
-	"EngineVersion": "5.3.0",
+	"EngineVersion": "5.4.0",
 	"CanContainContent": false,
 	"Installed": true,
 	"Modules": [

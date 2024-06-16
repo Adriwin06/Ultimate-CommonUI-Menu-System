@@ -496,25 +496,24 @@ FXeSSUpscaler::FXeSSUpscaler(FXeSSRHI* InXeSSRHI)
 	CVarXeSSPreExposure->AsVariable()->SetOnChangedCallback(FConsoleVariableDelegate::CreateLambda([this](IConsoleVariable* InVariable)
 	{
 		auto CVarEyeAdaptationPreExposureOverride = IConsoleManager::Get().FindConsoleVariable(TEXT("r.EyeAdaptation.PreExposureOverride"));
-		auto SetByFlag = ECVF_SetByConsole; // Use the highest priority to avoid failure
 
 		if (InVariable->GetBool())
 		{
-			CVarEyeAdaptationPreExposureOverride->Set(0.f, SetByFlag);
+			CVarEyeAdaptationPreExposureOverride->Set(0.f);
 		}
 		else
 		{
-			CVarEyeAdaptationPreExposureOverride->Set(1.f, SetByFlag);
+			CVarEyeAdaptationPreExposureOverride->Set(1.f);
 		}
 #if ENGINE_MAJOR_VERSION == 4
 		auto CVarUsePreExposure = IConsoleManager::Get().FindConsoleVariable(TEXT("r.UsePreExposure"));
 		if (InVariable->GetBool())
 		{
-			CVarUsePreExposure->Set(1, SetByFlag);
+			CVarUsePreExposure->Set(1);
 		}
 		else
 		{
-			CVarUsePreExposure->Set(0, SetByFlag);
+			CVarUsePreExposure->Set(0);
 		}
 #endif // ENGINE_MAJOR_VERSION == 4
 	}));
