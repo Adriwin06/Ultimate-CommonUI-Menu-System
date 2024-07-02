@@ -67,7 +67,6 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power and AO Quality settings are not working. The issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. It seems like it is an Engine bug.
 
 ## To do
-  - Add other settings like audio device, audio mode, color blind mode, etc and settings from the NvRTX branch
   - Enhance Enhanced Input system implementation (Available in experimental version in [this branch](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/tree/Enhanced-Inputs))
   - Add comparaison images for each settings, and custom description widgets when it's needed
   - Fix all bugs.
