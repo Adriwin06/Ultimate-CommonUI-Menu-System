@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,8 @@
 // THE SOFTWARE.
 
 #include "FFXFSR3TemporalUpscalerProxy.h"
+
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 
 #include "FFXFSR3TemporalUpscaling.h"
 #include "FFXFSR3Include.h"
@@ -152,6 +154,19 @@ FSSDSignalTextures FFXFSR3TemporalUpscalerProxy::DenoiseDiffuseIndirect(
 	return TemporalUpscaler->DenoiseDiffuseIndirect(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
 }
 
+#if ENGINE_HAS_DENOISE_INDIRECT
+FSSDSignalTextures FFXFSR3TemporalUpscalerProxy::DenoiseIndirect(
+	FRDGBuilder& GraphBuilder,
+	const FViewInfo& View,
+	FPreviousViewInfo* PreviousViewInfos,
+	const FSceneTextureParameters& SceneTextures,
+	const FIndirectInputs& Inputs,
+	const FAmbientOcclusionRayTracingConfig Config) const
+{
+	return TemporalUpscaler->DenoiseIndirect(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
+}
+#endif
+
 IScreenSpaceDenoiser::FDiffuseIndirectOutputs FFXFSR3TemporalUpscalerProxy::DenoiseSkyLight(
 	FRDGBuilder& GraphBuilder,
 	const FViewInfo& View,
@@ -163,6 +178,7 @@ IScreenSpaceDenoiser::FDiffuseIndirectOutputs FFXFSR3TemporalUpscalerProxy::Deno
 	return TemporalUpscaler->DenoiseSkyLight(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
 }
 
+#if UE_VERSION_OLDER_THAN(5, 4, 0)
 IScreenSpaceDenoiser::FDiffuseIndirectOutputs FFXFSR3TemporalUpscalerProxy::DenoiseReflectedSkyLight(
 	FRDGBuilder& GraphBuilder,
 	const FViewInfo& View,
@@ -173,6 +189,7 @@ IScreenSpaceDenoiser::FDiffuseIndirectOutputs FFXFSR3TemporalUpscalerProxy::Deno
 {
 	return TemporalUpscaler->DenoiseReflectedSkyLight(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
 }
+#endif
 
 FSSDSignalTextures FFXFSR3TemporalUpscalerProxy::DenoiseDiffuseIndirectHarmonic(
 	FRDGBuilder& GraphBuilder,
@@ -201,3 +218,5 @@ FSSDSignalTextures FFXFSR3TemporalUpscalerProxy::DenoiseScreenSpaceDiffuseIndire
 {
 	return TemporalUpscaler->DenoiseScreenSpaceDiffuseIndirect(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
 }
+
+#endif

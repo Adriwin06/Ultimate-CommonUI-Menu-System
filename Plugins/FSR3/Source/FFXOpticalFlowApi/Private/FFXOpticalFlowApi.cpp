@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,8 @@
 
 #if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
+#pragma warning( push )
+#pragma warning( disable : 4191 )
 #else
 #define _countof(a) (sizeof(a)/sizeof(*(a)))
 #define strcpy_s(a, b) strcpy(a, b)
@@ -30,12 +32,11 @@
 #endif
 THIRD_PARTY_INCLUDES_START
 
-#if !defined(FFX_BUILD_AS_DLL) || (FFX_BUILD_AS_DLL == 0)
 #include "components/opticalflow/ffx_opticalflow.cpp"
-#endif
 
 THIRD_PARTY_INCLUDES_END
 #if PLATFORM_WINDOWS
+#pragma warning( pop )
 #include "Windows/HideWindowsPlatformTypes.h"
 #else
 #undef _countof

@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,8 +30,39 @@
 #include "UnrealClient.h"
 
 #include "FFXShared.h"
+#include "FFXFSR3.h"
+#include "FFXOpticalFlowApi.h"
 #include "FFXFrameInterpolationApi.h"
 #include "FFXFSR3Settings.h"
+
+#if PLATFORM_WINDOWS
+#include "Windows/AllowWindowsPlatformTypes.h"
+#pragma warning( push )
+#pragma warning( disable : 4191 )
+#else
+#define _countof(a) (sizeof(a)/sizeof(*(a)))
+#define strcpy_s(a, b) strcpy(a, b)
+#define FFX_GCC 1
+#endif
+THIRD_PARTY_INCLUDES_START
+
+#include "ffx_provider.h"
+#include "ffx_provider_framegeneration.h"
+#include "ffx_provider_fsr3upscale.h"
+
+THIRD_PARTY_INCLUDES_END
+#if PLATFORM_WINDOWS
+#pragma warning( pop )
+#include "Windows/HideWindowsPlatformTypes.h"
+#else
+#undef _countof
+#undef strcpy_s
+#undef FFX_GCC
+#endif
+
+#define FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR                            0
+#define FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCD_OUTPUT                        1
+#define FFX_FSR3_RESOURCE_IDENTIFIER_COUNT                                          2
 
 struct FFXTextureBulkData final : public FResourceBulkDataInterface
 {
@@ -56,6 +87,84 @@ struct FFXTextureBulkData final : public FResourceBulkDataInterface
 	uint32 DataSize = 0;
 };
 
+static EPixelFormat GetUEFormat(FfxSurfaceFormat Format)
+{
+	EPixelFormat UEFormat = PF_Unknown;
+	switch (Format)
+	{
+	case FFX_SURFACE_FORMAT_R32G32B32A32_TYPELESS:
+		UEFormat = PF_R32G32B32A32_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R32G32B32A32_UINT:
+		UEFormat = PF_R32G32B32A32_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT:
+		UEFormat = PF_A32B32G32R32F;
+		break;
+	case FFX_SURFACE_FORMAT_R16G16B16A16_FLOAT:
+		UEFormat = PF_FloatRGBA;
+		break;
+	case FFX_SURFACE_FORMAT_R10G10B10A2_UNORM:
+		UEFormat = PF_A2B10G10R10;
+		break;
+	case FFX_SURFACE_FORMAT_R32G32_FLOAT:
+		UEFormat = PF_G32R32F;
+		break;
+	case FFX_SURFACE_FORMAT_R32_UINT:
+		UEFormat = PF_R32_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R8G8B8A8_TYPELESS:
+		UEFormat = PF_R8G8B8A8_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R8G8B8A8_UNORM:
+		UEFormat = PF_R8G8B8A8;
+		break;
+	case FFX_SURFACE_FORMAT_R8G8B8A8_SRGB:
+		UEFormat = PF_R8G8B8A8;
+		break;
+	case FFX_SURFACE_FORMAT_R11G11B10_FLOAT:
+		UEFormat = PF_FloatR11G11B10;
+		break;
+	case FFX_SURFACE_FORMAT_R16G16_FLOAT:
+		UEFormat = PF_G16R16F;
+		break;
+	case FFX_SURFACE_FORMAT_R16G16_UINT:
+		UEFormat = PF_R16G16_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R16_FLOAT:
+		UEFormat = PF_R16F;
+		break;
+	case FFX_SURFACE_FORMAT_R16_UINT:
+		UEFormat = PF_R16_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R16_UNORM:
+		UEFormat = PF_G16;
+		break;
+	case FFX_SURFACE_FORMAT_R16_SNORM:
+		UEFormat = PF_R16G16B16A16_SNORM;
+		break;
+	case FFX_SURFACE_FORMAT_R8_UNORM:
+		UEFormat = PF_R8;
+		break;
+	case FFX_SURFACE_FORMAT_R8_UINT:
+		UEFormat = PF_R8_UINT;
+		break;
+	case FFX_SURFACE_FORMAT_R32_FLOAT:
+		UEFormat = PF_R32_FLOAT;
+		break;
+	case FFX_SURFACE_FORMAT_R8G8_UNORM:
+		UEFormat = PF_R8G8;
+		break;
+	case FFX_SURFACE_FORMAT_R16G16_SINT:
+		UEFormat = PF_R16G16B16A16_SINT;
+		break;
+	default:
+		check(false);
+		break;
+	}
+	return UEFormat;
+}
+
 static FfxErrorCode CreateResource_UE(FfxInterface* backendInterface, const FfxCreateResourceDescription* desc, FfxUInt32 effectContextId, FfxResourceInternal* outTexture)
 {
 	FfxErrorCode Result = FFX_OK;
@@ -71,52 +180,52 @@ static FfxErrorCode CreateResource_UE(FfxInterface* backendInterface, const FfxC
 				
 		FRHIResourceCreateInfo Info(WCHAR_TO_TCHAR(desc->name));
 
-		uint32 Size = desc->resourceDescription.width;
-		FFXTextureBulkData BulkData(desc->initData, desc->initDataSize);
-		if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16_SNORM && desc->initData)
+		size_t Size = desc->resourceDescription.width;
+		FFXTextureBulkData BulkData(desc->initData.buffer, desc->initData.size);
+		if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16_SNORM && desc->initData.buffer)
 		{
-			int16* Data = (int16*)FMemory::Malloc(desc->initDataSize * 4);
-			for (uint32 i = 0; i < (desc->initDataSize / sizeof(int16)); i++)
+			int16* Data = (int16*)FMemory::Malloc(desc->initData.size * 4);
+			for (uint32 i = 0; i < (desc->initData.size / sizeof(int16)); i++)
 			{
-				Data[i * 4] = ((int16*)desc->initData)[i];
+				Data[i * 4] = ((int16*)desc->initData.buffer)[i];
 				Data[i * 4 + 1] = 0;
 				Data[i * 4 + 2] = 0;
 				Data[i * 4 + 3] = 0;
 			}
 
 			BulkData.Data = Data;
-			BulkData.DataSize = desc->initDataSize * 4;
+			BulkData.DataSize = desc->initData.size * 4;
 			Size = desc->resourceDescription.width * 4;
 		}
-		else if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16G16_SINT && desc->initData)
+		else if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16G16_SINT && desc->initData.buffer)
 		{
-			int16* Data = (int16*)FMemory::Malloc(desc->initDataSize * 2);
-			for (uint32 i = 0; i < (desc->initDataSize / (sizeof(int16) * 2)); i+=2)
+			int16* Data = (int16*)FMemory::Malloc(desc->initData.size * 2);
+			for (uint32 i = 0; i < (desc->initData.size / (sizeof(int16) * 2)); i+=2)
 			{
-				Data[i * 2] = ((int16*)desc->initData)[i];
-				Data[i * 2 + 1] = ((int16*)desc->initData)[i+1];
+				Data[i * 2] = ((int16*)desc->initData.buffer)[i];
+				Data[i * 2 + 1] = ((int16*)desc->initData.buffer)[i+1];
 				Data[i * 2 + 2] = 0;
 				Data[i * 2 + 3] = 0;
 			}
 
 			BulkData.Data = Data;
-			BulkData.DataSize = desc->initDataSize * 2;
+			BulkData.DataSize = desc->initData.size * 2;
 			Size = desc->resourceDescription.width * 2;
 		}
 
 		auto Type = desc->resourceDescription.type;
 
-		Info.BulkData = desc->initData && desc->initDataSize ? &BulkData : nullptr;
+		Info.BulkData = desc->initData.buffer && desc->initData.size ? &BulkData : nullptr;
 
 		switch (Type)
 		{
 			case FFX_RESOURCE_TYPE_BUFFER:
 			{
-				FRDGBufferDesc Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Size);
+				FRDGBufferDesc Desc = FRDGBufferDesc::CreateStructuredDesc(sizeof(uint32), Size);
 #if UE_VERSION_AT_LEAST(5, 3, 0)
-				FBufferRHIRef VB = FRHICommandListExecutor::GetImmediateCommandList().CreateBuffer(Size, Desc.Usage, sizeof(uint32), Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState), Info);
+				FBufferRHIRef VB = FRHICommandListExecutor::GetImmediateCommandList().CreateBuffer(Size * sizeof(uint32), Desc.Usage, sizeof(uint32), Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initialState), Info);
 #else
-				FBufferRHIRef VB = RHICreateBuffer(Size, Desc.Usage, sizeof(uint32), Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState), Info);
+				FBufferRHIRef VB = RHICreateBuffer(Size * sizeof(uint32), Desc.Usage, sizeof(uint32), Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initialState), Info);
 #endif
 				check(VB.GetReference());
 				TRefCountPtr<FRDGPooledBuffer>* PooledBuffer = new TRefCountPtr<FRDGPooledBuffer>;
@@ -128,7 +237,7 @@ static FfxErrorCode CreateResource_UE(FfxInterface* backendInterface, const FfxC
 #else
 					void* Dest = RHILockBuffer(VB, 0, desc->resourceDescription.width, EResourceLockMode::RLM_WriteOnly);
 #endif
-					FMemory::Memcpy(Dest, BulkData.Data, FMath::Min(Size, desc->initDataSize));
+					FMemory::Memcpy(Dest, BulkData.Data, FMath::Min(Size, desc->initData.size));
 #if UE_VERSION_AT_LEAST(5, 3, 0)
 					FRHICommandListExecutor::GetImmediateCommandList().UnlockBuffer(VB);
 #else
@@ -145,13 +254,18 @@ static FfxErrorCode CreateResource_UE(FfxInterface* backendInterface, const FfxC
 			case FFX_RESOURCE_TYPE_TEXTURE2D:
 			{
 				uint32 NumMips = desc->resourceDescription.mipCount > 0 ? desc->resourceDescription.mipCount : FMath::FloorToInt(FMath::Log2((float)FMath::Max(desc->resourceDescription.width, desc->resourceDescription.height)));
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 				FRHITextureCreateDesc Desc = FRHITextureCreateDesc::Create2D(WCHAR_TO_TCHAR(desc->name), desc->resourceDescription.width, desc->resourceDescription.height, GetUEFormat(desc->resourceDescription.format));
 				Desc.SetBulkData(Info.BulkData);
 				Desc.SetNumMips(NumMips);
-				Desc.SetInitialState(Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState));
+				Desc.SetInitialState(Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initialState));
 				Desc.SetNumSamples(1);
 				Desc.SetFlags(Flags);
 				FTextureRHIRef Texture = RHICreateTexture(Desc);
+#else
+				FTexture2DRHIRef Texture = RHICreateTexture2D(desc->resourceDescription.width, desc->resourceDescription.height, GetUEFormat(desc->resourceDescription.format), NumMips, 1, Flags, Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initialState), Info);
+				Texture->SetName(FName(WCHAR_TO_TCHAR(desc->name)));
+#endif
 
 				TRefCountPtr<IPooledRenderTarget>* PooledRT = new TRefCountPtr<IPooledRenderTarget>;
 				*PooledRT = CreateRenderTarget(Texture.GetReference(),WCHAR_TO_TCHAR( desc->name));
@@ -164,13 +278,19 @@ static FfxErrorCode CreateResource_UE(FfxInterface* backendInterface, const FfxC
 			case FFX_RESOURCE_TYPE_TEXTURE3D:
 			{
 				uint32 NumMips = desc->resourceDescription.mipCount > 0 ? desc->resourceDescription.mipCount : FMath::FloorToInt(FMath::Log2((float)FMath::Max(FMath::Max(desc->resourceDescription.width, desc->resourceDescription.height), desc->resourceDescription.depth)));
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 				FRHITextureCreateDesc Desc = FRHITextureCreateDesc::Create3D(WCHAR_TO_TCHAR(desc->name), desc->resourceDescription.width, desc->resourceDescription.height, desc->resourceDescription.depth, GetUEFormat(desc->resourceDescription.format));
 				Desc.SetBulkData(Info.BulkData);
 				Desc.SetNumMips(NumMips);
-				Desc.SetInitialState(Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState));
+				Desc.SetInitialState(Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initialState));
 				Desc.SetNumSamples(1);
 				Desc.SetFlags(Flags);
 				FTextureRHIRef Texture = RHICreateTexture(Desc);
+#else
+				FTexture3DRHIRef Texture = RHICreateTexture3D(desc->resourceDescription.width, desc->resourceDescription.height, desc->resourceDescription.depth, GetUEFormat(desc->resourceDescription.format), NumMips, Flags, Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initialState), Info);
+				Texture->SetName(FName(WCHAR_TO_TCHAR(desc->name)));
+#endif
+
 				TRefCountPtr<IPooledRenderTarget>* PooledRT = new TRefCountPtr<IPooledRenderTarget>;
 				*PooledRT = CreateRenderTarget(Texture.GetReference(), WCHAR_TO_TCHAR(desc->name));
 				outTexture->internalIndex = Context->AddResource(Texture.GetReference(), desc->resourceDescription.type, PooledRT, nullptr, nullptr);
@@ -212,11 +332,11 @@ static FfxErrorCode GetDeviceCapabilities_UE(FfxInterface* backendInterface, Ffx
 {
 	if (GetFeatureLevelShaderPlatform(ERHIFeatureLevel::SM6) != SP_NumPlatforms)
 	{
-		deviceCapabilities->minimumSupportedShaderModel = FFX_SHADER_MODEL_6_0;
+		deviceCapabilities->maximumSupportedShaderModel = FFX_SHADER_MODEL_6_0;
 	}
 	else
 	{
-		deviceCapabilities->minimumSupportedShaderModel = FFX_SHADER_MODEL_5_1;
+		deviceCapabilities->maximumSupportedShaderModel = FFX_SHADER_MODEL_5_1;
 	}
 
 	// We are just going to assume no FP16 support and let the compiler do what is needs to
@@ -245,7 +365,7 @@ static FfxErrorCode GetDeviceCapabilities_UE(FfxInterface* backendInterface, Ffx
 			auto* ApiAccessor = DX12Backend->GetBackend();
 			if (ApiAccessor)
 			{
-				deviceCapabilities->minimumSupportedShaderModel = (FfxShaderModel)ApiAccessor->GetSupportedShaderModel();
+				deviceCapabilities->maximumSupportedShaderModel = (FfxShaderModel)ApiAccessor->GetSupportedShaderModel();
 				deviceCapabilities->fp16Supported = ApiAccessor->IsFloat16Supported();
 			}
 		}
@@ -256,7 +376,7 @@ static FfxErrorCode GetDeviceCapabilities_UE(FfxInterface* backendInterface, Ffx
 	return FFX_OK;
 }
 
-static FfxErrorCode CreateDevice_UE(FfxInterface* backendInterface, FfxUInt32* effectContextId)
+static FfxErrorCode CreateDevice_UE(FfxInterface* backendInterface, FfxEffectBindlessConfig* bindlessConfig, FfxUInt32* effectContextId)
 {
 	FFXBackendState* backendContext = (FFXBackendState*)backendInterface->scratchBuffer;
 	if (backendContext->device != backendInterface->device)
@@ -298,7 +418,7 @@ static FfxErrorCode CreatePipeline_UE(FfxInterface* backendInterface, FfxEffect 
 		FfxDeviceCapabilities deviceCapabilities;
 		GetDeviceCapabilities_UE(backendInterface, &deviceCapabilities);
 
-		bool const bPreferWave64 = (deviceCapabilities.minimumSupportedShaderModel >= FFX_SHADER_MODEL_6_6 && deviceCapabilities.waveLaneCountMin == 32 && deviceCapabilities.waveLaneCountMax == 64);
+		bool const bPreferWave64 = (deviceCapabilities.maximumSupportedShaderModel >= FFX_SHADER_MODEL_6_6 && deviceCapabilities.waveLaneCountMin == 32 && deviceCapabilities.waveLaneCountMax == 64);
 		outPipeline->pipeline = (FfxPipeline*)GetFFXPass(effect, pass, permutationOptions, pipelineDescription, outPipeline, deviceCapabilities.fp16Supported, bPreferWave64);
 		if (outPipeline->pipeline)
 		{
@@ -328,7 +448,7 @@ static FfxErrorCode ScheduleRenderJob_UE(FfxInterface* backendInterface, const F
 	return FFX_OK;
 }
 
-static FfxErrorCode FlushRenderJobs_UE(FfxInterface* backendInterface, FfxCommandList commandList)
+static FfxErrorCode FlushRenderJobs_UE(FfxInterface* backendInterface, FfxCommandList commandList, FfxUInt32 effectContextId)
 {
 	FfxErrorCode Result = FFX_OK;
 	FFXBackendState* Context = backendInterface ? (FFXBackendState*)backendInterface->scratchBuffer : nullptr;
@@ -390,6 +510,10 @@ static FfxErrorCode FlushRenderJobs_UE(FfxInterface* backendInterface, FfxComman
 					Pipeline->Dispatch(*GraphBuilder, Context, job);
 					break;
 				}
+				case FFX_GPU_JOB_BARRIER:
+				{
+					break;
+				}
 				default:
 				{
 					Result = FFX_ERROR_INVALID_ENUM;
@@ -441,6 +565,91 @@ static FfxErrorCode DestroyResource_UE(FfxInterface* backendInterface, FfxResour
 	}
 
 	return Result;
+}
+
+static FfxSurfaceFormat GetFFXFormat(EPixelFormat UEFormat, bool bSRGB)
+{
+	FfxSurfaceFormat Format = FFX_SURFACE_FORMAT_UNKNOWN;
+	switch (UEFormat)
+	{
+	case PF_R32G32B32A32_UINT:
+		Format = FFX_SURFACE_FORMAT_R32G32B32A32_UINT;
+		break;
+	case PF_A32B32G32R32F:
+		Format = FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT;
+		break;
+	case PF_FloatRGBA:
+		Format = FFX_SURFACE_FORMAT_R16G16B16A16_FLOAT;
+		break;
+	case PF_A2B10G10R10:
+		Format = FFX_SURFACE_FORMAT_R10G10B10A2_UNORM;
+		break;
+	case PF_G32R32F:
+		Format = FFX_SURFACE_FORMAT_R32G32_FLOAT;
+		break;
+	case PF_R32_UINT:
+		Format = FFX_SURFACE_FORMAT_R32_UINT;
+		break;
+	case PF_R8G8B8A8_UINT:
+		Format = FFX_SURFACE_FORMAT_R8G8B8A8_TYPELESS;
+		break;
+	case PF_R8G8B8A8:
+		if (bSRGB)
+		{
+			Format = FFX_SURFACE_FORMAT_R8G8B8A8_SRGB;
+			break;
+		}
+	case PF_B8G8R8A8:
+		Format = FFX_SURFACE_FORMAT_R8G8B8A8_UNORM;
+		break;
+	case PF_FloatR11G11B10:
+	case PF_FloatRGB:
+		Format = FFX_SURFACE_FORMAT_R11G11B10_FLOAT;
+		break;
+	case PF_G16R16F:
+		Format = FFX_SURFACE_FORMAT_R16G16_FLOAT;
+		break;
+	case PF_R16G16_UINT:
+		Format = FFX_SURFACE_FORMAT_R16G16_UINT;
+		break;
+	case PF_R16F:
+		Format = FFX_SURFACE_FORMAT_R16_FLOAT;
+		break;
+	case PF_R16_UINT:
+		Format = FFX_SURFACE_FORMAT_R16_UINT;
+		break;
+	case PF_G16:
+		Format = FFX_SURFACE_FORMAT_R16_UNORM;
+		break;
+	case PF_R16G16B16A16_SNORM:
+		Format = FFX_SURFACE_FORMAT_R16_SNORM;
+		break;
+	case PF_R8:
+		Format = FFX_SURFACE_FORMAT_R8_UNORM;
+		break;
+	case PF_R32_FLOAT:
+		Format = FFX_SURFACE_FORMAT_R32_FLOAT;
+		break;
+	case PF_DepthStencil:
+		Format = FFX_SURFACE_FORMAT_R32_FLOAT;
+		break;
+	case PF_R8G8:
+		Format = FFX_SURFACE_FORMAT_R8G8_UNORM;
+		break;
+	case PF_R8_UINT:
+		Format = FFX_SURFACE_FORMAT_R8_UINT;
+		break;
+	case PF_R16G16B16A16_SINT:
+		Format = FFX_SURFACE_FORMAT_R16G16_SINT;
+		break;
+	case PF_A16B16G16R16:
+		Format = FFX_SURFACE_FORMAT_R16G16B16A16_FLOAT;
+		break;
+	default:
+		check(false);
+		break;
+	}
+	return Format;
 }
 
 static FfxErrorCode RegisterResource_UE(FfxInterface* backendInterface, const FfxResource* inResource, FfxUInt32 effectContextId, FfxResourceInternal* outResource)
@@ -528,26 +737,148 @@ static FfxErrorCode UnregisterResources_UE(FfxInterface* backendInterface, FfxCo
 	return Result;
 }
 
-static FfxUInt32 GetSDKVersion_UE(FfxInterface* backendInterface)
+static FfxVersionNumber GetSDKVersion_UE(FfxInterface* backendInterface)
 {
 	return FFX_SDK_MAKE_VERSION(FFX_SDK_VERSION_MAJOR, FFX_SDK_VERSION_MINOR, FFX_SDK_VERSION_PATCH);
+}
+
+static FfxErrorCode GetEffectGpuMemoryUsage_UE(FfxInterface* backendInterface, FfxUInt32 effectContextId, FfxEffectMemoryUsage* outVramUsage)
+{
+	check(false);
+	return FfxErrorCodes::FFX_OK;
+}
+
+static FfxErrorCode MapResource_UE(FfxInterface* backendInterface, FfxResourceInternal resource, void** ptr)
+{
+	check(false);
+	return FfxErrorCodes::FFX_OK;
+}
+
+static FfxErrorCode UnmapResource_UE(FfxInterface* backendInterface, FfxResourceInternal resource)
+{
+	check(false);
+	return FfxErrorCodes::FFX_OK;
+}
+
+static FfxResource GetResource_UE(FfxInterface* backendInterface, FfxResourceInternal resource)
+{
+	FfxResource Res;
+	FMemory::Memzero(Res);
+
+	FFXBackendState* backendContext = (FFXBackendState*)backendInterface->scratchBuffer;
+	Res.description = backendContext->Resources[resource.internalIndex].Desc;
+	if (backendContext->Resources[resource.internalIndex].Resource)
+	{
+		Res.resource = (void*)(((uintptr_t)backendContext->Resources[resource.internalIndex].Resource) | 0x1);
+	}
+	else if (backendContext->Resources[resource.internalIndex].RDG)
+	{
+		Res.resource = backendContext->Resources[resource.internalIndex].RDG;
+	}
+
+	return Res;
+}
+
+static FfxErrorCode RegisterStaticResource_UE(FfxInterface* backendInterface, const FfxStaticResourceDescription* desc, FfxUInt32 effectContextId)
+{
+	check(false);
+	return FfxErrorCodes::FFX_OK;
+}
+
+
+static FfxErrorCode StageConstantBufferData_UE(FfxInterface* backendInterface, void* data, FfxUInt32 size, FfxConstantBuffer* constantBuffer)
+{
+	FfxErrorCode Result = backendInterface ? FFX_OK : FFX_ERROR_INVALID_ARGUMENT;
+	FFXBackendState* Context = backendInterface ? (FFXBackendState*)backendInterface->scratchBuffer : nullptr;
+
+	if (!data || !constantBuffer) {
+		return FfxErrorCodes::FFX_ERROR_INVALID_POINTER;
+	}
+
+	if ((Context->StagingRingBufferBase + FFX_ALIGN_UP(size, 256)) >= FFX_CONSTANT_BUFFER_RING_BUFFER_SIZE)
+		Context->StagingRingBufferBase = 0;
+	
+	uint8* pStaging = (uint8*)&Context->StagingRingBuffer;
+	pStaging += Context->StagingRingBufferBase;
+
+	FMemory::Memcpy((void*)pStaging, data, size);
+
+	constantBuffer->data = (uint32_t*)pStaging;
+	constantBuffer->num32BitEntries = size / sizeof(uint32_t);
+
+	Context->StagingRingBufferBase += FFX_ALIGN_UP(size, 256);
+
+	return FfxErrorCodes::FFX_OK;
+}
+
+static FfxErrorCode BreadcrumbsAllocBlock_UE(FfxInterface* backendInterface, uint64_t blockBytes, FfxBreadcrumbsBlockData* blockData)
+{
+	check(false);
+	return FfxErrorCodes::FFX_OK;
+}
+
+static void BreadcrumbsFreeBlock_UE(FfxInterface* backendInterface, FfxBreadcrumbsBlockData* blockData)
+{
+	check(false);
+}
+
+static void BreadcrumbsWrite_UE(FfxInterface* backendInterface, FfxCommandList commandList, uint32_t value, uint64_t gpuLocation, void* gpuBuffer, bool isBegin)
+{
+	check(false);
+}
+
+static void BreadcrumbsPrintDeviceInfo_UE(FfxInterface* backendInterface, FfxAllocationCallbacks* allocs, bool extendedInfo, char** printBuffer, size_t* printSize)
+{
+	check(false);
+}
+
+static FfxErrorCode GetPermutationBlobByIndex_UE(FfxEffect effectId, FfxPass passId, FfxBindStage bindStage, uint32_t permutationOptions, FfxShaderBlob* outBlob)
+{
+	check(false);
+	return FfxErrorCodes::FFX_OK;
+}
+
+static FfxErrorCode SetFrameGenerationConfigToSwapchain_UE(FfxFrameGenerationConfig const* config)
+{
+	return FfxErrorCodes::FFX_OK;
+}
+
+static void RegisterConstantBufferAllocator_UE(FfxInterface* backendInterface, FfxConstantBufferAllocator  constantAllocator)
+{
+	check(false);
 }
 
 FfxErrorCode ffxGetInterfaceUE(FfxInterface* outInterface, void* scratchBuffer, size_t scratchBufferSize)
 {
 	outInterface->fpGetSDKVersion = GetSDKVersion_UE;
+	outInterface->fpGetEffectGpuMemoryUsage = GetEffectGpuMemoryUsage_UE;
 	outInterface->fpCreateBackendContext = CreateDevice_UE;
 	outInterface->fpGetDeviceCapabilities = GetDeviceCapabilities_UE;
 	outInterface->fpDestroyBackendContext = ReleaseDevice_UE;
 	outInterface->fpCreateResource = CreateResource_UE;
+	outInterface->fpDestroyResource = DestroyResource_UE;
+	outInterface->fpMapResource = MapResource_UE;
+	outInterface->fpUnmapResource = UnmapResource_UE;
+	outInterface->fpGetResource = GetResource_UE;
 	outInterface->fpRegisterResource = RegisterResource_UE;
 	outInterface->fpUnregisterResources = UnregisterResources_UE;
+	outInterface->fpRegisterStaticResource = RegisterStaticResource_UE;
 	outInterface->fpGetResourceDescription = GetResourceDesc_UE;
-	outInterface->fpDestroyResource = DestroyResource_UE;
+	outInterface->fpStageConstantBufferDataFunc = StageConstantBufferData_UE;
 	outInterface->fpCreatePipeline = CreatePipeline_UE;
 	outInterface->fpDestroyPipeline = DestroyPipeline_UE;
 	outInterface->fpScheduleGpuJob = ScheduleRenderJob_UE;
 	outInterface->fpExecuteGpuJobs = FlushRenderJobs_UE;
+
+	outInterface->fpBreadcrumbsAllocBlock = BreadcrumbsAllocBlock_UE;
+	outInterface->fpBreadcrumbsFreeBlock = BreadcrumbsFreeBlock_UE;
+	outInterface->fpBreadcrumbsWrite = BreadcrumbsWrite_UE;
+	outInterface->fpBreadcrumbsPrintDeviceInfo = BreadcrumbsPrintDeviceInfo_UE;
+
+	outInterface->fpGetPermutationBlobByIndex = GetPermutationBlobByIndex_UE;
+	outInterface->fpSwapChainConfigureFrameGeneration = SetFrameGenerationConfigToSwapchain_UE;
+	outInterface->fpRegisterConstantBufferAllocator = RegisterConstantBufferAllocator_UE;
+
 	outInterface->scratchBuffer = scratchBuffer;
 	outInterface->scratchBufferSize = scratchBufferSize;
 	outInterface->device = (FfxDevice)GDynamicRHI;
@@ -558,6 +889,114 @@ FfxErrorCode ffxGetInterfaceUE(FfxInterface* outInterface, void* scratchBuffer, 
 size_t ffxGetScratchMemorySizeUE()
 {
 	return sizeof(FFXBackendState);
+}
+
+struct FFXRHIBackendCreateHeader
+{
+	ffxApiHeader header;
+	FfxInterface** interface;
+};
+
+ffxReturnCode_t CreateBackend(const ffxCreateContextDescHeader* desc, bool& backendFound, FfxInterface* iface, size_t contexts, Allocator& alloc)
+{
+	ffxReturnCode_t Code = FFX_API_RETURN_ERROR;
+	for (const auto* it = desc->pNext; it; it = it->pNext)
+	{
+		switch (it->type)
+		{
+		case FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_RHI:
+		{
+			// check for double backend just to make sure.
+			if (backendFound)
+				return FFX_API_RETURN_ERROR;
+			backendFound = true;
+
+			size_t scratchBufferSize = ffxGetScratchMemorySizeUE();
+			void* scratchBuffer = alloc.alloc(scratchBufferSize);
+			memset(scratchBuffer, 0, scratchBufferSize);
+			ffxGetInterfaceUE(iface, scratchBuffer, scratchBufferSize);
+
+			FFXRHIBackendCreateHeader const* header = (FFXRHIBackendCreateHeader const*)it;
+			if (header && header->interface)
+			{
+				*header->interface = iface;
+			}
+
+			Code = FFX_API_RETURN_OK;
+			break;
+		}
+		default:
+			break;
+		}
+	}
+	return Code;
+}
+
+void* GetDevice(const ffxApiHeader* desc)
+{
+	for (const auto* it = desc->pNext; it; it = it->pNext)
+	{
+		switch (it->type)
+		{
+		case FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_RHI:
+		{
+			return (void*)GDynamicRHI;
+		}
+		default:
+			break;
+		}
+	}
+	return nullptr;
+}
+
+static constexpr ffxProvider* providers[] = {
+	&ffxProvider_FSR3Upscale::Instance,
+	&ffxProvider_FrameGeneration::Instance,
+};
+static constexpr size_t providerCount = _countof(providers);
+
+const ffxProvider* GetffxProvider(ffxStructType_t descType, uint64_t overrideId, void* device)
+{
+	for (size_t i = 0; i < providerCount; ++i)
+	{
+		if (providers[i]->GetId() == overrideId || (overrideId == 0 && providers[i]->CanProvide(descType)))
+			return providers[i];
+	}
+
+	return nullptr;
+}
+
+const ffxProvider* GetAssociatedProvider(ffxContext* context)
+{
+	const InternalContextHeader* hdr = (const InternalContextHeader*)(*context);
+	const ffxProvider* provider = hdr->provider;
+	return provider;
+}
+
+uint64_t GetProviderCount(ffxStructType_t descType, void* device)
+{
+	return GetProviderVersions(descType, device, UINT64_MAX, nullptr, nullptr);
+}
+
+uint64_t GetProviderVersions(ffxStructType_t descType, void* device, uint64_t capacity, uint64_t* versionIds, const char** versionNames)
+{
+	uint64_t count = 0;
+
+	for (size_t i = 0; i < providerCount; ++i)
+	{
+		if (count >= capacity) break;
+		if (providers[i]->CanProvide(descType))
+		{
+			auto index = count;
+			count++;
+			if (versionIds)
+				versionIds[index] = providers[i]->GetId();
+			if (versionNames)
+				versionNames[index] = providers[i]->GetVersionName();
+		}
+	}
+
+	return count;
 }
 
 uint32 FFXBackendState::AllocEffect()
@@ -779,9 +1218,64 @@ FFXRHIBackend::~FFXRHIBackend()
 {
 }
 
-static FfxErrorCode FFXFrameInterpolationUiCompositionCallback(const FfxPresentCallbackDescription* params)
+static FfxErrorCode FFXFrameInterpolationUiCompositionCallback(const FfxPresentCallbackDescription* params, void* unusedUserCtx)
 {
     return FFX_OK;
+}
+
+struct FFXRHIContext
+{
+	ffxContext Context;
+	FfxInterface* Interface;
+};
+
+ffxReturnCode_t FFXRHIBackend::ffxCreateContext(ffxContext* context, ffxCreateContextDescHeader* desc)
+{
+	ffxReturnCode_t Code = FFX_API_RETURN_ERROR;
+	FFXRHIBackendCreateHeader RhiHeader;
+	RhiHeader.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_RHI;
+	RhiHeader.header.pNext = nullptr;
+	desc->pNext = &RhiHeader.header;
+
+	FFXRHIContext* ContextWrapper = new FFXRHIContext;
+	if (ContextWrapper)
+	{
+		RhiHeader.interface = &ContextWrapper->Interface;
+		Code = ::ffxCreateContext(&ContextWrapper->Context, desc, &AllocCbs.Cbs);
+		if (Code == FFX_API_RETURN_OK)
+		{
+			*context = ContextWrapper;
+		}
+	}
+	return Code;
+}
+
+ffxReturnCode_t FFXRHIBackend::ffxDestroyContext(ffxContext* context)
+{
+	FFXRHIContext* RhiContext = (FFXRHIContext*)(context ? *context : nullptr);
+	ffxContext* InnerContext = RhiContext ? &RhiContext->Context : nullptr;
+	return ::ffxDestroyContext(InnerContext, &AllocCbs.Cbs);
+}
+
+ffxReturnCode_t FFXRHIBackend::ffxConfigure(ffxContext* context, const ffxConfigureDescHeader* desc)
+{
+	FFXRHIContext* RhiContext = (FFXRHIContext*)(context ? *context : nullptr);
+	ffxContext* InnerContext = RhiContext ? &RhiContext->Context : nullptr;
+	return ::ffxConfigure(InnerContext, desc);
+}
+
+ffxReturnCode_t FFXRHIBackend::ffxQuery(ffxContext* context, ffxQueryDescHeader* desc)
+{
+	FFXRHIContext* RhiContext = (FFXRHIContext*)(context ? *context : nullptr);
+	ffxContext* InnerContext = RhiContext ? &RhiContext->Context : nullptr;
+	return ::ffxQuery(InnerContext, desc);
+}
+
+ffxReturnCode_t FFXRHIBackend::ffxDispatch(ffxContext* context, const ffxDispatchDescHeader* desc)
+{
+	FFXRHIContext* RhiContext = (FFXRHIContext*)(context ? *context : nullptr);
+	ffxContext* InnerContext = RhiContext ? &RhiContext->Context : nullptr;
+	return ::ffxDispatch(InnerContext, desc);
 }
 
 void FFXRHIBackend::Init()
@@ -792,7 +1286,7 @@ void FFXRHIBackend::Init()
 	auto GameViewport = Engine->GameViewport;
 	auto Viewport = GameViewport->Viewport;
 
-	if (Viewport->GetViewportRHI().IsValid() && (Viewport->GetViewportRHI()->GetCustomPresent() == nullptr) && CVarFSR3UseRHI.GetValueOnAnyThread() && !FParse::Param(FCommandLine::Get(), TEXT("fsr3native")))
+	if (Viewport->GetViewportRHI().IsValid() && (Viewport->GetViewportRHI()->GetCustomPresent() == nullptr) && (CVarFSR3UseRHI.GetValueOnAnyThread() || FParse::Param(FCommandLine::Get(), TEXT("fsr3rhi"))) && !FParse::Param(FCommandLine::Get(), TEXT("fsr3native")))
 	{
 		IFFXFrameInterpolationModule* FFXFrameInterpolationModule = FModuleManager::GetModulePtr<IFFXFrameInterpolationModule>(TEXT("FFXFrameInterpolation"));
 		check(FFXFrameInterpolationModule);
@@ -809,7 +1303,7 @@ void FFXRHIBackend::Init()
 		auto SwapChainSize = Viewport->GetSizeXY();
 		ENQUEUE_RENDER_COMMAND(FFXFrameInterpolationCreateCustomPresent)([FFXFrameInterpolation, this, Flags, SwapChainSize, SurfaceFormat](FRHICommandListImmediate& RHICmdList)
 		{
-			auto* CustomPresent = FFXFrameInterpolation->CreateCustomPresent(this, Flags, SwapChainSize, SwapChainSize, (FfxSwapchain)nullptr, (FfxCommandQueue)GDynamicRHI, GetFFXFormat(SurfaceFormat, false), &FFXFrameInterpolationUiCompositionCallback);
+			auto* CustomPresent = FFXFrameInterpolation->CreateCustomPresent(this, Flags, SwapChainSize, SwapChainSize, (FfxSwapchain)nullptr, (FfxCommandQueue)GDynamicRHI, GetFFXApiFormat(SurfaceFormat, false), EFFXBackendAPI::Unreal);
 			if (CustomPresent)
 			{
 				CustomPresent->InitViewport(GEngine->GameViewport->Viewport, GEngine->GameViewport->Viewport->GetViewportRHI());
@@ -821,67 +1315,22 @@ EFFXBackendAPI FFXRHIBackend::GetAPI() const
 {
 	return EFFXBackendAPI::Unreal;
 }
-void FFXRHIBackend::SetFeatureLevel(FfxInterface& Interface, ERHIFeatureLevel::Type FeatureLevel)
+void FFXRHIBackend::SetFeatureLevel(ffxContext* context, ERHIFeatureLevel::Type FeatureLevel)
 {
-	FFXBackendState* Backend = (FFXBackendState*)Interface.scratchBuffer;
+	FFXRHIContext* RhiContext = (FFXRHIContext*)(context ? *context : nullptr);
+	FFXBackendState* Backend = (RhiContext && RhiContext->Interface) ? (FFXBackendState*)RhiContext->Interface->scratchBuffer : nullptr;
 	if (Backend)
 	{
 		Backend->FeatureLevel = FeatureLevel;
 	}
 }
-size_t FFXRHIBackend::GetGetScratchMemorySize()
-{
-	return sizeof(FFXBackendState);
-}
-FfxErrorCode FFXRHIBackend::CreateInterface(FfxInterface& OutInterface, uint32 MaxContexts)
-{
-	FfxErrorCode Code = FFX_OK;
-	if (OutInterface.device == nullptr)
-	{
-		size_t InscratchBufferSize = GetGetScratchMemorySize();
-		void* InScratchBuffer = FMemory::Malloc(InscratchBufferSize);
-		Code = ffxGetInterfaceUE(&OutInterface, InScratchBuffer, InscratchBufferSize);
-		if (Code != FFX_OK)
-		{
-			FMemory::Free(InScratchBuffer);
-			FMemory::Memzero(OutInterface);
-		}
-	}
-	else
-	{
-		Code = FFX_ERROR_INVALID_ARGUMENT;
-	}
-	return Code;
-}
-FfxDevice FFXRHIBackend::GetDevice(void* device)
-{
-	return (FfxDevice)device;
-}
-FfxCommandList FFXRHIBackend::GetCommandList(void* list)
-{
-	return (FfxCommandList)list;
-}
-FfxResource FFXRHIBackend::GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping)
-{
-	check(false);
-	FfxResource Result = GetNativeResource((FRHITexture*)resource, state);
-	return Result;
-}
-FfxCommandQueue FFXRHIBackend::GetCommandQueue(void* cmdQueue)
-{
-	return (FfxCommandQueue)cmdQueue;
-}
 FfxSwapchain FFXRHIBackend::GetSwapchain(void* swapChain)
 {
 	return (FfxSwapchain)swapChain;
 }
-FfxDevice FFXRHIBackend::GetNativeDevice()
+FfxApiResource FFXRHIBackend::GetNativeResource(FRDGTexture* Texture, FfxApiResourceState State)
 {
-	return (FfxDevice)GDynamicRHI;
-}
-FfxResource FFXRHIBackend::GetNativeResource(FRDGTexture* Texture, FfxResourceStates State)
-{
-	FfxResource resources = {};
+	FfxApiResource resources = {};
 	if (Texture)
 	{
 		auto& Desc = Texture->Desc;
@@ -893,7 +1342,7 @@ FfxResource FFXRHIBackend::GetNativeResource(FRDGTexture* Texture, FfxResourceSt
 		resources.description.height = Desc.Extent.Y;
 		resources.description.depth = Texture->Desc.Depth;
 		resources.description.mipCount = Texture->Desc.NumMips;
-		resources.description.flags = FFX_RESOURCE_FLAGS_NONE;
+		resources.description.flags = FFX_API_RESOURCE_FLAGS_NONE;
 
 		switch (Desc.Dimension)
 		{
@@ -905,8 +1354,6 @@ FfxResource FFXRHIBackend::GetNativeResource(FRDGTexture* Texture, FfxResourceSt
 			resources.description.depth = Desc.ArraySize;
 			break;
 		case ETextureDimension::Texture3D:
-			resources.description.type = FFX_RESOURCE_TYPE_TEXTURE3D;
-			break;
 		case ETextureDimension::TextureCube:
 		case ETextureDimension::TextureCubeArray:
 		default:
@@ -916,20 +1363,21 @@ FfxResource FFXRHIBackend::GetNativeResource(FRDGTexture* Texture, FfxResourceSt
 	}
 	return resources;
 }
-FfxResource FFXRHIBackend::GetNativeResource(FRHITexture* Texture, FfxResourceStates State)
+FfxApiResource FFXRHIBackend::GetNativeResource(FRHITexture* Texture, FfxApiResourceState State)
 {
-	FfxResource Result;
-	auto& Desc = Texture->GetDesc();
-	bool bSRGB = (Desc.Flags & TexCreate_SRGB) == TexCreate_SRGB;
+	FfxApiResource Result;
 	Result.resource = (void*)(((uintptr_t)Texture) | 0x1);
 	Result.state = State;
+	Result.description.flags = FFX_API_RESOURCE_FLAGS_NONE;
 
+#if UE_VERSION_AT_LEAST(5, 1, 0)
+	auto& Desc = Texture->GetDesc();
+	bool bSRGB = (Desc.Flags & TexCreate_SRGB) == TexCreate_SRGB;
 	Result.description.format = GetFFXFormat(Desc.Format, bSRGB);
 	Result.description.width = Desc.Extent.X;
 	Result.description.height = Desc.Extent.Y;
 	Result.description.depth = Desc.Depth;
 	Result.description.mipCount = Desc.NumMips;
-	Result.description.flags = FFX_RESOURCE_FLAGS_NONE;
 
 	switch (Desc.Dimension)
 	{
@@ -941,24 +1389,41 @@ FfxResource FFXRHIBackend::GetNativeResource(FRHITexture* Texture, FfxResourceSt
 		Result.description.depth = Desc.ArraySize;
 		break;
 	case ETextureDimension::Texture3D:
-		Result.description.type = FFX_RESOURCE_TYPE_TEXTURE3D;
-		break;
 	case ETextureDimension::TextureCube:
 	case ETextureDimension::TextureCubeArray:
 	default:
 		check(false);
 		break;
 	}
+#else
+	auto Size = Texture->GetSizeXYZ();
+	bool bSRGB = (Texture->GetFlags() & TexCreate_SRGB) == TexCreate_SRGB;
+	Result.description.format = GetFFXFormat(Texture->GetFormat(), bSRGB);
+	Result.description.width = Size.X;
+	Result.description.height = Size.Y;
+	Result.description.depth = Size.Z;
+	Result.description.mipCount = Texture->GetNumMips();
+	
+	switch (Texture->GetType())
+	{
+	case RRT_Texture2D:
+		Result.description.type = FFX_RESOURCE_TYPE_TEXTURE2D;
+		break;
+	case RRT_Texture2DArray:
+		Result.description.type = FFX_RESOURCE_TYPE_TEXTURE2D;
+		Result.description.depth = Size.Z;
+		break;
+	default:
+		check(false);
+		break;
+	}
+#endif
 
 	return Result;
 }
 FfxCommandList FFXRHIBackend::GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList)
 {
 	return (FfxCommandList)&RHICmdList;
-}
-uint32 FFXRHIBackend::GetNativeTextureFormat(FRHITexture* Texture)
-{
-	return Texture->GetDesc().Format;
 }
 FfxShaderModel FFXRHIBackend::GetSupportedShaderModel()
 {
@@ -993,188 +1458,31 @@ void FFXRHIBackend::ForceUAVTransition(FRHICommandListImmediate& RHICmdList, FRH
 	// Deliberately blank
 }
 
-void FFXRHIBackend::UpdateSwapChain(FfxInterface& Interface, void* SwapChain, bool mode, bool allowAsyncWorkloads, bool showDebugView)
+void FFXRHIBackend::UpdateSwapChain(ffxContext* Context, ffxConfigureDescFrameGeneration& Desc)
 {
-	// Deliberately blank
+	if (Context && Desc.swapChain)
+	{
+		Desc.swapChain = nullptr;
+		Desc.presentCallback = nullptr;
+
+		auto Code = ffxConfigure(Context, &Desc.header);
+		check(Code == FFX_API_RETURN_OK);
+	}
 }
 
-FfxResource FFXRHIBackend::GetInterpolationOutput(FfxSwapchain SwapChain)
+FfxApiResource FFXRHIBackend::GetInterpolationOutput(FfxSwapchain SwapChain)
 {
 	return { nullptr };
 }
 
-FfxCommandList FFXRHIBackend::GetInterpolationCommandList(FfxSwapchain SwapChain)
+void* FFXRHIBackend::GetInterpolationCommandList(FfxSwapchain SwapChain)
 {
 	return nullptr;
 }
 
-void FFXRHIBackend::BindUITexture(FfxSwapchain gameSwapChain, FfxResource uiResource)
+void FFXRHIBackend::RegisterFrameResources(FRHIResource* FIResources, uint64 FrameID)
 {
 
-}
-
-void FFXRHIBackend::RegisterFrameResources(FRHIResource* FIResources, IRefCountedObject* FSR3Resources)
-{
-
-}
-
-FFXSharedResource FFXRHIBackend::CreateResource(FfxInterface& Interface, const FfxCreateResourceDescription* desc)
-{
-	FFXSharedResource Result = {};
-	ETextureCreateFlags Flags = TexCreate_None;
-	Flags |= (desc->resourceDescription.usage & FFX_RESOURCE_USAGE_READ_ONLY) ? TexCreate_ShaderResource : TexCreate_None;
-	Flags |= (desc->resourceDescription.usage & FFX_RESOURCE_USAGE_RENDERTARGET) ? TexCreate_RenderTargetable | TexCreate_UAV | TexCreate_ShaderResource : TexCreate_None;
-	Flags |= (desc->resourceDescription.usage & FFX_RESOURCE_USAGE_UAV) ? TexCreate_UAV | TexCreate_ShaderResource : TexCreate_None;
-	Flags |= desc->resourceDescription.format == FFX_SURFACE_FORMAT_R8G8B8A8_SRGB ? TexCreate_SRGB : TexCreate_None;
-
-	FRHIResourceCreateInfo Info(WCHAR_TO_TCHAR(desc->name));
-
-	uint32 Size = desc->resourceDescription.width;
-	FFXTextureBulkData BulkData(desc->initData, desc->initDataSize);
-	if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16_SNORM && desc->initData)
-	{
-		int16* Data = (int16*)FMemory::Malloc(desc->initDataSize * 4);
-		for (uint32 i = 0; i < (desc->initDataSize / sizeof(int16)); i++)
-		{
-			Data[i * 4] = ((int16*)desc->initData)[i];
-			Data[i * 4 + 1] = 0;
-			Data[i * 4 + 2] = 0;
-			Data[i * 4 + 3] = 0;
-		}
-
-		BulkData.Data = Data;
-		BulkData.DataSize = desc->initDataSize * 4;
-		Size = desc->resourceDescription.width * 4;
-	}
-	else if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16G16_SINT && desc->initData)
-	{
-		int16* Data = (int16*)FMemory::Malloc(desc->initDataSize * 2);
-		for (uint32 i = 0; i < (desc->initDataSize / (sizeof(int16) * 2)); i += 2)
-		{
-			Data[i * 2] = ((int16*)desc->initData)[i];
-			Data[i * 2 + 1] = ((int16*)desc->initData)[i + 1];
-			Data[i * 2 + 2] = 0;
-			Data[i * 2 + 3] = 0;
-		}
-
-		BulkData.Data = Data;
-		BulkData.DataSize = desc->initDataSize * 2;
-		Size = desc->resourceDescription.width * 2;
-	}
-
-	auto Type = desc->resourceDescription.type;
-
-	Info.BulkData = desc->initData && desc->initDataSize ? &BulkData : nullptr;
-
-#if UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT
-	if (desc->name)
-	{
-		FCStringWide::Strcpy(Result.Resource.name, 63, desc->name);
-	}
-#endif
-
-	switch (Type)
-	{
-	case FFX_RESOURCE_TYPE_BUFFER:
-	{
-		FRDGBufferDesc Desc = FRDGBufferDesc::CreateBufferDesc(sizeof(uint32), Size);
-#if UE_VERSION_AT_LEAST(5, 3, 0)
-		FBufferRHIRef VB = FRHICommandListExecutor::GetImmediateCommandList().CreateBuffer(Size, Desc.Usage, sizeof(uint32), Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState), Info);
-#else
-		FBufferRHIRef VB = RHICreateBuffer(Size, Desc.Usage, sizeof(uint32), Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState), Info);
-#endif
-		check(VB.GetReference());
-		if (Info.BulkData)
-		{
-#if UE_VERSION_AT_LEAST(5, 3, 0)
-			void* Dest = FRHICommandListExecutor::GetImmediateCommandList().LockBuffer(VB, 0, desc->resourceDescription.width, EResourceLockMode::RLM_WriteOnly);
-#else
-			void* Dest = RHILockBuffer(VB, 0, desc->resourceDescription.width, EResourceLockMode::RLM_WriteOnly);
-#endif
-			FMemory::Memcpy(Dest, BulkData.Data, FMath::Min(Size, desc->initDataSize));
-#if UE_VERSION_AT_LEAST(5, 3, 0)
-			FRHICommandListExecutor::GetImmediateCommandList().UnlockBuffer(VB);
-#else
-			RHIUnlockBuffer(VB);
-#endif
-		}
-		VB->AddRef();
-		Result.Resource.resource = (void*)(((uintptr_t)VB.GetReference()) | 0x1);
-		Result.Resource.state = desc->initalState;
-		Result.Resource.description = desc->resourceDescription;
-		break;
-	}
-	case FFX_RESOURCE_TYPE_TEXTURE2D:
-	{
-		uint32 NumMips = desc->resourceDescription.mipCount > 0 ? desc->resourceDescription.mipCount : FMath::FloorToInt(FMath::Log2((float)FMath::Max(desc->resourceDescription.width, desc->resourceDescription.height)));
-		FRHITextureCreateDesc Desc = FRHITextureCreateDesc::Create2D(WCHAR_TO_TCHAR(desc->name), desc->resourceDescription.width, desc->resourceDescription.height, GetUEFormat(desc->resourceDescription.format));
-		Desc.SetBulkData(Info.BulkData);
-		Desc.SetNumMips(NumMips);
-		Desc.SetInitialState(Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState));
-		Desc.SetNumSamples(1);
-		Desc.SetFlags(Flags);
-		FTextureRHIRef Texture = RHICreateTexture(Desc);
-		Texture->AddRef();
-		Result.Resource = GetNativeResource(Texture.GetReference(), Info.BulkData ? FFX_RESOURCE_STATE_COMPUTE_READ : desc->initalState);
-		break;
-	}
-	case FFX_RESOURCE_TYPE_TEXTURE3D:
-	{
-		uint32 NumMips = desc->resourceDescription.mipCount > 0 ? desc->resourceDescription.mipCount : FMath::FloorToInt(FMath::Log2((float)FMath::Max(FMath::Max(desc->resourceDescription.width, desc->resourceDescription.height), desc->resourceDescription.depth)));
-		FRHITextureCreateDesc Desc = FRHITextureCreateDesc::Create3D(WCHAR_TO_TCHAR(desc->name), desc->resourceDescription.width, desc->resourceDescription.height, desc->resourceDescription.depth, GetUEFormat(desc->resourceDescription.format));
-		Desc.SetBulkData(Info.BulkData);
-		Desc.SetNumMips(NumMips);
-		Desc.SetInitialState(Info.BulkData ? ERHIAccess::SRVCompute : GetUEAccessState(desc->initalState));
-		Desc.SetNumSamples(1);
-		Desc.SetFlags(Flags);
-		FTextureRHIRef Texture = RHICreateTexture(Desc);
-		Texture->AddRef();
-		Result.Resource = GetNativeResource(Texture.GetReference(), Info.BulkData ? FFX_RESOURCE_STATE_COMPUTE_READ : desc->initalState);
-		break;
-	}
-	case FFX_RESOURCE_TYPE_TEXTURE1D:
-	default:
-	{
-		break;
-	}
-	}
-
-	if (desc->resourceDescription.format == FFX_SURFACE_FORMAT_R16_SNORM && Info.BulkData)
-	{
-		FMemory::Free(const_cast<void*>(BulkData.Data));
-	}
-
-	return Result;
-}
-
-FfxErrorCode FFXRHIBackend::ReleaseResource(FfxInterface& Interface, FFXSharedResource Resource)
-{
-	FfxErrorCode Result = FFX_ERROR_INVALID_ARGUMENT;
-	if (((uintptr_t)Resource.Resource.resource) & 0x1)
-	{
-		switch (Resource.Resource.description.type)
-		{
-		case FFX_RESOURCE_TYPE_BUFFER:
-		{
-			FRHIBuffer* Buffer = (FRHIBuffer*)((void*)(((uintptr_t)Resource.Resource.resource) & 0xfffffffffffffffe));
-			Buffer->Release();
-			Result = FFX_OK;
-			break;
-		}
-		case FFX_RESOURCE_TYPE_TEXTURE2D:
-		case FFX_RESOURCE_TYPE_TEXTURE3D:
-		{
-			FRHITexture* Texture = (FRHITexture*)((void*)(((uintptr_t)Resource.Resource.resource) & 0xfffffffffffffffe));
-			Texture->Release();
-			Result = FFX_OK;
-			break;
-		}
-		case FFX_RESOURCE_TYPE_TEXTURE1D:
-		default:
-			break;
-		}
-	}
-	return Result;
 }
 
 bool FFXRHIBackend::GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS)
@@ -1182,7 +1490,7 @@ bool FFXRHIBackend::GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS)
 	return false;
 }
 
-void FFXRHIBackend::CopySubRect(FfxCommandList CmdList, FfxResource Src, FfxResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint)
+void FFXRHIBackend::CopySubRect(FfxCommandList CmdList, FfxApiResource Src, FfxApiResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint)
 {
 	// Deliberately blank
 }

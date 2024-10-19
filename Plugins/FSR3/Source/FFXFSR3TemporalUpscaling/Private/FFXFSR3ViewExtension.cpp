@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,6 +23,7 @@
 #include "FFXFSR3TemporalUpscaler.h"
 #include "FFXFSR3TemporalUpscalerProxy.h"
 #include "FFXFSR3TemporalUpscaling.h"
+#include "FFXFSR3Settings.h"
 #include "PostProcess/PostProcessing.h"
 #include "Materials/Material.h"
 
@@ -31,36 +32,6 @@
 #include "Engine/StaticMesh.h"
 #include "LandscapeProxy.h"
 #include "Components/HierarchicalInstancedStaticMeshComponent.h"
-
-static TAutoConsoleVariable<int32> CVarEnableFSR3(
-	TEXT("r.FidelityFX.FSR3.Enabled"),
-	1,
-	TEXT("Enable FidelityFX Super Resolution for Temporal Upscale"),
-	ECVF_RenderThreadSafe);
-
-static TAutoConsoleVariable<int32> CVarEnableFSR3InEditor(
-	TEXT("r.FidelityFX.FSR3.EnabledInEditorViewport"),
-	0,
-	TEXT("Enable FidelityFX Super Resolution for Temporal Upscale in the Editor viewport by default."),
-	ECVF_RenderThreadSafe);
-
-static TAutoConsoleVariable<int32> CVarFSR3AdjustMipBias(
-	TEXT("r.FidelityFX.FSR3.AdjustMipBias"),
-	1,
-	TEXT("Allow FSR3 to adjust the minimum global texture mip bias (r.ViewTextureMipBias.Min & r.ViewTextureMipBias.Offset)"),
-	ECVF_ReadOnly);
-
-static TAutoConsoleVariable<int32> CVarFSR3ForceVertexDeformationOutputsVelocity(
-	TEXT("r.FidelityFX.FSR3.ForceVertexDeformationOutputsVelocity"),
-	1,
-	TEXT("Allow FSR3 to enable r.Velocity.EnableVertexDeformation to ensure that materials that use World-Position-Offset render valid velocities."),
-	ECVF_ReadOnly);
-
-static TAutoConsoleVariable<int32> CVarFSR3ForceLandscapeHISMMobility(
-	TEXT("r.FidelityFX.FSR3.ForceLandscapeHISMMobility"),
-	0,
-	TEXT("Allow FSR3 to force the mobility of Landscape actors Hierarchical Instance Static Mesh components that use World-Position-Offset materials so they render valid velocities.\nSetting 1/'All Instances' is faster on the CPU, 2/'Instances with World-Position-Offset' is faster on the GPU."),
-	ECVF_ReadOnly);
 
 static void ForceLandscapeHISMMobility(FSceneViewFamily& InViewFamily, ALandscapeProxy* Landscape)
 {
@@ -105,10 +76,8 @@ FFXFSR3ViewExtension::FFXFSR3ViewExtension(const FAutoRegister& AutoRegister) : 
 	static IConsoleVariable* CVarMinAutomaticViewMipBiasOffset = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Offset"));
 	static IConsoleVariable* CVarVertexDeformationOutputsVelocity = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Velocity.EnableVertexDeformation"));
 	static IConsoleVariable* CVarVelocityEnableLandscapeGrass = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Velocity.EnableLandscapeGrass"));
-	static IConsoleVariable* CVarReactiveMask = IConsoleManager::Get().FindConsoleVariable(TEXT("r.FidelityFX.FSR3.CreateReactiveMask"));
 	static IConsoleVariable* CVarSeparateTranslucency = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SeparateTranslucency"));
 	static IConsoleVariable* CVarSSRExperimentalDenoiser = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SSR.ExperimentalDenoiser"));
-	static IConsoleVariable* CVarFSR3SSRExperimentalDenoiser = IConsoleManager::Get().FindConsoleVariable(TEXT("r.FidelityFX.FSR3.UseSSRExperimentalDenoiser"));
 
 	PreviousFSR3State = CVarEnableFSR3.GetValueOnAnyThread();
 	PreviousFSR3StateRT = CVarEnableFSR3.GetValueOnAnyThread();
@@ -159,7 +128,7 @@ FFXFSR3ViewExtension::FFXFSR3ViewExtension(const FAutoRegister& AutoRegister) : 
 				}
 			}
 
-			if (CVarReactiveMask && CVarReactiveMask->GetInt())
+			if (CVarFSR3CreateReactiveMask->GetInt())
 			{
 				if (CVarSeparateTranslucency != nullptr)
 				{
@@ -168,10 +137,7 @@ FFXFSR3ViewExtension::FFXFSR3ViewExtension(const FAutoRegister& AutoRegister) : 
 
 				if (CVarSSRExperimentalDenoiser != nullptr)
 				{
-					if (CVarFSR3SSRExperimentalDenoiser)
-					{
-						CVarFSR3SSRExperimentalDenoiser->Set(SSRExperimentalDenoiser, EConsoleVariableFlags::ECVF_SetByCode);
-					}
+					CVarFSR3UseExperimentalSSRDenoiser->Set(SSRExperimentalDenoiser, EConsoleVariableFlags::ECVF_SetByCode);
 					CVarSSRExperimentalDenoiser->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
 				}
 			}
@@ -196,7 +162,7 @@ FFXFSR3ViewExtension::FFXFSR3ViewExtension(const FAutoRegister& AutoRegister) : 
 
 void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
-	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
 		static IConsoleVariable* CVarVertexDeformationOutputsVelocity = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Velocity.EnableVertexDeformation"));
 		static IConsoleVariable* CVarVelocityEnableLandscapeGrass = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Velocity.EnableLandscapeGrass"));
@@ -237,9 +203,7 @@ void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 			static IConsoleVariable* CVarMinAutomaticViewMipBiasMin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Min"));
 			static IConsoleVariable* CVarMinAutomaticViewMipBiasOffset = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Offset"));
 			static IConsoleVariable* CVarSeparateTranslucency = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SeparateTranslucency"));
-			static IConsoleVariable* CVarReactiveMask = IConsoleManager::Get().FindConsoleVariable(TEXT("r.FidelityFX.FSR3.CreateReactiveMask"));
 			static IConsoleVariable* CVarSSRExperimentalDenoiser = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SSR.ExperimentalDenoiser"));
-			static IConsoleVariable* CVarFSR3SSRExperimentalDenoiser = IConsoleManager::Get().FindConsoleVariable(TEXT("r.FidelityFX.FSR3.UseSSRExperimentalDenoiser"));
 
 			if (EnableFSR3)
 			{
@@ -270,7 +234,7 @@ void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 					}
 				}
 
-				if (CVarReactiveMask && CVarReactiveMask->GetInt())
+				if (CVarFSR3CreateReactiveMask->GetInt())
 				{
 					if (CVarSeparateTranslucency != nullptr)
 					{
@@ -280,10 +244,7 @@ void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 					if (CVarSSRExperimentalDenoiser != nullptr)
 					{
 						SSRExperimentalDenoiser = CVarSSRExperimentalDenoiser->GetInt();
-						if (CVarFSR3SSRExperimentalDenoiser != nullptr)
-						{
-							CVarFSR3SSRExperimentalDenoiser->Set(SSRExperimentalDenoiser, EConsoleVariableFlags::ECVF_SetByCode);
-						}
+						CVarFSR3UseExperimentalSSRDenoiser->Set(SSRExperimentalDenoiser, EConsoleVariableFlags::ECVF_SetByCode);
 						CVarSSRExperimentalDenoiser->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
 					}
 				}
@@ -315,7 +276,7 @@ void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 					}
 				}
 
-				if (CVarReactiveMask && CVarReactiveMask->GetInt())
+				if (CVarFSR3CreateReactiveMask->GetInt())
 				{
 					if (CVarSeparateTranslucency != nullptr)
 					{
@@ -333,7 +294,7 @@ void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 
 void FFXFSR3ViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 {
-	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
 		IFFXFSR3TemporalUpscalingModule& FSR3ModuleInterface = FModuleManager::GetModuleChecked<IFFXFSR3TemporalUpscalingModule>(TEXT("FFXFSR3TemporalUpscaling"));
 		FFXFSR3TemporalUpscaler* Upscaler = FSR3ModuleInterface.GetFSR3Upscaler();
@@ -363,19 +324,22 @@ void FFXFSR3ViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFamily)
 
 		if (IsTemporalUpscalingRequested && CVarEnableFSR3.GetValueOnAnyThread() && (InViewFamily.GetTemporalUpscalerInterface() == nullptr))
 		{
-			static const auto CVarFSR3EnabledInEditor = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.FidelityFX.FSR3.EnabledInEditorViewport"));
-			if (!WITH_EDITOR || (CVarFSR3EnabledInEditor && CVarFSR3EnabledInEditor->GetValueOnGameThread() == 1) || bIsGameView)
+			if (!WITH_EDITOR || (CVarEnableFSR3InEditor.GetValueOnGameThread() == 1) || bIsGameView)
 			{
 				Upscaler->UpdateDynamicResolutionState();
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 				InViewFamily.SetTemporalUpscalerInterface(new FFXFSR3TemporalUpscalerProxy(Upscaler));
+#else
+				InViewFamily.SetTemporalUpscalerInterface(Upscaler);
+#endif
 			}
 		}
 	}
 }
 
-void FFXFSR3ViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
+void FFXFSR3ViewExtension::PreRenderViewFamily_RenderThread(FRenderGraphType& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
-	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
 		// When the FSR3 plugin is enabled/disabled dispose of any previous history as it will be invalid if it comes from another upscaler
 		CurrentFSR3StateRT = CVarEnableFSR3.GetValueOnRenderThread();
@@ -401,10 +365,10 @@ void FFXFSR3ViewExtension::PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBu
 	}
 }
 
-void FFXFSR3ViewExtension::PreRenderView_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView)
+void FFXFSR3ViewExtension::PreRenderView_RenderThread(FRenderGraphType& GraphBuilder, FSceneView& InView)
 {
 	// FSR3 can access the previous frame of Lumen data at this point, but not later where it will be replaced with the current frame's which won't be accessible when FSR3 runs.
-	if (InView.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (InView.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
 		if (CVarEnableFSR3.GetValueOnAnyThread())
 		{
@@ -417,7 +381,7 @@ void FFXFSR3ViewExtension::PreRenderView_RenderThread(FRDGBuilder& GraphBuilder,
 void FFXFSR3ViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& View, const FPostProcessingInputs& Inputs)
 {
 	// FSR3 requires the separate translucency data which is only available through the post-inputs so bind them to the upscaler now.
-	if (View.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (View.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
 		if (CVarEnableFSR3.GetValueOnAnyThread())
 		{
@@ -427,10 +391,10 @@ void FFXFSR3ViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBui
 	}
 }
 
-void FFXFSR3ViewExtension::PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily)
+void FFXFSR3ViewExtension::PostRenderViewFamily_RenderThread(FRenderGraphType& GraphBuilder, FSceneViewFamily& InViewFamily)
 {
 	// As FSR3 retains pointers/references to objects the engine is not expecting clear them out now to prevent leaks or accessing dangling pointers.
-	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
 		if (CVarEnableFSR3.GetValueOnAnyThread())
 		{

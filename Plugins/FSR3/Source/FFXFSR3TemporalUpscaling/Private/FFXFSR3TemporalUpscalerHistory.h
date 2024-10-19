@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,52 +38,12 @@ struct FFXFSR3State : public FRHIResource
 	FFXFSR3State(IFFXSharedBackend* InBackend)
 	: FRHIResource(RRT_None)
 	, Backend(InBackend)
-	, Fsr3Resources(nullptr)
 	, LastUsedFrame(~0u)
-	, Index(0u)
 	{
-		FMemory::Memzero(Interface);
-		FMemory::Memzero(Fsr3ResourceArray);
-		Fsr3Resources = &Fsr3ResourceArray[0];
 	}
 	~FFXFSR3State()
 	{
-		ReleaseResources();
-		ffxFsr3UpscalerContextDestroy(&Fsr3);
-		if (Interface.scratchBuffer)
-		{
-			FMemory::Free(Interface.scratchBuffer);
-		}
-	}
-
-	FfxErrorCode CreateResources()
-	{
-		if (!Fsr3ResourceArray[Index].dilatedDepth.Resource.resource || !Fsr3ResourceArray[Index].dilatedMotionVectors.Resource.resource || !Fsr3ResourceArray[Index].reconstructedPrevNearestDepth.Resource.resource)
-		{
-			FFX_RETURN_ON_ERROR(
-				Backend,
-				FFX_ERROR_INVALID_POINTER);
-
-			FfxFsr3UpscalerSharedResourceDescriptions internalSurfaceDesc;
-			ffxFsr3UpscalerGetSharedResourceDescriptions(&Fsr3, &internalSurfaceDesc);
-
-			Fsr3ResourceArray[Index].dilatedDepth = Backend->CreateResource(Interface, &internalSurfaceDesc.dilatedDepth);
-			Fsr3ResourceArray[Index].dilatedMotionVectors = Backend->CreateResource(Interface, &internalSurfaceDesc.dilatedMotionVectors);
-			Fsr3ResourceArray[Index].reconstructedPrevNearestDepth = Backend->CreateResource(Interface, &internalSurfaceDesc.reconstructedPrevNearestDepth);
-		}
-		return FFX_OK;
-	}
-
-	void ReleaseResources()
-	{
-		for (uint32 i = 0; i < FFX_FSR3UPSCALER_MAX_NUM_BUFFERS; i++)
-		{
-			Backend->ReleaseResource(Interface, Fsr3ResourceArray[i].dilatedDepth);
-			Backend->ReleaseResource(Interface, Fsr3ResourceArray[i].dilatedMotionVectors);
-			Backend->ReleaseResource(Interface, Fsr3ResourceArray[i].reconstructedPrevNearestDepth);
-		}
-		Index = 0;
-		Fsr3Resources = &Fsr3ResourceArray[0];
+		Backend->ffxDestroyContext(&Fsr3);
 	}
 
 	uint32 AddRef() const
@@ -102,14 +62,10 @@ struct FFXFSR3State : public FRHIResource
 	}
 
 	IFFXSharedBackend* Backend;
-	FfxInterface Interface;
-	FfxFsr3UpscalerContextDescription Params;
-	FfxFsr3UpscalerContext Fsr3;
-	FfxFsr3UpscalerSharedResources* Fsr3Resources;
-	FfxFsr3UpscalerSharedResources Fsr3ResourceArray[FFX_FSR3UPSCALER_MAX_NUM_BUFFERS];
+	ffxCreateContextDescUpscale Params;
+	ffxContext Fsr3;
 	uint64 LastUsedFrame;
 	uint32 ViewID;
-	uint32 Index;
 };
 typedef TRefCountPtr<FFXFSR3State> FSR3StateRef;
 
@@ -128,11 +84,8 @@ public:
 	virtual uint64 GetGPUSizeBytes() const override;
 #endif
 
-	void AdvanceIndex() final;
-    FfxFsr3UpscalerSharedResources* GetFSRResources() const final;
-    FfxFsr3UpscalerContext* GetFSRContext() const final;
-    FfxInterface* GetFFXInterface() const final;
-    FfxFsr3UpscalerContextDescription* GetFSRContextDesc() const final;
+	ffxContext* GetFSRContext() const final;
+    ffxCreateContextDescUpscale* GetFSRContextDesc() const final;
 	TRefCountPtr<IPooledRenderTarget> GetMotionVectors() const final;
 
 	void SetState(FSR3StateRef NewState);

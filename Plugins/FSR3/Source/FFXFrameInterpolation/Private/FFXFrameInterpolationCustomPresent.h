@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -23,10 +23,9 @@
 
 #include "CoreMinimal.h"
 #include "FFXFrameInterpolationApi.h"
-#include "FFXOpticalFlowApi.h"
-#include "FFXFSR3.h"
 #include "FFXSharedBackend.h"
 #include "IFFXFrameInterpolation.h"
+#include "RendererInterface.h"
 
 //-------------------------------------------------------------------------------------
 // Enumeration of the present status inside the custom present object.
@@ -37,15 +36,6 @@ enum class FFXFrameInterpolationCustomPresentStatus : uint8
 	InterpolateRHI = 1,
 	PresentRT = 2,
 	PresentRHI = 3
-};
-
-//-------------------------------------------------------------------------------------
-// Helper struct to hold shared optical flow resources.
-//-------------------------------------------------------------------------------------
-struct FfxOpticalflowSharedResources
-{
-	FFXSharedResource opticalFlow;
-	FFXSharedResource opticalFlowSCD;
 };
 
 //-------------------------------------------------------------------------------------
@@ -72,15 +62,12 @@ struct FFXFrameInterpolationResources : public FRHIResource
 	}
 
 	uint32 UniqueID;
-	FfxInterface Interface;
-	FfxOpticalflowContext OpticalFlowContext;
-	FfxOpticalflowContextDescription OpticalFlowDesc;
-	FfxOpticalflowSharedResources OpticalFlowResources;
-	FfxFrameInterpolationContextDescription Desc;
-	FfxFrameInterpolationContext Context;
+	ffxCreateContextDescFrameGeneration Desc;
+	ffxContext Context;
 	TRefCountPtr<IPooledRenderTarget> Color;
 	TRefCountPtr<IPooledRenderTarget> Hud;
 	TRefCountPtr<IPooledRenderTarget> Inter;
+	TRefCountPtr<IPooledRenderTarget> MotionVectorRT;
 	IFFXSharedBackend* Backend;
 	bool bDebugView;
 };
@@ -97,7 +84,7 @@ class FFXFrameInterpolationCustomPresent : public IFFXFrameInterpolationCustomPr
         TRefCountPtr<IPooledRenderTarget> Interpolated;
     };
 
-	FfxFrameInterpolationContextDescription Desc;
+	ffxCreateContextDescFrameGeneration Desc;
 	TRefCountPtr<IPooledRenderTarget> RealFrameNoUI;
 	TRefCountPtr<IPooledRenderTarget> InterpolatedNoUI;
     FFXFrameInterpolationFrame Current;
@@ -110,6 +97,7 @@ class FFXFrameInterpolationCustomPresent : public IFFXFrameInterpolationCustomPr
 	TArray<FFXFIResourceRef> OldResources;
 	FFXFrameInterpolationCustomPresentStatus Status;
 	EFFXFrameInterpolationPresentMode Mode;
+	EFFXBackendAPI Api;
 	bool bNeedsNativePresentRT;
 	bool bPresentRHI;
 	bool bHasValidInterpolatedRT;
@@ -121,17 +109,15 @@ public:
 	virtual ~FFXFrameInterpolationCustomPresent();
 
     // Called by our custom code for intialising the swap chain.
-    bool InitSwapChain(IFFXSharedBackend* InBackend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxSurfaceFormat Format, FfxPresentCallbackFunc CompositionFunc);
+    bool InitSwapChain(IFFXSharedBackend* InBackend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxApiSurfaceFormat Format, EFFXBackendAPI Api);
 
     void InitViewport(FViewport* InViewport, FViewportRHIRef ViewportRHI) final;
 
 	IFFXSharedBackend* GetBackend() const { return Backend; }
 
-	FfxInterface& GetInterface() { return Desc.backendInterface; }
-
-	FfxFrameInterpolationContext* GetContext() const
+	ffxContext* GetContext() const
 	{
-		FfxFrameInterpolationContext* Resource = nullptr;
+		ffxContext* Resource = nullptr;
 		if (CurrentResource.IsValid())
 		{
 			Resource = &CurrentResource->Context;
@@ -179,7 +165,7 @@ public:
 	bool GetUseFFXSwapchain() const { return bUseFFXSwapchain; }
 	void SetUseFFXSwapchain(bool const bEnabled) override final;;
 
-	FFXFIResourceRef UpdateContexts(FRDGBuilder& GraphBuilder, uint32 UniqueID, FfxFsr3UpscalerContextDescription const& FsrDesc, FIntPoint ViewportSizeXY, FfxSurfaceFormat BackBufferFormat);
+	FFXFIResourceRef UpdateContexts(FRDGBuilder& GraphBuilder, uint32 UniqueID, ffxDispatchDescFrameGenerationPrepare const& FsrDesc, ffxCreateContextDescFrameGeneration const& FgDesc);
 
 	void SetPreUITextures(TRefCountPtr<IPooledRenderTarget> InRealFrameNoUI, TRefCountPtr<IPooledRenderTarget> InInterpolatedNoUI)
 	{

@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -63,32 +63,12 @@ void FFXFSR3TemporalUpscalerHistory::SetState(FSR3StateRef NewState)
 	Fsr3 = NewState;
 }
 
-void FFXFSR3TemporalUpscalerHistory::AdvanceIndex()
-{
-	if (Fsr3.IsValid())
-	{
-		Fsr3->Index = (Fsr3->Index + 1) % FFX_FSR3UPSCALER_MAX_NUM_BUFFERS;
-		Fsr3->CreateResources();
-		Fsr3->Fsr3Resources = &Fsr3->Fsr3ResourceArray[Fsr3->Index];
-	}
-}
-
-FfxFsr3UpscalerSharedResources* FFXFSR3TemporalUpscalerHistory::GetFSRResources() const
-{
-	return Fsr3.IsValid() ? Fsr3->Fsr3Resources : nullptr;
-}
-
-FfxFsr3UpscalerContext* FFXFSR3TemporalUpscalerHistory::GetFSRContext() const
+ffxContext* FFXFSR3TemporalUpscalerHistory::GetFSRContext() const
 {
 	return Fsr3.IsValid() ? &Fsr3->Fsr3 : nullptr;
 }
 
-FfxInterface* FFXFSR3TemporalUpscalerHistory::GetFFXInterface() const
-{
-	return Fsr3.IsValid() ? &Fsr3->Interface : nullptr;
-}
-
-FfxFsr3UpscalerContextDescription* FFXFSR3TemporalUpscalerHistory::GetFSRContextDesc() const
+ffxCreateContextDescUpscale* FFXFSR3TemporalUpscalerHistory::GetFSRContextDesc() const
 {
 	return Fsr3.IsValid() ? &Fsr3->Params : nullptr;
 }

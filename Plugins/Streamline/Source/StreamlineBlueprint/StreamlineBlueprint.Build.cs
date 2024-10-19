@@ -61,13 +61,13 @@ public class StreamlineBlueprint : ModuleRules
 			PublicDependencyModuleNames.AddRange(
 				new string[]
 				{
+					"StreamlineCore",
 				}
 			);
 
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
-					"StreamlineCore",
 					"StreamlineRHI",
 					"Streamline"
 				}

@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,15 +31,15 @@ public class FFXFrameInterpolationApi : ModuleRules
 
 		PublicIncludePaths.AddRange(
 			new string[] {
-				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/include"),
+				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/sdk/include"),
 			}
 			);
 
 
 		PrivateIncludePaths.AddRange(
 			new string[] {
-				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/src"),
-				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/src/shared"),
+				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/sdk/src"),
+				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/sdk/src/shared"),
 			}
 			);
 
@@ -60,19 +60,6 @@ public class FFXFrameInterpolationApi : ModuleRules
 				"Engine",
 			}
 			);
-
-		string BuildWithDLL = System.Environment.GetEnvironmentVariable("FFX_BUILD_AS_DLL");
-		bool bBuildWithDLL = (BuildWithDLL != null) && (BuildWithDLL == "1");
-		if (bBuildWithDLL && Target.Platform.IsInGroup(UnrealPlatformGroup.Windows))
-		{
-			string AmdApiLibPath = Path.Combine(ModuleDirectory, "../fidelityfx-sdk/bin/ffx_sdk");
-
-			string LibraryName = "ffx_frameinterpolation_x64.lib";
-			PublicAdditionalLibraries.Add(Path.Combine(AmdApiLibPath, LibraryName));
-			RuntimeDependencies.Add("$(TargetOutputDir)/ffx_frameinterpolation_x64.dll", Path.Combine(AmdApiLibPath, "ffx_frameinterpolation_x64.dll"));
-			PublicDelayLoadDLLs.Add("ffx_frameinterpolation_x64.dll");
-			PrivateDefinitions.Add("FFX_BUILD_AS_DLL=1");
-		}
 
 		PrecompileForTargets = PrecompileTargetsType.Any;
 	}

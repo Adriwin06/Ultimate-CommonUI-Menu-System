@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,12 +21,30 @@
 
 #pragma once
 
+#include "FFXSharedBackend.h"
+#if PLATFORM_WINDOWS
 #include "Windows/AllowWindowsPlatformTypes.h"
+#pragma warning( push )
+#pragma warning( disable : 4191 )
+#else
+#define _countof(a) (sizeof(a)/sizeof(*(a)))
+#define strcpy_s(a, b) strcpy(a, b)
+#define FFX_GCC 1
+#endif
 THIRD_PARTY_INCLUDES_START
+#if UE_VERSION_AT_LEAST(5, 3, 0)
+#include <bit>
+#endif
 #include "FidelityFX/host/ffx_interface.h"
 THIRD_PARTY_INCLUDES_END
+#if PLATFORM_WINDOWS
+#pragma warning( pop )
 #include "Windows/HideWindowsPlatformTypes.h"
-#include "FFXSharedBackend.h"
+#else
+#undef _countof
+#undef strcpy_s
+#undef FFX_GCC
+#endif
 #if UE_VERSION_AT_LEAST(5, 2, 0)
 #include "RHIResources.h"
 #else
@@ -35,6 +53,8 @@ THIRD_PARTY_INCLUDES_END
 #include "RendererInterface.h"
 #include "RenderGraphDefinitions.h"
 #include "RenderGraphBuilder.h"
+
+#define FFX_API_CREATE_CONTEXT_DESC_TYPE_BACKEND_RHI 0x0000004u
 
 //-------------------------------------------------------------------------------------
 // The maximum number of resources that can be allocated.
@@ -64,6 +84,9 @@ struct FFXRHIBACKEND_API FFXBackendState
 		uint64 ResourceMask;
 		uint64 DynamicMask;
 	} Blocks[FFX_MAX_BLOCK_COUNT];
+
+	uint8 StagingRingBuffer[FFX_ALIGN_UP(FFX_CONSTANT_BUFFER_RING_BUFFER_SIZE, sizeof(uint32_t))];
+	uint32 StagingRingBufferBase;
 
 	FfxGpuJobDescription Jobs[FFX_MAX_JOB_COUNT];
 	uint32 NumJobs;
@@ -99,7 +122,7 @@ struct FFXRHIBACKEND_API FFXBackendState
 };
 
 //-------------------------------------------------------------------------------------
-// FFX-style functions for the RHI backend to help setup the FSR2 library.
+// FFX-style functions for the RHI backend to help setup the FSR3 library.
 //-------------------------------------------------------------------------------------
 extern FfxErrorCode ffxGetInterfaceUE(FfxInterface* outInterface, void* scratchBuffer, size_t scratchBufferSize);
 extern size_t ffxGetScratchMemorySizeUE();
@@ -107,6 +130,7 @@ extern FfxResource ffxGetResourceFromUEResource(FfxInterface* backendInterface, 
 
 class FFXRHIBACKEND_API FFXRHIBackend : public IFFXSharedBackend
 {
+	FFXSharedAllocCallbacks AllocCbs;
 public:
 	FFXRHIBackend();
 	virtual ~FFXRHIBackend();
@@ -114,31 +138,26 @@ public:
 	void OnViewportCreatedHandler_SetCustomPresent();
 	void OnBeginDrawHandler();
 
+	ffxReturnCode_t ffxCreateContext(ffxContext* context, ffxCreateContextDescHeader* desc) final;
+	ffxReturnCode_t ffxDestroyContext(ffxContext* context) final;
+	ffxReturnCode_t ffxConfigure(ffxContext* context, const ffxConfigureDescHeader* desc) final;
+	ffxReturnCode_t ffxQuery(ffxContext* context, ffxQueryDescHeader* desc) final;
+	ffxReturnCode_t ffxDispatch(ffxContext* context, const ffxDispatchDescHeader* desc) final;
+
 	void Init() final;
 	EFFXBackendAPI GetAPI() const final;
-	void SetFeatureLevel(FfxInterface& OutInterface, ERHIFeatureLevel::Type FeatureLevel) final;
-	size_t GetGetScratchMemorySize() final;
-	FfxErrorCode CreateInterface(FfxInterface& OutInterface, uint32 MaxContexts) final;
-	FfxDevice GetDevice(void* device) final;
-	FfxCommandList GetCommandList(void* list) final;
-	FfxResource GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping) final;
-	FfxCommandQueue GetCommandQueue(void* cmdQueue) final;
+	void SetFeatureLevel(ffxContext* context, ERHIFeatureLevel::Type FeatureLevel) final;
 	FfxSwapchain GetSwapchain(void* swapChain) final;
-	FfxDevice GetNativeDevice() final;
-	FfxResource GetNativeResource(FRHITexture* Texture, FfxResourceStates State) final;
-    FfxResource GetNativeResource(FRDGTexture* Texture, FfxResourceStates State) final;
+	FfxApiResource GetNativeResource(FRHITexture* Texture, FfxApiResourceState State) final;
+	FfxApiResource GetNativeResource(FRDGTexture* Texture, FfxApiResourceState State) final;
 	FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList) final;
-	uint32 GetNativeTextureFormat(FRHITexture* Texture) final;
 	FfxShaderModel GetSupportedShaderModel() final;
 	bool IsFloat16Supported() final;
 	void ForceUAVTransition(FRHICommandListImmediate& RHICmdList, FRHITexture* OutputTexture, ERHIAccess Access) final;
-	void UpdateSwapChain(FfxInterface& Interface, void* SwapChain, bool mode, bool allowAsyncWorkloads, bool showDebugView) final;
-	FfxResource GetInterpolationOutput(FfxSwapchain SwapChain) final;
-	FfxCommandList GetInterpolationCommandList(FfxSwapchain SwapChain) final;
-	void BindUITexture(FfxSwapchain gameSwapChain, FfxResource uiResource) final;
-	FFXSharedResource CreateResource(FfxInterface& Interface, const FfxCreateResourceDescription* desc) final;
-	FfxErrorCode ReleaseResource(FfxInterface& Interface, FFXSharedResource Resource) final;
-	void RegisterFrameResources(FRHIResource* FIResources, IRefCountedObject* FSR3Resources) final;
+	void UpdateSwapChain(ffxContext* Context, ffxConfigureDescFrameGeneration& Desc) final;
+	FfxApiResource GetInterpolationOutput(FfxSwapchain SwapChain) final;
+	void* GetInterpolationCommandList(FfxSwapchain SwapChain) final;
+	void RegisterFrameResources(FRHIResource* FIResources, uint64 FrameID) final;
 	bool GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS) final;
-	void CopySubRect(FfxCommandList CmdList, FfxResource Src, FfxResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint) final;
+	void CopySubRect(FfxCommandList CmdList, FfxApiResource Src, FfxApiResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint) final;
 };

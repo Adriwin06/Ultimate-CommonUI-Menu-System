@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,7 @@ public:
 
 	static uint32 GetNumBoundSRVs()
 	{
-		return 2;
+		return 1;
 	}
 
 	static uint32 GetNumBoundUAVs()
@@ -69,7 +69,6 @@ public:
 	static uint32* GetBoundSRVs()
 	{
 		static uint32 SRVs[] = {
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCENE_CHANGE_DETECTION,
 		};
 		return SRVs;
@@ -78,7 +77,6 @@ public:
 	static const wchar_t** GetBoundSRVNames()
 	{
 		static const wchar_t* SRVs[] = {
-			L"r_dilated_motion_vectors",
 			L"r_optical_flow_scd",
 		};
 		return SRVs;
@@ -87,11 +85,11 @@ public:
 	static const wchar_t** GetBoundUAVNames()
 	{
 		static const wchar_t* SRVs[] = {
-			L"rw_disocclusion_mask",
 			L"rw_game_motion_vector_field_x",
 			L"rw_game_motion_vector_field_y",
 			L"rw_optical_flow_motion_vector_field_x",
 			L"rw_optical_flow_motion_vector_field_y",
+			L"rw_disocclusion_mask",
 			L"rw_counters",
 		};
 		return SRVs;
@@ -107,12 +105,12 @@ public:
 
 	static uint32* GetBoundUAVs()
 	{
-		static uint32 UAVs[] = { 
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DISOCCLUSION_MASK,                     
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_X,            
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_Y,            
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X,    
+		static uint32 UAVs[] = {
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_X,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_Y,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_Y,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DISOCCLUSION_MASK,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_COUNTERS,
 		};
 		return UAVs;

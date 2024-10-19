@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -82,6 +82,8 @@ public:
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		SHADER_PARAMETER_STRUCT_REF(FFXFrameInterpolationParameters, cbFI)
 		SHADER_PARAMETER_STRUCT_REF(FFXInpaintingPyramidParameters, cbInpaintingPyramid)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_input_depth)
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_input_motion_vectors)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_dilated_depth)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_dilated_motion_vectors)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_reconstructed_depth_previous_frame)
@@ -97,12 +99,10 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_optical_flow_confidence)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_optical_flow_global_motion)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_optical_flow_scd)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_optical_flow_debug)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_output)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_inpainting_pyramid)
 		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_present_backbuffer)
-		SHADER_PARAMETER_RDG_TEXTURE(Texture2D, r_counters)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_uiTexture)
+		SHADER_PARAMETER_RDG_BUFFER_SRV(StructuredBuffer<uint>, r_counters)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_dilated_depth)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_dilated_motion_vectors)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_reconstructed_depth_previous_frame)
@@ -113,7 +113,7 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_game_motion_vector_field_y)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_optical_flow_motion_vector_field_x)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_optical_flow_motion_vector_field_y)
-		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_counters)
+		SHADER_PARAMETER_RDG_BUFFER_UAV(RWStructuredBuffer<uint>, rw_counters)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_inpainting_pyramid0)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_inpainting_pyramid1)
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, rw_inpainting_pyramid2)

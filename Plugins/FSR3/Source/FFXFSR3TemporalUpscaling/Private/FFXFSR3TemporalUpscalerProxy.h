@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,10 @@
 // THE SOFTWARE.
 
 #pragma once
+
+#include "FFXSharedBackend.h"
+
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 
 #include "Engine/Engine.h"
 #include "PostProcess/PostProcessing.h"
@@ -104,6 +108,16 @@ public:
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
 
+#if ENGINE_HAS_DENOISE_INDIRECT
+	FSSDSignalTextures DenoiseIndirect(
+		FRDGBuilder& GraphBuilder,
+		const FViewInfo& View,
+		FPreviousViewInfo* PreviousViewInfos,
+		const FSceneTextureParameters& SceneTextures,
+		const FIndirectInputs& Inputs,
+		const FAmbientOcclusionRayTracingConfig Config) const override;
+#endif
+
 	FDiffuseIndirectOutputs DenoiseSkyLight(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& View,
@@ -112,6 +126,7 @@ public:
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
 
+#if UE_VERSION_OLDER_THAN(5, 4, 0)
 	FDiffuseIndirectOutputs DenoiseReflectedSkyLight(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& View,
@@ -119,6 +134,7 @@ public:
 		const FSceneTextureParameters& SceneTextures,
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
+#endif
 	
 	FSSDSignalTextures DenoiseDiffuseIndirectHarmonic(
 		FRDGBuilder& GraphBuilder,
@@ -143,3 +159,5 @@ private:
 	FFXFSR3TemporalUpscaler* TemporalUpscaler;
 	
 };
+
+#endif

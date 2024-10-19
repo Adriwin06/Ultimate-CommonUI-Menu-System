@@ -417,7 +417,7 @@ TTuple<bool, FString> FStreamlineRHI::IsSwapChainProviderRequired(const sl::Adap
 		Result = MakeTuple(false, FString::Printf(TEXT("no supported feature needing a swap chain provider: %s. This can be overriden with -sl{no}swapchainprovider"), *CombinedResultString));
 	}
 
-	if (FParse::Param(FCommandLine::Get(), TEXT("-slswapchainprovider")))
+	if (FParse::Param(FCommandLine::Get(), TEXT("slswapchainprovider")))
 	{
 		Result = MakeTuple(true, TEXT("-slswapchainprovider command line"));
 	}

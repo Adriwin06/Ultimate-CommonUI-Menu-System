@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,6 @@
 #include "FFXSharedBackend.h"
 #include "FFXFrameInterpolationSlate.h"
 #include "FFXFrameInterpolationCustomPresent.h"
-#include "FFXFSR3History.h"
 #include "FFXFSR3Settings.h"
 
 #include "PostProcess/PostProcessing.h"
@@ -32,7 +31,6 @@
 
 #include "FFXFrameInterpolationApi.h"
 #include "FFXOpticalFlowApi.h"
-#include "FFXFSR3.h"
 
 #include "ScenePrivate.h"
 #include "RenderTargetPool.h"
@@ -59,11 +57,77 @@ struct FFXFrameInterpolationPass
 	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
 		RDG_TEXTURE_ACCESS(ColorTexture, ERHIAccess::SRVCompute)
 		RDG_TEXTURE_ACCESS(BackBufferTexture, ERHIAccess::SRVCompute)
+		RDG_TEXTURE_ACCESS(SceneDepth, ERHIAccess::SRVCompute)
+		RDG_TEXTURE_ACCESS(MotionVectors, ERHIAccess::SRVCompute)
 		RDG_TEXTURE_ACCESS(HudTexture, ERHIAccess::CopyDest)
 		RDG_TEXTURE_ACCESS(InterpolatedRT, ERHIAccess::CopyDest)
 		RDG_TEXTURE_ACCESS(Interpolated, ERHIAccess::CopyDest)
 	END_SHADER_PARAMETER_STRUCT()
 };
+
+//------------------------------------------------------------------------------------------------------
+// Unreal shader to convert from the Velocity texture format to the Motion Vectors used by FFX.
+//------------------------------------------------------------------------------------------------------
+class FFXFIConvertVelocityCS : public FGlobalShader
+{
+public:
+	static const int ThreadgroupSizeX = 8;
+	static const int ThreadgroupSizeY = 8;
+	static const int ThreadgroupSizeZ = 1;
+
+	DECLARE_GLOBAL_SHADER(FFXFIConvertVelocityCS);
+	SHADER_USE_PARAMETER_STRUCT(FFXFIConvertVelocityCS, FGlobalShader);
+
+	BEGIN_SHADER_PARAMETER_STRUCT(FParameters, )
+		RDG_TEXTURE_ACCESS(DepthTexture, ERHIAccess::SRVCompute)
+		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, InputDepth)
+		SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, InputVelocity)
+		SHADER_PARAMETER_STRUCT_REF(FViewUniformShaderParameters, View)
+		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, OutputTexture)
+	END_SHADER_PARAMETER_STRUCT()
+
+	static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
+	{
+		return IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM5);
+	}
+	static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
+	{
+		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEX"), ThreadgroupSizeX);
+		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEY"), ThreadgroupSizeY);
+		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEZ"), ThreadgroupSizeZ);
+		OutEnvironment.SetDefine(TEXT("COMPUTE_SHADER"), 1);
+		OutEnvironment.SetDefine(TEXT("UNREAL_ENGINE_MAJOR_VERSION"), ENGINE_MAJOR_VERSION);
+	}
+};
+IMPLEMENT_GLOBAL_SHADER(FFXFIConvertVelocityCS, "/Plugin/FSR3/Private/PostProcessFFX_FSR3ConvertVelocity.usf", "MainCS", SF_Compute);
+
+#if UE_VERSION_OLDER_THAN(5, 1, 0)
+inline void TransitionAndCopyTexture(FRHICommandList& RHICmdList, FRHITexture* SrcTexture, FRHITexture* DstTexture, const FRHICopyTextureInfo& Info)
+{
+	check(SrcTexture && DstTexture);
+	check(SrcTexture->GetNumSamples() == DstTexture->GetNumSamples());
+
+	if (SrcTexture == DstTexture)
+	{
+		RHICmdList.Transition({
+			FRHITransitionInfo(SrcTexture, ERHIAccess::Unknown, ERHIAccess::SRVMask)
+			});
+		return;
+	}
+
+	RHICmdList.Transition({
+		FRHITransitionInfo(SrcTexture, ERHIAccess::Unknown, ERHIAccess::CopySrc),
+		FRHITransitionInfo(DstTexture, ERHIAccess::Unknown, ERHIAccess::CopyDest)
+		});
+
+	RHICmdList.CopyTexture(SrcTexture, DstTexture, Info);
+
+	RHICmdList.Transition({
+		FRHITransitionInfo(SrcTexture, ERHIAccess::CopySrc,  ERHIAccess::SRVMask),
+		FRHITransitionInfo(DstTexture, ERHIAccess::CopyDest, ERHIAccess::SRVMask)
+		});
+}
+#endif
 
 //------------------------------------------------------------------------------------------------------
 // Implementation for the Frame Interpolation.
@@ -73,6 +137,8 @@ FFXFrameInterpolation::FFXFrameInterpolation()
 , LastTime(FPlatformTime::Seconds())
 , AverageTime(0.f)
 , AverageFPS(0.f)
+, InterpolationCount(0llu)
+, PresentCount(0llu)
 , Index(0u)
 , ResetState(0u)
 , bInterpolatedFrame(false)
@@ -86,12 +152,12 @@ FFXFrameInterpolation::~FFXFrameInterpolation()
 	ViewExtension = nullptr;
 }
 
-IFFXFrameInterpolationCustomPresent* FFXFrameInterpolation::CreateCustomPresent(IFFXSharedBackend* Backend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxSurfaceFormat Format, FfxPresentCallbackFunc CompositionFunc)
+IFFXFrameInterpolationCustomPresent* FFXFrameInterpolation::CreateCustomPresent(IFFXSharedBackend* Backend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxApiSurfaceFormat Format, EFFXBackendAPI Api)
 {
 	FFXFrameInterpolationCustomPresent* Result = new FFXFrameInterpolationCustomPresent;
 	if (Result)
 	{
-		if (Result->InitSwapChain(Backend, Flags, RenderSize, DisplaySize, RawSwapChain, Queue, Format, CompositionFunc))
+		if (Result->InitSwapChain(Backend, Flags, RenderSize, DisplaySize, RawSwapChain, Queue, Format, Api))
 		{
 			SwapChains.Add(RawSwapChain, Result);
 		}
@@ -111,7 +177,7 @@ bool FFXFrameInterpolation::GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS
 	FFXFrameInterpolationCustomPresent* Presenter = ViewportRHI.IsValid() ? (FFXFrameInterpolationCustomPresent*)ViewportRHI->GetCustomPresent() : nullptr;
 	if (Presenter)
 	{
-		if (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative)
+		if ((Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative) || Presenter->GetUseFFXSwapchain())
 		{
 			bOK = Presenter->GetBackend()->GetAverageFrameTimes(AvgTimeMs, AvgFPS);
 		}
@@ -140,7 +206,6 @@ void FFXFrameInterpolation::OnBeginDrawHandler()
 {
 	if (GEngine->GameViewport->Viewport->GetViewportRHI().IsValid() && (GEngine->GameViewport->Viewport->GetViewportRHI()->GetCustomPresent() == nullptr))
 	{
-		static const auto CVarFSR3UseRHIBackend = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.FidelityFX.FSR3.UseRHI"));
 		auto ViewportRHI = GEngine->GameViewport->Viewport->GetViewportRHI();
 		void* NativeSwapChain = ViewportRHI->GetNativeSwapChain();
 		FFXFrameInterpolationCustomPresent** PresentHandler = SwapChains.Find(NativeSwapChain);
@@ -148,7 +213,7 @@ void FFXFrameInterpolation::OnBeginDrawHandler()
 		{
 			(*PresentHandler)->InitViewport(GEngine->GameViewport->Viewport, GEngine->GameViewport->Viewport->GetViewportRHI());
 		}
-		else if (CVarFSR3UseRHIBackend && CVarFSR3UseRHIBackend->GetValueOnAnyThread() != 0)
+		else if ((CVarFSR3UseRHI.GetValueOnAnyThread() != 0) || FParse::Param(FCommandLine::Get(), TEXT("fsr3rhi")))
 		{
 			IFFXSharedBackendModule* RHIBackendModule = FModuleManager::GetModulePtr<IFFXSharedBackendModule>(TEXT("FFXRHIBackend"));
 			check(RHIBackendModule);
@@ -161,13 +226,12 @@ void FFXFrameInterpolation::OnBeginDrawHandler()
 
 void FFXFrameInterpolation::CalculateFPSTimings()
 {
-	static const auto CVarFSR3Enabled = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.FidelityFX.FSR3.Enabled"));
 	auto* Engine = GEngine;
 	auto GameViewport = Engine ? Engine->GameViewport : nullptr;
 	auto Viewport = GameViewport ? GameViewport->Viewport : nullptr;
 	auto ViewportRHI = Viewport ? Viewport->GetViewportRHI() : nullptr;
 	FFXFrameInterpolationCustomPresent* Presenter = ViewportRHI.IsValid() ? (FFXFrameInterpolationCustomPresent*)ViewportRHI->GetCustomPresent() : nullptr;
-	if (CVarEnableFFXFI.GetValueOnAnyThread() != 0 && (CVarFSR3Enabled && CVarFSR3Enabled->GetValueOnAnyThread() != 0) && Presenter && Presenter->GetMode() == EFFXFrameInterpolationPresentModeRHI)
+	if (CVarEnableFFXFI.GetValueOnAnyThread() != 0 && Presenter && Presenter->GetMode() == EFFXFrameInterpolationPresentModeRHI)
 	{
 		double CurrentTime = FPlatformTime::Seconds();
 		float FrameTimeMS = (float)((CurrentTime - LastTime) * 1000.0);
@@ -224,6 +288,7 @@ void FFXFrameInterpolation::SetupView(const FSceneView& InView, const FPostProce
 		FFXFrameInterpolationView View;
 		View.ViewFamilyTexture = Inputs.ViewFamilyTexture;
 		View.SceneDepth = Inputs.SceneTextures->GetContents()->SceneDepthTexture;
+		View.SceneVelocity = Inputs.SceneTextures->GetContents()->GBufferVelocityTexture;
 		View.ViewRect = ((FViewInfo const&)InView).ViewRect;
 		View.InputExtentsQuantized = View.ViewRect.Size();
 		QuantizeSceneBufferSize(((FViewInfo const&)InView).GetSecondaryViewRectSize(), View.OutputExtents);
@@ -231,9 +296,15 @@ void FFXFrameInterpolation::SetupView(const FSceneView& InView, const FPostProce
 		View.bReset = InView.bCameraCut;
 		View.CameraNear = InView.ViewMatrices.ComputeNearPlane();
 		View.CameraFOV = InView.ViewMatrices.ComputeHalfFieldOfViewPerAxis().Y * 2.0f;
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 		View.bEnabled = InView.bIsGameView && !InView.bIsSceneCapture && !InView.bIsSceneCaptureCube && !InView.bIsReflectionCapture && !InView.bIsPlanarReflection;
-		if (View.bEnabled)
+#else
+		View.bEnabled = InView.bIsGameView && !InView.bIsSceneCapture && !InView.bIsReflectionCapture && !InView.bIsPlanarReflection;
+#endif
+		View.TemporalJitterPixels = ((FViewInfo const&)InView).TemporalJitterPixels;
+		if (View.bEnabled && (InView.GetFeatureLevel() >= ERHIFeatureLevel::SM6))
 		{
+			View.GameTimeMs = InView.Family->Time.GetDeltaWorldTimeSeconds();
 			GameDeltaTime = InView.Family->Time.GetDeltaWorldTimeSeconds();
 			Views.Add(&InView, View);
 		}
@@ -242,15 +313,28 @@ void FFXFrameInterpolation::SetupView(const FSceneView& InView, const FPostProce
 
 static FfxCommandList GCommandList = nullptr;
 
-static FfxBackbufferTransferFunction GetFfxTransferFunction(EDisplayOutputFormat UEFormat)
+#if UE_VERSION_OLDER_THAN(5, 1, 0)
+enum class EDisplayOutputFormat : uint8
 {
-	FfxBackbufferTransferFunction Output = FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
+	SDR_sRGB,
+	SDR_Rec709,
+	SDR_ExplicitGammaMapping,
+	HDR_ACES_1000nit_ST2084,
+	HDR_ACES_2000nit_ST2084,
+	HDR_ACES_1000nit_ScRGB,
+	HDR_ACES_2000nit_ScRGB,
+};
+#endif
+
+static uint32_t GetFfxTransferFunction(EDisplayOutputFormat UEFormat)
+{
+	uint32_t Output = FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
 	switch (UEFormat)
 	{
 		// Gamma ST.2084
 	case EDisplayOutputFormat::HDR_ACES_1000nit_ST2084:
 	case EDisplayOutputFormat::HDR_ACES_2000nit_ST2084:
-		Output = FFX_BACKBUFFER_TRANSFER_FUNCTION_PQ;
+		Output = FFX_API_BACKBUFFER_TRANSFER_FUNCTION_PQ;
 		break;
 
 		// Gamma 1.0 (Linear)
@@ -258,30 +342,32 @@ static FfxBackbufferTransferFunction GetFfxTransferFunction(EDisplayOutputFormat
 	case EDisplayOutputFormat::HDR_ACES_2000nit_ScRGB:
 		// Linear. Still supports expanded color space with values >1.0f and <0.0f.
 		// The actual range is determined by the pixel format (e.g. a UNORM format can only ever have 0-1).
-		Output = FFX_BACKBUFFER_TRANSFER_FUNCTION_SCRGB;
+		Output = FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SCRGB;
 		break;
 	
 		// Gamma 2.2
 	case EDisplayOutputFormat::SDR_sRGB:
 	case EDisplayOutputFormat::SDR_Rec709:
-		Output = FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
+		Output = FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
 		break;
 
 		// Unsupported types that require modifications to the FidelityFX code in order to support
 	case EDisplayOutputFormat::SDR_ExplicitGammaMapping:
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 	case EDisplayOutputFormat::HDR_LinearEXR:
 	case EDisplayOutputFormat::HDR_LinearNoToneCurve:
 	case EDisplayOutputFormat::HDR_LinearWithToneCurve:
+#endif
 	default:
 		check(false);
-		Output = FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
+		Output = FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB;
 		break;
 	}
 
 	return Output;
 }
 
-bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameInterpolationCustomPresent* Presenter, const FSceneView* View, FFXFrameInterpolationView const& ViewDesc, FRDGTextureRef FinalBuffer, FRDGTextureRef InterpolatedRDG, FRDGTextureRef BackBufferRDG)
+bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameInterpolationCustomPresent* Presenter, const FSceneView* View, FFXFrameInterpolationView const& ViewDesc, FRDGTextureRef FinalBuffer, FRDGTextureRef InterpolatedRDG, FRDGTextureRef BackBufferRDG, uint32 InterpolateIndex)
 {
 	bool bInterpolated = false;
 	auto* Engine = GEngine;
@@ -290,35 +376,111 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 	auto ViewportRHI = Viewport ? Viewport->GetViewportRHI() : nullptr;
 	FIntPoint ViewportSizeXY = Viewport ? Viewport->GetSizeXY() : FIntPoint::ZeroValue;
 
-#if UE_VERSION_AT_LEAST(5, 3, 0)
-	TRefCountPtr<IFFXFSR3CustomTemporalAAHistory> CustomTemporalAAHistory = (((FSceneViewState*)View->State)->PrevFrameViewInfo.ThirdPartyTemporalUpscalerHistory);
-#else
-	TRefCountPtr<IFFXFSR3CustomTemporalAAHistory> CustomTemporalAAHistory = (((FSceneViewState*)View->State)->PrevFrameViewInfo.CustomTemporalAAHistory);
-#endif
-	TRefCountPtr<IFFXFSR3History> FSRContext = (IFFXFSR3History*)(CustomTemporalAAHistory.GetReference());
-
 	FRDGTextureRef ViewFamilyTexture = ViewDesc.ViewFamilyTexture;
 	FIntRect ViewRect = ViewDesc.ViewRect;
 	FIntPoint InputExtents = ViewDesc.ViewRect.Size();
 	FIntPoint InputExtentsQuantized = ViewDesc.InputExtentsQuantized;
-	FIntPoint OutputExtents = ViewDesc.OutputExtents;
-	FIntPoint OutputPoint = FIntPoint(
-		FMath::CeilToInt(((FViewInfo*)View)->UnscaledViewRect.Min.X * View->Family->SecondaryViewFraction),
-		FMath::CeilToInt(((FViewInfo*)View)->UnscaledViewRect.Min.Y * View->Family->SecondaryViewFraction));
+	FIntPoint InputTextureExtents = CVarFSR3QuantizeInternalTextures.GetValueOnRenderThread() ? InputExtentsQuantized : InputExtents;
+	FIntPoint OutputExtents = ((FViewInfo*)View)->UnscaledViewRect.Size();
+	FIntPoint OutputPoint = ((FViewInfo*)View)->UnscaledViewRect.Min;
 	float CameraNear = ViewDesc.CameraNear;
 	float CameraFOV = ViewDesc.CameraFOV;
 	bool bEnabled = ViewDesc.bEnabled;
 	bool bReset = ViewDesc.bReset || (ResetState == 0);
 	bool const bResized = Presenter->Resized();
+	float DeltaTimeMs = GameDeltaTime * 1000.f;
 	FRHICopyTextureInfo Info;
 
-	FfxFsr3UpscalerContextDescription UpscalerDesc = *FSRContext->GetFSRContextDesc();
-	FfxFsr3UpscalerSharedResources SharedResources = *FSRContext->GetFSRResources();
+	ffxDispatchDescFrameGenerationPrepare UpscalerDesc;
+	FMemory::Memzero(UpscalerDesc);
+	UpscalerDesc.header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION_PREPARE;
+#if UE_VERSION_AT_LEAST(5, 3, 0)
+	UpscalerDesc.frameID = View->Family->FrameCounter;
+#else
+	UpscalerDesc.frameID = GFrameCounterRenderThread;
+#endif
+	UpscalerDesc.frameTimeDelta = View->Family->Time.GetDeltaWorldTimeSeconds() * 1000.f;
+	if (bool(ERHIZBuffer::IsInverted))
+	{
+		UpscalerDesc.cameraNear = FLT_MAX;
+		UpscalerDesc.cameraFar = CameraNear;
+	}
+	else
+	{
+		UpscalerDesc.cameraNear = CameraNear;
+		UpscalerDesc.cameraFar = FLT_MAX;
+	}
+	UpscalerDesc.cameraFovAngleVertical = CameraFOV;
+	UpscalerDesc.viewSpaceToMetersFactor = 1.f / View->WorldToMetersScale;
+
+	UpscalerDesc.jitterOffset.x = ((FViewInfo*)View)->TemporalJitterPixels.X;
+	UpscalerDesc.jitterOffset.y = ((FViewInfo*)View)->TemporalJitterPixels.Y;
+
+	UpscalerDesc.renderSize.width = InputExtents.X;
+	UpscalerDesc.renderSize.height = InputExtents.Y;
+	UpscalerDesc.motionVectorScale.x = InputExtents.X;
+	UpscalerDesc.motionVectorScale.y = InputExtents.Y;
+
+	FIntPoint MaxRenderSize = ((FViewInfo*)View)->GetSecondaryViewRectSize();
+
+	ffxCreateContextDescFrameGeneration FgDesc;
+	FMemory::Memzero(FgDesc);
+	FgDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_FRAMEGENERATION;
+	FgDesc.backBufferFormat = GetFFXApiFormat(BackBufferRDG->Desc.Format, false);
+	FgDesc.displaySize.width = FMath::Max((uint32)MaxRenderSize.X, (uint32)OutputExtents.X);
+	FgDesc.displaySize.height = FMath::Max((uint32)MaxRenderSize.Y, (uint32)OutputExtents.Y);
+	FgDesc.maxRenderSize.width = MaxRenderSize.X;
+	FgDesc.maxRenderSize.height = MaxRenderSize.Y;
+	FgDesc.flags |= (bool(ERHIZBuffer::IsInverted)) ? FFX_FRAMEGENERATION_ENABLE_DEPTH_INVERTED : 0;
+	FgDesc.flags |= FFX_FRAMEGENERATION_ENABLE_HIGH_DYNAMIC_RANGE | FFX_FRAMEGENERATION_ENABLE_DEPTH_INFINITE;
+	FgDesc.flags |= CVarFSR3AllowAsyncWorkloads.GetValueOnAnyThread() ? FFX_FRAMEGENERATION_ENABLE_ASYNC_WORKLOAD_SUPPORT : 0;
 
 	FRDGTextureRef ColorBuffer = FinalBuffer;
 	FRDGTextureRef InterBuffer = InterpolatedRDG;
 	FRDGTextureRef HudBuffer = nullptr;
-	FFXFIResourceRef Context = Presenter->UpdateContexts(GraphBuilder, ((FSceneViewState*)View->State)->UniqueID, UpscalerDesc, ViewportSizeXY, GetFFXFormat(BackBufferRDG->Desc.Format, false));
+	FFXFIResourceRef Context = Presenter->UpdateContexts(GraphBuilder, ((FSceneViewState*)View->State)->UniqueID, UpscalerDesc, FgDesc);
+
+	//------------------------------------------------------------------------------------------------------
+	// Consolidate Motion Vectors
+	//   UE motion vectors are in sparse format by default.  Convert them to a format consumable by FFX.
+	//------------------------------------------------------------------------------------------------------
+	if (!IsValidRef(Context->MotionVectorRT) || Context->MotionVectorRT->GetDesc().Extent.X != InputTextureExtents.X || Context->MotionVectorRT->GetDesc().Extent.Y != InputTextureExtents.Y)
+	{
+		FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(InputTextureExtents,
+			PF_G16R16F,
+			FClearValueBinding::Transparent,
+			TexCreate_ShaderResource | TexCreate_UAV,
+			TexCreate_ShaderResource | TexCreate_UAV | TexCreate_RenderTargetable,
+			false));
+		GRenderTargetPool.FindFreeElement(GraphBuilder.RHICmdList, Desc, Context->MotionVectorRT, TEXT("FFXFIMotionVectorTexture"));
+	}
+
+	FRDGTextureRef MotionVectorTexture = GraphBuilder.RegisterExternalTexture(Context->MotionVectorRT);
+	{
+		FFXFIConvertVelocityCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FFXFIConvertVelocityCS::FParameters>();
+		FRDGTextureUAVDesc OutputDesc(MotionVectorTexture);
+
+		FRDGTextureSRVDesc DepthDesc = FRDGTextureSRVDesc::Create(ViewDesc.SceneDepth);
+		FRDGTextureSRVDesc VelocityDesc = FRDGTextureSRVDesc::Create(ViewDesc.SceneVelocity);
+
+		PassParameters->DepthTexture = ViewDesc.SceneDepth;
+		PassParameters->InputDepth = GraphBuilder.CreateSRV(DepthDesc);
+		PassParameters->InputVelocity = GraphBuilder.CreateSRV(VelocityDesc);
+
+		PassParameters->View = ((FViewInfo*)View)->ViewUniformBuffer;
+
+		PassParameters->OutputTexture = GraphBuilder.CreateUAV(OutputDesc);
+
+		TShaderMapRef<FFXFIConvertVelocityCS> ComputeShaderFSR(((FViewInfo*)View)->ShaderMap);
+		FComputeShaderUtils::AddPass(
+			GraphBuilder,
+			RDG_EVENT_NAME("FidelityFX-FI/ConvertVelocity (CS)"),
+			ComputeShaderFSR,
+			PassParameters,
+			FComputeShaderUtils::GetGroupCount(FIntVector(ViewDesc.SceneDepth->Desc.Extent.X, ViewDesc.SceneDepth->Desc.Extent.Y, 1),
+				FIntVector(FFXFIConvertVelocityCS::ThreadgroupSizeX, FFXFIConvertVelocityCS::ThreadgroupSizeY, FFXFIConvertVelocityCS::ThreadgroupSizeZ))
+		);
+	}
 
 	if (Context->Desc.displaySize.width != ViewportSizeXY.X || Context->Desc.displaySize.height != ViewportSizeXY.Y)
 	{
@@ -368,122 +530,114 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 	PassParameters->HudTexture = HudBuffer;
 	PassParameters->InterpolatedRT = InterBuffer;
 	PassParameters->Interpolated = InterpolatedRDG;
+	PassParameters->SceneDepth = ViewDesc.SceneDepth;
+	PassParameters->MotionVectors = MotionVectorTexture;
 
-	float DeltaTimeMs = GameDeltaTime * 1000.f;
 	static const auto CVarHDRMinLuminanceLog10 = IConsoleManager::Get().FindTConsoleVariableDataFloat(TEXT("r.HDR.Display.MinLuminanceLog10"));
 	static const auto CVarHDRMaxLuminance = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.HDR.Display.MaxLuminance"));
 
 	float GHDRMinLuminnanceLog10 = CVarHDRMinLuminanceLog10 ? CVarHDRMinLuminanceLog10->GetValueOnAnyThread() : 0.f;
-	int32 GHDRMaxLuminnance = CVarHDRMinLuminanceLog10 ? CVarHDRMaxLuminance->GetValueOnAnyThread() : 1;
+	int32 GHDRMaxLuminnance = CVarHDRMaxLuminance ? CVarHDRMaxLuminance->GetValueOnAnyThread() : 1;
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 	EDisplayOutputFormat ViewportOutputFormat = Viewport->GetDisplayOutputFormat();
-
-	bool bAllowAsyncWorkloads = (CVarFSR3AllowAsyncWorkloads.GetValueOnAnyThread() != 0);
-	bool bShowDebugMode = false;
-#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT)
-	bShowDebugMode = CVarFFXFIShowDebugView.GetValueOnAnyThread() != 0;
-#endif
-
-	// compute how many VSync intervals interpolated and real frame should be displayed
-	FfxFrameInterpolationDispatchDescription* interpolateParams = new FfxFrameInterpolationDispatchDescription;
+#else
+	static const auto CVarHDROutputDevice = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.HDR.Display.OutputDevice"));
+	static const auto CVarHDROutputEnabled = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.HDR.EnableHDROutput"));
+	const EDisplayOutputFormat ViewportOutputFormat = (CVarHDROutputDevice && GRHISupportsHDROutput && (CVarHDROutputEnabled && CVarHDROutputEnabled->GetValueOnAnyThread() != 0)) ? EDisplayOutputFormat(CVarHDROutputDevice->GetValueOnAnyThread()) : EDisplayOutputFormat::SDR_sRGB;
+	if ((GHDRMaxLuminnance == 0) && (ViewportOutputFormat == EDisplayOutputFormat::HDR_ACES_1000nit_ST2084 || ViewportOutputFormat == EDisplayOutputFormat::HDR_ACES_2000nit_ST2084 || ViewportOutputFormat == EDisplayOutputFormat::HDR_ACES_1000nit_ScRGB || ViewportOutputFormat == EDisplayOutputFormat::HDR_ACES_2000nit_ScRGB))
 	{
-		interpolateParams->flags = 0;
-#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT)
-		interpolateParams->flags |= CVarFFXFIShowDebugTearLines.GetValueOnAnyThread() ? FFX_FRAMEINTERPOLATION_DISPATCH_DRAW_DEBUG_TEAR_LINES : 0;
-		interpolateParams->flags |= CVarFFXFIShowDebugView.GetValueOnAnyThread() ? FFX_FRAMEINTERPOLATION_DISPATCH_DRAW_DEBUG_VIEW : 0;
-#endif
-		interpolateParams->renderSize.width = InputExtents.X;
-		interpolateParams->renderSize.height = InputExtents.Y;
-		interpolateParams->displaySize.width = ColorBuffer->Desc.Extent.X;
-		interpolateParams->displaySize.height = ColorBuffer->Desc.Extent.Y;
-		interpolateParams->interpolationRect.left = 0;
-		interpolateParams->interpolationRect.top = 0;
-		interpolateParams->interpolationRect.width = interpolateParams->displaySize.width;
-		interpolateParams->interpolationRect.height = interpolateParams->displaySize.height;
-		interpolateParams->frameTimeDelta = DeltaTimeMs;
-		interpolateParams->reset = bReset;
-		interpolateParams->viewSpaceToMetersFactor = 1.f / View->WorldToMetersScale;
-
-		interpolateParams->opticalFlowBufferSize.width = interpolateParams->displaySize.width / s_opticalFlowBlockSize;
-		interpolateParams->opticalFlowBufferSize.height = interpolateParams->displaySize.height / s_opticalFlowBlockSize;
-		interpolateParams->opticalFlowScale = { 1.f / interpolateParams->displaySize.width, 1.f / interpolateParams->displaySize.height };
-		interpolateParams->opticalFlowBlockSize = s_opticalFlowBlockSize;
-
-		if (bool(ERHIZBuffer::IsInverted))
+		if (ViewportOutputFormat == EDisplayOutputFormat::HDR_ACES_1000nit_ST2084 || ViewportOutputFormat == EDisplayOutputFormat::HDR_ACES_1000nit_ScRGB)
 		{
-			interpolateParams->cameraNear = FLT_MAX;
-			interpolateParams->cameraFar = CameraNear;
+			GHDRMaxLuminnance = 1000;
 		}
 		else
 		{
-			interpolateParams->cameraNear = CameraNear;
-			interpolateParams->cameraFar = FLT_MAX;
+			GHDRMaxLuminnance = 2000;
 		}
-		interpolateParams->cameraFovAngleVertical = CameraFOV;
-		interpolateParams->dilatedDepth = SharedResources.dilatedDepth.Resource;
-		interpolateParams->dilatedMotionVectors = SharedResources.dilatedMotionVectors.Resource;
-		interpolateParams->reconstructPrevNearDepth = SharedResources.reconstructedPrevNearestDepth.Resource;
 	}
+#endif
+
+	// compute how many VSync intervals interpolated and real frame should be displayed
+	ffxDispatchDescFrameGeneration* interpolateParams = new ffxDispatchDescFrameGeneration;
+	{
+		interpolateParams->header.type = FFX_API_DISPATCH_DESC_TYPE_FRAMEGENERATION;
+		interpolateParams->header.pNext = nullptr;
+		interpolateParams->numGeneratedFrames = 1;
+#if UE_VERSION_AT_LEAST(5, 3, 0)
+		interpolateParams->frameID = View->Family->FrameCounter;
+#else
+		interpolateParams->frameID = GFrameCounterRenderThread;
+#endif
+    	interpolateParams->backbufferTransferFunction = GetFfxTransferFunction(ViewportOutputFormat);
+		interpolateParams->generationRect = {0 ,0, (int32_t)Context->Desc.displaySize.width, (int32_t)Context->Desc.displaySize.height};
+		interpolateParams->reset = bReset;
+
+		interpolateParams->minMaxLuminance[0] = interpolateParams->backbufferTransferFunction != FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? FMath::Pow(10, GHDRMinLuminnanceLog10) : 0.f;
+		interpolateParams->minMaxLuminance[1] = interpolateParams->backbufferTransferFunction != FFX_API_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? GHDRMaxLuminnance : 1.f;
+	}
+
+	auto DisplaySize = ColorBuffer->Desc.Extent;
+	bool const bOverrideSwapChain = ((CVarFSR3OverrideSwapChainDX12.GetValueOnAnyThread() != 0) || FParse::Param(FCommandLine::Get(), TEXT("fsr3swapchain")));
+
+	ffxConfigureDescFrameGeneration ConfigDesc;
+	FMemory::Memzero(ConfigDesc);
+	ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+	ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(ViewportRHI->GetNativeSwapChain());
+	ConfigDesc.frameGenerationEnabled = true;
+	ConfigDesc.allowAsyncWorkloads = (CVarFSR3AllowAsyncWorkloads.GetValueOnAnyThread() != 0);
+	ConfigDesc.generationRect = interpolateParams->generationRect;
+	ConfigDesc.frameID = interpolateParams->frameID;
+	ConfigDesc.flags |= bOverrideSwapChain ? 0 : FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY;
+#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT || UE_BUILD_TEST)
+	ConfigDesc.flags |= CVarFFXFIShowDebugTearLines.GetValueOnAnyThread() ? FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_TEAR_LINES : 0;
+	ConfigDesc.flags |= CVarFFXFIShowDebugView.GetValueOnAnyThread() ? FFX_FRAMEGENERATION_FLAG_DRAW_DEBUG_VIEW : 0;
+#endif
 
 	if (Presenter->GetBackend()->GetAPI() == EFFXBackendAPI::Unreal)
 	{
 		bInterpolated = true;
-		interpolateParams->currentBackBuffer = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_RESOURCE_STATE_COPY_DEST);
-		FMemory::Memzero(interpolateParams->currentBackBuffer_HUDLess);
+		interpolateParams->presentColor = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_API_RESOURCE_STATE_COPY_DEST);
 
-		Presenter->GetBackend()->SetFeatureLevel(Presenter->GetInterface(), View->GetFeatureLevel());
+		Presenter->GetBackend()->SetFeatureLevel(&Context->Context, View->GetFeatureLevel());
 
-		GraphBuilder.AddPass(RDG_EVENT_NAME("FidelityFX-FrameInterpolation"), PassParameters, ERDGPassFlags::Compute | ERDGPassFlags::NeverCull | ERDGPassFlags::Copy, [Presenter, PassParameters, interpolateParams, DeltaTimeMs, ViewportRHI, bAllowAsyncWorkloads, bShowDebugMode](FRHICommandListImmediate& RHICmdList)
+		GraphBuilder.AddPass(RDG_EVENT_NAME("FidelityFX-FrameInterpolation"), PassParameters, ERDGPassFlags::Compute | ERDGPassFlags::NeverCull | ERDGPassFlags::Copy, [Presenter, PassParameters, Context, ConfigDesc](FRHICommandListImmediate& RHICmdList)
 		{
 			PassParameters->ColorTexture->MarkResourceAsUsed();
 			PassParameters->InterpolatedRT->MarkResourceAsUsed();
+			PassParameters->SceneDepth->MarkResourceAsUsed();
+			PassParameters->MotionVectors->MarkResourceAsUsed();
 
 			Presenter->SetCustomPresentStatus(FFXFrameInterpolationCustomPresentStatus::InterpolateRT);
-			RHICmdList.EnqueueLambda([Presenter, ViewportRHI, bAllowAsyncWorkloads, bShowDebugMode](FRHICommandListImmediate& cmd) mutable
+			RHICmdList.EnqueueLambda([Presenter, Context, ConfigDesc](FRHICommandListImmediate& cmd) mutable
 			{
-				Presenter->GetBackend()->UpdateSwapChain(Presenter->GetInterface(), ViewportRHI->GetNativeSwapChain(), true, bAllowAsyncWorkloads, bShowDebugMode);
+				Presenter->GetBackend()->UpdateSwapChain(&Context->Context, ConfigDesc);
 				Presenter->SetCustomPresentStatus(FFXFrameInterpolationCustomPresentStatus::InterpolateRHI);
 			});
 		});
 
-		{
-			FfxOpticalflowDispatchDescription ofDispatchDesc{};
-			ofDispatchDesc.commandList = Presenter->GetBackend()->GetCommandList(&GraphBuilder);
-			ofDispatchDesc.color = interpolateParams->currentBackBuffer;
-			ofDispatchDesc.reset = interpolateParams->reset;
-			ofDispatchDesc.opticalFlowVector = Context->OpticalFlowResources.opticalFlow.Resource;
-			ofDispatchDesc.opticalFlowSCD = Context->OpticalFlowResources.opticalFlowSCD.Resource;
-    		ofDispatchDesc.backbufferTransferFunction = GetFfxTransferFunction(ViewportOutputFormat);
-    		ofDispatchDesc.minMaxLuminance.x = ofDispatchDesc.backbufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? FMath::Pow(10, GHDRMinLuminnanceLog10) : 0.f;
-    		ofDispatchDesc.minMaxLuminance.y = ofDispatchDesc.backbufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? GHDRMaxLuminnance : 1.0f;
-
-			FfxErrorCode Code = ffxOpticalflowContextDispatch(&Context->OpticalFlowContext, &ofDispatchDesc);
-			check(Code == FFX_OK);
-		}
-
 		// Interpolate the frame
 		{
-			interpolateParams->commandList = Presenter->GetBackend()->GetCommandList(&GraphBuilder);
+			interpolateParams->commandList = (void*)&GraphBuilder;
+			interpolateParams->outputs[0] = Presenter->GetBackend()->GetNativeResource(PassParameters->InterpolatedRT, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			FfxResource InterpolatedRes = Presenter->GetBackend()->GetNativeResource(PassParameters->InterpolatedRT, FFX_RESOURCE_STATE_UNORDERED_ACCESS);
-			interpolateParams->output = InterpolatedRes;
+			UpscalerDesc.commandList = interpolateParams->commandList;
+			UpscalerDesc.depth = Presenter->GetBackend()->GetNativeResource(PassParameters->SceneDepth, FFX_API_RESOURCE_STATE_COMPUTE_READ);
+			UpscalerDesc.motionVectors = Presenter->GetBackend()->GetNativeResource(PassParameters->MotionVectors, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
 
-			interpolateParams->opticalFlowVector = Context->OpticalFlowResources.opticalFlow.Resource;
-			interpolateParams->opticalFlowSceneChangeDetection = Context->OpticalFlowResources.opticalFlowSCD.Resource;
-    		interpolateParams->backBufferTransferFunction = GetFfxTransferFunction(ViewportOutputFormat);
-    		interpolateParams->minMaxLuminance[0] = interpolateParams->backBufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? FMath::Pow(10, GHDRMinLuminnanceLog10) : 0.f;
-    		interpolateParams->minMaxLuminance[1] = interpolateParams->backBufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? GHDRMaxLuminnance : 1.f;
+			auto Code = Presenter->GetBackend()->ffxDispatch(&Context->Context, &UpscalerDesc.header);
+			check(Code == FFX_API_RETURN_OK);
 
-			FfxErrorCode Code = ffxFrameInterpolationDispatch(&Context->Context, interpolateParams);
-			check(Code == FFX_OK);
+			Code = Presenter->GetBackend()->ffxDispatch(&Context->Context, &interpolateParams->header);
+			check(Code == FFX_API_RETURN_OK);
 
-			Info.Size.X = interpolateParams->displaySize.width;
-			Info.Size.Y = interpolateParams->displaySize.height;
+			Info.Size.X = DisplaySize.X;
+			Info.Size.Y = DisplaySize.Y;
 			if (PassParameters->Interpolated != PassParameters->InterpolatedRT)
 			{
 				Info.DestPosition.X = OutputPoint.X;
 				Info.DestPosition.Y = OutputPoint.Y;
-				Info.Size.X = FMath::Min((uint32)interpolateParams->displaySize.width, (uint32)PassParameters->Interpolated->Desc.Extent.X);
-				Info.Size.Y = FMath::Min((uint32)interpolateParams->displaySize.height, (uint32)PassParameters->Interpolated->Desc.Extent.Y);
+				Info.Size.X = FMath::Min((uint32)DisplaySize.X, (uint32)PassParameters->Interpolated->Desc.Extent.X);
+				Info.Size.Y = FMath::Min((uint32)DisplaySize.Y, (uint32)PassParameters->Interpolated->Desc.Extent.Y);
 				AddCopyTexturePass(GraphBuilder, PassParameters->InterpolatedRT, PassParameters->Interpolated, Info);
 				AddCopyTexturePass(GraphBuilder, PassParameters->InterpolatedRT, BackBufferRDG, Info);
 			}
@@ -500,7 +654,7 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 	else if (!bResized)
 	{
 		bInterpolated = true;
-		GraphBuilder.AddPass(RDG_EVENT_NAME("FidelityFX-FrameInterpolation"), PassParameters, ERDGPassFlags::Compute | ERDGPassFlags::NeverCull | ERDGPassFlags::Copy, [FSRContext, OutputExtents, OutputPoint, ViewportRHI, Presenter, Context, PassParameters, interpolateParams, DeltaTimeMs, Engine, ViewportOutputFormat, GHDRMinLuminnanceLog10, GHDRMaxLuminnance, bAllowAsyncWorkloads, bShowDebugMode](FRHICommandListImmediate& RHICmdList)
+		GraphBuilder.AddPass(RDG_EVENT_NAME("FidelityFX-FrameInterpolation"), PassParameters, ERDGPassFlags::Compute | ERDGPassFlags::NeverCull | ERDGPassFlags::Copy, [InterpolateIndex, UpscalerDesc, ConfigDesc, OutputExtents, OutputPoint, ViewportRHI, Presenter, Context, PassParameters, interpolateParams, DeltaTimeMs, Engine, ViewportOutputFormat, GHDRMinLuminnanceLog10, GHDRMaxLuminnance](FRHICommandListImmediate& RHICmdList)
 		{
 			PassParameters->ColorTexture->MarkResourceAsUsed();
 			PassParameters->InterpolatedRT->MarkResourceAsUsed();
@@ -508,29 +662,45 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 			{
 				PassParameters->HudTexture->MarkResourceAsUsed();
 			}
+			PassParameters->SceneDepth->MarkResourceAsUsed();
+			PassParameters->MotionVectors->MarkResourceAsUsed();
 
 			bool const bWholeScreen = (PassParameters->Interpolated.GetTexture() == PassParameters->InterpolatedRT.GetTexture());
+			ffxConfigureDescFrameGeneration ConfigureDesc = ConfigDesc;
 
 			if (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative)
 			{
-				interpolateParams->currentBackBuffer_HUDLess = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_RESOURCE_STATE_COPY_DEST);
-				interpolateParams->currentBackBuffer = Presenter->GetBackend()->GetNativeResource(bWholeScreen ? PassParameters->BackBufferTexture.GetTexture() : PassParameters->HudTexture.GetTexture(), bWholeScreen ? FFX_RESOURCE_STATE_PRESENT : FFX_RESOURCE_STATE_COPY_DEST);
+				ConfigureDesc.HUDLessColor = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_API_RESOURCE_STATE_COPY_DEST);
+				interpolateParams->presentColor = Presenter->GetBackend()->GetNativeResource(bWholeScreen ? PassParameters->BackBufferTexture.GetTexture() : PassParameters->HudTexture.GetTexture(), bWholeScreen ? FFX_API_RESOURCE_STATE_PRESENT : FFX_API_RESOURCE_STATE_COPY_DEST);
 			}
 			else
 			{
-				FMemory::Memzero(interpolateParams->currentBackBuffer_HUDLess);
-				interpolateParams->currentBackBuffer = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_RESOURCE_STATE_COPY_DEST);
+				interpolateParams->presentColor = Presenter->GetBackend()->GetNativeResource(PassParameters->ColorTexture, FFX_API_RESOURCE_STATE_COPY_DEST);
 			}
 
-			FfxResource InterpolatedRes = Presenter->GetBackend()->GetNativeResource(PassParameters->InterpolatedRT, FFX_RESOURCE_STATE_UNORDERED_ACCESS);
-			Presenter->SetCustomPresentStatus(Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative ? FFXFrameInterpolationCustomPresentStatus::PresentRT : FFXFrameInterpolationCustomPresentStatus::InterpolateRT);
-			RHICmdList.EnqueueLambda([ViewportRHI, Presenter, FSRContext, Context, InterpolatedRes, interpolateParams, OutputExtents, OutputPoint, bWholeScreen, ViewportOutputFormat, GHDRMinLuminnanceLog10, GHDRMaxLuminnance, bAllowAsyncWorkloads, bShowDebugMode](FRHICommandListImmediate& cmd) mutable
+			if (InterpolateIndex != 0)
 			{
-				Presenter->GetBackend()->UpdateSwapChain(Presenter->GetInterface(), ViewportRHI->GetNativeSwapChain(), true, bAllowAsyncWorkloads, bShowDebugMode);
+				ConfigureDesc.swapChain = nullptr;
+				ConfigureDesc.presentCallback = nullptr;
+				ConfigureDesc.presentCallbackUserContext = nullptr;
+				ConfigureDesc.frameGenerationCallback = nullptr;
+				ConfigureDesc.frameGenerationCallbackUserContext = nullptr;
+				ConfigureDesc.flags |= FFX_FRAMEGENERATION_FLAG_NO_SWAPCHAIN_CONTEXT_NOTIFY;
+			}
+
+			ffxDispatchDescFrameGenerationPrepare PrepareDesc = UpscalerDesc;
+			PrepareDesc.depth = Presenter->GetBackend()->GetNativeResource(PassParameters->SceneDepth, FFX_API_RESOURCE_STATE_COMPUTE_READ);
+			PrepareDesc.motionVectors = Presenter->GetBackend()->GetNativeResource(PassParameters->MotionVectors, FFX_API_RESOURCE_STATE_UNORDERED_ACCESS);
+
+			auto InterpolatedRes = Presenter->GetBackend()->GetNativeResource(PassParameters->InterpolatedRT, Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative || !bWholeScreen || InterpolateIndex == 0 ? FFX_API_RESOURCE_STATE_UNORDERED_ACCESS : FFX_API_RESOURCE_STATE_COPY_SRC);
+			Presenter->SetCustomPresentStatus(Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative ? FFXFrameInterpolationCustomPresentStatus::PresentRT : FFXFrameInterpolationCustomPresentStatus::InterpolateRT);
+			RHICmdList.EnqueueLambda([PrepareDesc, ConfigureDesc, ViewportRHI, Presenter, Context, InterpolatedRes, interpolateParams, OutputExtents, OutputPoint, bWholeScreen, ViewportOutputFormat, GHDRMinLuminnanceLog10, GHDRMaxLuminnance](FRHICommandListImmediate& cmd) mutable
+			{
+				Presenter->GetBackend()->UpdateSwapChain(&Context->Context, ConfigureDesc);
 				Presenter->SetCustomPresentStatus(Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative ? FFXFrameInterpolationCustomPresentStatus::PresentRHI : FFXFrameInterpolationCustomPresentStatus::InterpolateRHI);
-				if (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative)
+				if ((Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative) || Presenter->GetUseFFXSwapchain())
 				{
-					Presenter->GetBackend()->RegisterFrameResources(Context.GetReference(), FSRContext.GetReference());
+					Presenter->GetBackend()->RegisterFrameResources(Context.GetReference(), ConfigureDesc.frameID);
 				}
 				
 				FfxCommandList CmdBuffer = nullptr;
@@ -548,35 +718,23 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 				}
 				if (CmdBuffer)
 				{
+					// Prepare the interpolation context on the current RHI command list
 					{
-						FfxOpticalflowDispatchDescription ofDispatchDesc{};
-						ofDispatchDesc.commandList = CmdBuffer;
-						ofDispatchDesc.color = interpolateParams->currentBackBuffer_HUDLess.resource ? interpolateParams->currentBackBuffer_HUDLess : interpolateParams->currentBackBuffer;
-						ofDispatchDesc.reset = interpolateParams->reset;
-						ofDispatchDesc.opticalFlowVector = Context->OpticalFlowResources.opticalFlow.Resource;
-						ofDispatchDesc.opticalFlowSCD = Context->OpticalFlowResources.opticalFlowSCD.Resource;
-    					ofDispatchDesc.backbufferTransferFunction = GetFfxTransferFunction(ViewportOutputFormat);
-						ofDispatchDesc.minMaxLuminance.x = ofDispatchDesc.backbufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? FMath::Pow(10, GHDRMinLuminnanceLog10) : 0.f;
-						ofDispatchDesc.minMaxLuminance.y = ofDispatchDesc.backbufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? GHDRMaxLuminnance : 1.f;
+						ffxDispatchDescFrameGenerationPrepare UpscalerDesc = PrepareDesc;
+						UpscalerDesc.commandList = Presenter->GetBackend()->GetNativeCommandBuffer(cmd);
 
-						FfxErrorCode Code = ffxOpticalflowContextDispatch(&Context->OpticalFlowContext, &ofDispatchDesc);
-						check(Code == FFX_OK);
+						auto Code = Presenter->GetBackend()->ffxDispatch(&Context->Context, &UpscalerDesc.header);
+						check(Code == FFX_API_RETURN_OK);
 					}
 
 					// Interpolate the frame
 					{
-						FfxResource OutputRes = Presenter->GetBackend()->GetInterpolationOutput(Presenter->GetBackend()->GetSwapchain(ViewportRHI->GetNativeSwapChain()));
-						interpolateParams->output = (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative && bWholeScreen) ? OutputRes : InterpolatedRes;
+						FfxApiResource OutputRes = Presenter->GetBackend()->GetInterpolationOutput(Presenter->GetBackend()->GetSwapchain(ViewportRHI->GetNativeSwapChain()));
+						interpolateParams->outputs[0] = (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative && bWholeScreen) ? OutputRes : InterpolatedRes;
 						interpolateParams->commandList = CmdBuffer;
 
-						interpolateParams->opticalFlowVector = Context->OpticalFlowResources.opticalFlow.Resource;
-						interpolateParams->opticalFlowSceneChangeDetection = Context->OpticalFlowResources.opticalFlowSCD.Resource;
-						interpolateParams->backBufferTransferFunction = GetFfxTransferFunction(ViewportOutputFormat);
-						interpolateParams->minMaxLuminance[0] = interpolateParams->backBufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? FMath::Pow(10, GHDRMinLuminnanceLog10) : 0.f;
-						interpolateParams->minMaxLuminance[1] = interpolateParams->backBufferTransferFunction != FFX_BACKBUFFER_TRANSFER_FUNCTION_SRGB ? GHDRMaxLuminnance : 1.f;
-
-						FfxErrorCode Code = ffxFrameInterpolationDispatch(&Context->Context, interpolateParams);
-						check(Code == FFX_OK);
+						auto Code = Presenter->GetBackend()->ffxDispatch(&Context->Context, &interpolateParams->header);
+						check(Code == FFX_API_RETURN_OK);
 
                         if (!bWholeScreen && (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative))
                         {
@@ -588,12 +746,11 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 			});
 
 			RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
+#if UE_VERSION_OLDER_THAN(5, 1, 0)
+			RHICmdList.SubmitCommandsHint();
+#endif
 
-			if (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative)
-			{
-				FSRContext->AdvanceIndex();
-			}
-			else
+			if (Presenter->GetMode() != EFFXFrameInterpolationPresentModeNative)
 			{
 #if UE_VERSION_AT_LEAST(5, 2, 0)
 				FTexture2DRHIRef BackBuffer = RHIGetViewportBackBuffer(ViewportRHI);
@@ -608,18 +765,18 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 					CopyInfo.DestPosition.Y = OutputPoint.Y;
 					CopyInfo.Size.X = OutputExtents.X;
 					CopyInfo.Size.Y = OutputExtents.Y;
-					FTexture2DRHIRef InterpolatedFrame = PassParameters->InterpolatedRT->GetRHI();
+					FTextureRHIRef InterpolatedFrame = PassParameters->InterpolatedRT->GetRHI();
 					TransitionAndCopyTexture(RHICmdList, InterpolatedFrame, PassParameters->Interpolated->GetRHI(), CopyInfo);
 					if (Presenter->GetMode() == EFFXFrameInterpolationPresentModeRHI)
 					{
-						check(PassParameters->Interpolated->Desc.Extent == BackBuffer->GetDesc().Extent);
+						check(PassParameters->Interpolated->Desc.Extent == FIntPoint(BackBuffer->GetSizeXYZ().X, BackBuffer->GetSizeXYZ().Y));
 						TransitionAndCopyTexture(RHICmdList, InterpolatedFrame, BackBuffer, CopyInfo);
 					}
 				}
 				else
 				{
-					FTexture2DRHIRef InterpolatedFrame = PassParameters->InterpolatedRT->GetRHI();
-					check(InterpolatedFrame->GetDesc().Extent == BackBuffer->GetDesc().Extent);
+					FTextureRHIRef InterpolatedFrame = PassParameters->InterpolatedRT->GetRHI();
+					check(FIntPoint(InterpolatedFrame->GetSizeXYZ().X, InterpolatedFrame->GetSizeXYZ().Y) == FIntPoint(BackBuffer->GetSizeXYZ().X, BackBuffer->GetSizeXYZ().Y));
 					TransitionAndCopyTexture(RHICmdList, InterpolatedFrame, BackBuffer, {});
 				}
 			}
@@ -631,14 +788,13 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 
 void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 {
-	static const auto CVarFSR3Enabled = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.FidelityFX.FSR3.Enabled"));
 	auto* Engine = GEngine;
 	auto GameViewport = Engine ? Engine->GameViewport : nullptr;
 	auto Viewport = GameViewport ? GameViewport->Viewport : nullptr;
 	auto ViewportRHI = Viewport ? Viewport->GetViewportRHI() : nullptr;
 	FIntPoint ViewportSizeXY = Viewport ? Viewport->GetSizeXY() : FIntPoint::ZeroValue;
 	FFXFrameInterpolationCustomPresent* Presenter = ViewportRHI.IsValid() ? (FFXFrameInterpolationCustomPresent*)ViewportRHI->GetCustomPresent() : nullptr;
-	bool bAllowed = CVarEnableFFXFI.GetValueOnAnyThread() != 0 && Presenter && (CVarFSR3Enabled && CVarFSR3Enabled->GetValueOnAnyThread() != 0);
+	bool bAllowed = CVarEnableFFXFI.GetValueOnAnyThread() != 0 && Presenter;
 #if WITH_EDITORONLY_DATA
 	bAllowed &= !GIsEditor;
 #endif
@@ -650,7 +806,7 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 		if (!IsValidRef(BackBufferRT) || BackBufferRT->GetDesc().Extent.X != BackBufferRDG->Desc.Extent.X || BackBufferRT->GetDesc().Extent.Y != BackBufferRDG->Desc.Extent.Y || BackBufferRT->GetDesc().Format != BackBufferRDG->Desc.Format)
 		{
 			FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(FIntPoint(BackBufferRDG->Desc.Extent.X, BackBufferRDG->Desc.Extent.Y),
-				BackBuffer->GetDesc().Format,
+				BackBuffer->GetFormat(),
 				FClearValueBinding::Transparent,
 				TexCreate_UAV,
 				TexCreate_UAV | TexCreate_ShaderResource,
@@ -665,7 +821,7 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 		if ((Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative) && (!IsValidRef(AsyncBufferRT[0]) || AsyncBufferRT[0]->GetDesc().Extent.X != BackBufferRDG->Desc.Extent.X || AsyncBufferRT[0]->GetDesc().Extent.Y != BackBufferRDG->Desc.Extent.Y || AsyncBufferRT[0]->GetDesc().Format != BackBufferRDG->Desc.Format))
 		{
 			FPooledRenderTargetDesc Desc(FPooledRenderTargetDesc::Create2DDesc(FIntPoint(BackBufferRDG->Desc.Extent.X, BackBufferRDG->Desc.Extent.Y),
-				BackBuffer->GetDesc().Format,
+				BackBuffer->GetFormat(),
 				FClearValueBinding::Transparent,
 				TexCreate_UAV,
 				TexCreate_UAV | TexCreate_ShaderResource,
@@ -694,25 +850,25 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 			AddCopyTexturePass(GraphBuilder, BackBufferRDG, AsyncBuffer, Info);
 			FinalBuffer = AsyncBuffer;
 			Index = (Index + 1) % 2;
+
+			// Reset the state if the present counter falls behind the interpolation, this ensures that textures will get cleared before first use
+			ResetState = (PresentCount >= InterpolationCount) ? ResetState : 0u;
 		}
 
 		FRDGTextureUAVDesc Interpolatedesc(InterpolatedRDG);
 		AddClearUAVPass(GraphBuilder, GraphBuilder.CreateUAV(Interpolatedesc), FVector::ZeroVector);
 
 		bAllowed = false;
+		uint32 InterpolateIndex = 0;
 		for (auto Pair : Views)
 		{
 			if (Pair.Key->State)
 			{
-#if UE_VERSION_AT_LEAST(5, 3, 0)
-				TRefCountPtr<IFFXFSR3CustomTemporalAAHistory> CustomTemporalAAHistory = (((FSceneViewState*)Pair.Key->State)->PrevFrameViewInfo.ThirdPartyTemporalUpscalerHistory);
-#else
-				TRefCountPtr<IFFXFSR3CustomTemporalAAHistory> CustomTemporalAAHistory = (((FSceneViewState*)Pair.Key->State)->PrevFrameViewInfo.CustomTemporalAAHistory);
-#endif
-				TRefCountPtr<IFFXFSR3History> FSRContext = (IFFXFSR3History*)(CustomTemporalAAHistory.GetReference());
-				if ((Pair.Key->Family->GetTemporalUpscalerInterface() && Pair.Key->Family->GetTemporalUpscalerInterface()->GetDebugName() == FString(TEXT("FFXFSR3TemporalUpscaler"))) && Pair.Value.bEnabled && Pair.Value.ViewFamilyTexture && FSRContext.IsValid() && (ViewportSizeXY.X == Pair.Value.ViewFamilyTexture->Desc.Extent.X) && (ViewportSizeXY.Y == Pair.Value.ViewFamilyTexture->Desc.Extent.Y))
+				if ((Pair.Key->Family->GetTemporalUpscalerInterface() && Pair.Key->Family->GetTemporalUpscalerInterface()->GetDebugName() == FString(TEXT("FFXFSR3TemporalUpscaler"))) && Pair.Value.bEnabled && Pair.Value.ViewFamilyTexture && (ViewportSizeXY.X == Pair.Value.ViewFamilyTexture->Desc.Extent.X) && (ViewportSizeXY.Y == Pair.Value.ViewFamilyTexture->Desc.Extent.Y))
 				{
-					bAllowed |= InterpolateView(GraphBuilder, Presenter, Pair.Key, Pair.Value, FinalBuffer, InterpolatedRDG, BackBufferRDG);
+					bool const bInterpolated = InterpolateView(GraphBuilder, Presenter, Pair.Key, Pair.Value, FinalBuffer, InterpolatedRDG, BackBufferRDG, InterpolateIndex);
+					InterpolateIndex = bInterpolated ? InterpolateIndex +1 : InterpolateIndex;
+					bAllowed |= bInterpolated;
 				}
 			}
 		}
@@ -743,7 +899,14 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 			Presenter->SetEnabled(false);
 			if (Presenter->GetContext())
 			{
-				Presenter->GetBackend()->UpdateSwapChain(Presenter->GetInterface(), ViewportRHI->GetNativeSwapChain(), false, false, false);
+				ffxConfigureDescFrameGeneration ConfigDesc;
+				FMemory::Memzero(ConfigDesc);
+				ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+				ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(ViewportRHI->GetNativeSwapChain());
+				ConfigDesc.frameGenerationEnabled = false;
+				ConfigDesc.allowAsyncWorkloads = false;
+
+				Presenter->GetBackend()->UpdateSwapChain(Presenter->GetContext(), ConfigDesc);
 			}
 		}
 	}
@@ -751,6 +914,9 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 	bInterpolatedFrame = bAllowed;
 	if (Presenter && Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative)
 	{
+		// If the present count fell behind reset it - otherwise it will persist indefinitely
+		PresentCount = (PresentCount >= InterpolationCount) ? PresentCount : (InterpolationCount + (bAllowed ? 1llu : 0llu));
+		InterpolationCount += bAllowed ? 1llu : 0llu;
 		ResetState = bAllowed ? 1u : 0u;
 	}
 	else
@@ -761,13 +927,12 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 
 void FFXFrameInterpolation::OnSlateWindowRendered(SWindow& SlateWindow, void* ViewportRHIPtr)
 {
-	static const auto CVarFSR3Enabled = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.FidelityFX.FSR3.Enabled"));
     static bool bProcessing = false;
 
 	FViewportRHIRef Viewport = *((FViewportRHIRef*)ViewportRHIPtr);
 	FFXFrameInterpolationCustomPresent* PresentHandler = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
 
-	if (IsInGameThread() && PresentHandler && PresentHandler->Enabled() && CVarEnableFFXFI.GetValueOnAnyThread() && (CVarFSR3Enabled && CVarFSR3Enabled->GetValueOnAnyThread() != 0))
+	if (IsInGameThread() && PresentHandler && PresentHandler->Enabled() && CVarEnableFFXFI.GetValueOnAnyThread())
 	{
 		if (!bProcessing)
 		{
@@ -788,7 +953,7 @@ void FFXFrameInterpolation::OnSlateWindowRendered(SWindow& SlateWindow, void* Vi
 			Windows.Add(&SlateWindow, Viewport.GetReference());
 
 			bool bDrawDebugView = false;
-#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT)
+#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT || UE_BUILD_TEST)
 			bDrawDebugView = CVarFFXFIShowDebugView.GetValueOnAnyThread() != 0;
 #endif
 
@@ -806,9 +971,9 @@ void FFXFrameInterpolation::OnSlateWindowRendered(SWindow& SlateWindow, void* Vi
 						if (Presenter && BackBufferRT.IsValid())
 						{
 							this->CalculateFPSTimings();
-							FTexture2DRHIRef InterpolatedFrame = BackBufferRT->GetRHI();
+							FTextureRHIRef InterpolatedFrame = BackBufferRT->GetRHI();
 							RHICmdList.PushEvent(TEXT("FFXFrameInterpolation::OnSlateWindowRendered"), FColor::White);
-							check(InterpolatedFrame->GetDesc().Extent == BackBuffer->GetDesc().Extent);
+							check(FIntPoint(InterpolatedFrame->GetSizeXYZ().X, InterpolatedFrame->GetSizeXYZ().Y) == FIntPoint(BackBuffer->GetSizeXYZ().X, BackBuffer->GetSizeXYZ().Y));
 							TransitionAndCopyTexture(RHICmdList, InterpolatedFrame, BackBuffer, {});
 							RHICmdList.PopEvent();
 
@@ -820,7 +985,23 @@ void FFXFrameInterpolation::OnSlateWindowRendered(SWindow& SlateWindow, void* Vi
 						}
 				});
 
+				double OldLastTickTime = 0.0;
+				bool const bModifySlateDeltaTime = (CVarFFXFIModifySlateDeltaTime.GetValueOnAnyThread() != 0);
+				if (bModifySlateDeltaTime)
+				{
+					OldLastTickTime = ((FFXFISlateApplication&)App).LastTickTime;
+					((FFXFISlateApplication&)App).LastTickTime = (((FFXFISlateApplication&)App).CurrentTime);
+				}
+
+				// If we hold on to this and the viewport resizes during redrawing then bad things will happen.
+				Viewport.SafeRelease();
+
 				App.ForceRedrawWindow(WindowPtr.ToSharedRef());
+				
+				if (bModifySlateDeltaTime)
+				{
+					((FFXFISlateApplication&)App).LastTickTime = OldLastTickTime;
+				}
 			}
 			bProcessing = false;
 		}
@@ -845,17 +1026,17 @@ void FFXFrameInterpolation::OnSlateWindowRendered(SWindow& SlateWindow, void* Vi
 
 void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& SlateWindow, const FTexture2DRHIRef& BackBuffer)
 {
-	static const auto CVarFSR3Enabled = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.FidelityFX.FSR3.Enabled"));
     /** Callback for when a backbuffer is ready for reading (called on render thread) */
 	FRHIViewport** ViewportPtr = Windows.Find(&SlateWindow);
-    if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread() && (CVarFSR3Enabled && CVarFSR3Enabled->GetValueOnAnyThread() != 0))
+    if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread())
     {
         FViewportRHIRef Viewport = *ViewportPtr;
         FFXFrameInterpolationCustomPresent* Presenter = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
 
-		if (ResetState)
+		if (Presenter)
 		{
-			if (Presenter)
+			PresentCount += (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative) ? 1llu : 0llu;
+			if (ResetState)
 			{
 				Presenter->CopyBackBufferRT(BackBuffer);
 			}
@@ -867,7 +1048,7 @@ void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& Sl
 
 	if (ResetState == 0)
 	{
-		if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread() && (CVarFSR3Enabled && CVarFSR3Enabled->GetValueOnAnyThread() != 0))
+		if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread())
 		{
 			FViewportRHIRef Viewport = *ViewportPtr;
 			FFXFrameInterpolationCustomPresent* Presenter = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
@@ -876,7 +1057,14 @@ void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& Sl
 				Presenter->SetEnabled(false);
 				if (Presenter->GetContext())
 				{
-					Presenter->GetBackend()->UpdateSwapChain(Presenter->GetInterface(), Viewport->GetNativeSwapChain(), false, false, false);
+					ffxConfigureDescFrameGeneration ConfigDesc;
+					FMemory::Memzero(ConfigDesc);
+					ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+					ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(Viewport->GetNativeSwapChain());
+					ConfigDesc.frameGenerationEnabled = false;
+					ConfigDesc.allowAsyncWorkloads = false;
+
+					Presenter->GetBackend()->UpdateSwapChain(Presenter->GetContext(), ConfigDesc);
 				}
 			}
 		}

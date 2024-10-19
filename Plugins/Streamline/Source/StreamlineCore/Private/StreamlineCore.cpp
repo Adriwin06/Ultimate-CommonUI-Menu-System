@@ -81,7 +81,23 @@ void FStreamlineCoreModule::StartupModule()
 	if (GetPlatformStreamlineSupport() == EStreamlineSupport::Supported)
 	{
 		// set the view family extension that's gonna call into SL in the postprocessing pass
-		StreamlineViewExtension = FSceneViewExtensions::NewExtension<FStreamlineViewExtension>(GetStreamlineRHI());
+		bool bShouldCreateViewExtension = IsStreamlineDLSSGSupported() || IsStreamlineDeepDVCSupported();
+		if (FParse::Param(FCommandLine::Get(), TEXT("slviewextension")))
+		{
+			bShouldCreateViewExtension = true;
+		}
+		if (FParse::Param(FCommandLine::Get(), TEXT("slnoviewextension")))
+		{
+			bShouldCreateViewExtension = false;
+		}
+		if (bShouldCreateViewExtension)
+		{
+			StreamlineViewExtension = FSceneViewExtensions::NewExtension<FStreamlineViewExtension>(GetStreamlineRHI());
+		}
+		else
+		{
+			StreamlineViewExtension = nullptr;
+		}
 		
 		RegisterStreamlineReflexHooks();
 

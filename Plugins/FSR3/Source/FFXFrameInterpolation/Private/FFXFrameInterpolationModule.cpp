@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -26,7 +26,9 @@
 #include "CoreMinimal.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/ConfigCacheIni.h"
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 #include "Misc/ConfigUtilities.h"
+#endif
 
 IMPLEMENT_MODULE(FFXFrameInterpolationModule, FFXFrameInterpolation)
 

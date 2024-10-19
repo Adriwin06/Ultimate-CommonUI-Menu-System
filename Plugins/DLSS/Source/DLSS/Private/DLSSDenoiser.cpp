@@ -203,6 +203,28 @@ FSSDSignalTextures FDLSSDenoiser::DenoiseDiffuseIndirect(FRDGBuilder& GraphBuild
 	return WrappedDenoiser->DenoiseDiffuseIndirect(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
 }
 
+#if defined(ENGINE_HAS_DENOISE_INDIRECT) && ENGINE_HAS_DENOISE_INDIRECT
+FSSDSignalTextures FDLSSDenoiser::DenoiseIndirect(FRDGBuilder& GraphBuilder, const FViewInfo& View, FPreviousViewInfo* PreviousViewInfos, const FSceneTextureParameters& SceneTextures, const FIndirectInputs& Inputs, const FAmbientOcclusionRayTracingConfig Config) const
+{
+	if (SkipDenoiser(View))
+	{
+		FSSDSignalTextures Outputs;
+
+		const FRDGSystemTextures& SystemTextures = FRDGSystemTextures::Get(GraphBuilder);
+		Outputs.Textures[0] = Inputs.Diffuse;
+		Outputs.Textures[1] = SystemTextures.Black;
+		Outputs.Textures[2] = Inputs.Specular;
+		Outputs.Textures[3] = SystemTextures.Black;
+
+		return Outputs;
+	}
+	else
+	{
+		return WrappedDenoiser->DenoiseIndirect(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
+	}
+}
+#endif
+
 FSSDSignalTextures FDLSSDenoiser::DenoiseScreenSpaceDiffuseIndirect(FRDGBuilder& GraphBuilder, const FViewInfo& View, FPreviousViewInfo* PreviousViewInfos, const FSceneTextureParameters& SceneTextures, const FDiffuseIndirectInputs& Inputs, const FAmbientOcclusionRayTracingConfig Config) const
 {
 	return WrappedDenoiser->DenoiseScreenSpaceDiffuseIndirect(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
@@ -228,6 +250,7 @@ IScreenSpaceDenoiser::FDiffuseIndirectOutputs FDLSSDenoiser::DenoiseSkyLight(FRD
 	}
 }
 
+#if (ENGINE_MAJOR_VERSION == 5) && (ENGINE_MINOR_VERSION < 4)
 IScreenSpaceDenoiser::FDiffuseIndirectOutputs FDLSSDenoiser::DenoiseReflectedSkyLight(FRDGBuilder& GraphBuilder, const FViewInfo& View, FPreviousViewInfo* PreviousViewInfos, const FSceneTextureParameters& SceneTextures, const FDiffuseIndirectInputs& Inputs, const FAmbientOcclusionRayTracingConfig Config) const
 {
 	if (SkipDenoiser(View))
@@ -242,6 +265,7 @@ IScreenSpaceDenoiser::FDiffuseIndirectOutputs FDLSSDenoiser::DenoiseReflectedSky
 		return WrappedDenoiser->DenoiseReflectedSkyLight(GraphBuilder, View, PreviousViewInfos, SceneTextures, Inputs, Config);
 	}
 }
+#endif
 
 
 bool FDLSSDenoiser::SupportsScreenSpaceDiffuseIndirectDenoiser(EShaderPlatform Platform) const

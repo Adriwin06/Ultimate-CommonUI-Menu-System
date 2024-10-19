@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,10 +21,17 @@
 
 #include "FFXFSR3Settings.h"
 
+#include "Misc/EngineVersionComparison.h"
+// Variant of UE_VERSION_NEWER_THAN that is true if the engine version is at or later than the specified, used to better handle version differences in the codebase.
+#define UE_VERSION_AT_LEAST(MajorVersion, MinorVersion, PatchVersion)	\
+	UE_GREATER_SORT(ENGINE_MAJOR_VERSION, MajorVersion, UE_GREATER_SORT(ENGINE_MINOR_VERSION, MinorVersion, UE_GREATER_SORT(ENGINE_PATCH_VERSION, PatchVersion, true)))
+
 #include "CoreMinimal.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/ConfigCacheIni.h"
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 #include "Misc/ConfigUtilities.h"
+#endif
 
 #define LOCTEXT_NAMESPACE "FFXFSR3Module"
 
@@ -33,6 +40,36 @@ IMPLEMENT_MODULE(FFXFSR3SettingsModule, FFXFSR3Settings)
 //------------------------------------------------------------------------------------------------------
 // Console variables that control how FSR3 operates.
 //------------------------------------------------------------------------------------------------------
+TAutoConsoleVariable<int32> CVarEnableFSR3(
+	TEXT("r.FidelityFX.FSR3.Enabled"),
+	1,
+	TEXT("Enable FidelityFX Super Resolution for Temporal Upscale"),
+	ECVF_RenderThreadSafe);
+
+TAutoConsoleVariable<int32> CVarEnableFSR3InEditor(
+	TEXT("r.FidelityFX.FSR3.EnabledInEditorViewport"),
+	0,
+	TEXT("Enable FidelityFX Super Resolution for Temporal Upscale in the Editor viewport by default."),
+	ECVF_RenderThreadSafe);
+
+TAutoConsoleVariable<int32> CVarFSR3AdjustMipBias(
+	TEXT("r.FidelityFX.FSR3.AdjustMipBias"),
+	1,
+	TEXT("Allow FSR3 to adjust the minimum global texture mip bias (r.ViewTextureMipBias.Min & r.ViewTextureMipBias.Offset)"),
+	ECVF_ReadOnly);
+
+TAutoConsoleVariable<int32> CVarFSR3ForceVertexDeformationOutputsVelocity(
+	TEXT("r.FidelityFX.FSR3.ForceVertexDeformationOutputsVelocity"),
+	1,
+	TEXT("Allow FSR3 to enable r.Velocity.EnableVertexDeformation to ensure that materials that use World-Position-Offset render valid velocities."),
+	ECVF_ReadOnly);
+
+TAutoConsoleVariable<int32> CVarFSR3ForceLandscapeHISMMobility(
+	TEXT("r.FidelityFX.FSR3.ForceLandscapeHISMMobility"),
+	0,
+	TEXT("Allow FSR3 to force the mobility of Landscape actors Hierarchical Instance Static Mesh components that use World-Position-Offset materials so they render valid velocities.\nSetting 1/'All Instances' is faster on the CPU, 2/'Instances with World-Position-Offset' is faster on the GPU."),
+	ECVF_ReadOnly);
+
 TAutoConsoleVariable<float> CVarFSR3Sharpness(
 	TEXT("r.FidelityFX.FSR3.Sharpness"),
 	0.0f,
@@ -225,10 +262,24 @@ TAutoConsoleVariable<int32> CVarFFXFIUpdateGlobalFrameTime(
 	TEXT("Update the GAverageMS and GAverageFPS engine globals with the frame time & FPS including frame interpolation."),
 	ECVF_RenderThreadSafe);
 
-#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT)
+TAutoConsoleVariable<int32> CVarFFXFIModifySlateDeltaTime(
+	TEXT("r.FidelityFX.FI.ModifySlateDeltaTime"),
+	1,
+	TEXT("Set the FSlateApplication delta time to 0.0 when redrawing the UI for the 'Slate Redraw' UI mode to prevent widgets' NativeTick implementations updating incorrectly, ignored when using 'UI Extraction'."),
+	ECVF_RenderThreadSafe);
+
+TAutoConsoleVariable<int32> CVarFFXFIUIMode(
+	TEXT("r.FidelityFX.FI.UIMode"),
+	0,
+	TEXT("The method to render the UI when using Frame Generation.\n")
+	TEXT("- Slate Redraw (0): will cause Slate to render the UI on to both the real & generated images each frame, this is higher quality but requires UI elements to be able to render multiple times per game frame.\n")
+	TEXT("- UI Extraction (1): will compare the pre- & post- UI frame to extract the UI and copy it on to the generated frame, this might result in lower quality for translucent UI elements but doesn't require re-rendering UI elements."),
+	ECVF_ReadOnly);
+
+#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT || UE_BUILD_TEST)
 TAutoConsoleVariable<int32> CVarFFXFIShowDebugTearLines(
 	TEXT("r.FidelityFX.FI.ShowDebugTearLines"),
-	(UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT),
+	0,
 	TEXT("Show the debug tear lines when running Frame Interpolation."),
 	ECVF_RenderThreadSafe);
 
@@ -247,6 +298,15 @@ TAutoConsoleVariable<int32> CVarFSR3UseRHI(
 	0,
 	TEXT("True to enable FSR3's default RHI backend, false to disable in which case a native backend must be enabled. Default is 0."),
 	ECVF_ReadOnly
+);
+
+TAutoConsoleVariable<int32> CVarFSR3PaceRHIFrames(
+	TEXT("r.FidelityFX.FI.RHIPacingMode"),
+	0,
+	TEXT("Enable pacing frames when using the RHI backend.\n")
+	TEXT("- None (0) : No frame pacing - default.\n")
+	TEXT("- Custom Present VSync (1) : enable VSync for the second presented frame, tearing will only affect the interpolated frame which will be held on screen for at least one VBlank but interferes with presentation state which may not always work."),
+	ECVF_RenderThreadSafe
 );
 
 //-------------------------------------------------------------------------------------
@@ -270,15 +330,36 @@ TAutoConsoleVariable<int32> CVarFSR3AllowAsyncWorkloads(
 	TEXT("r.FidelityFX.FI.AllowAsyncWorkloads"),
 	0,
 	TEXT("True to use async. execution of Frame Interpolation, 0 to run Frame Interpolation synchronously with the game. Default is 0."),
-	ECVF_RenderThreadSafe
+	ECVF_ReadOnly
 );
+
+//-------------------------------------------------------------------------------------
+// Console variables for older builds
+//-------------------------------------------------------------------------------------
+#if UE_VERSION_OLDER_THAN(5, 1, 0)
+TAutoConsoleVariable<float> CVarHDRMinLuminanceLog10(
+	TEXT("r.HDR.Display.MinLuminanceLog10"),
+	0,
+	TEXT("Min luminance in nits log10."),
+	ECVF_RenderThreadSafe);
+
+TAutoConsoleVariable<int32> CVarHDRMaxLuminance(
+	TEXT("r.HDR.Display.MaxLuminance"),
+	0,
+	TEXT("Max luminance in nits."),
+	ECVF_RenderThreadSafe);
+#endif
 
 //-------------------------------------------------------------------------------------
 // FFXFSR3SettingsModule
 //-------------------------------------------------------------------------------------
 void FFXFSR3SettingsModule::StartupModule()
 {
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 	UE::ConfigUtilities::ApplyCVarSettingsFromIni(TEXT("/Script/FFXFSR3Settings.FFXFSR3Settings"), *GEngineIni, ECVF_SetByProjectSetting);
+#else
+	ApplyCVarSettingsFromIni(TEXT("/Script/FFXFSR3Settings.FFXFSR3Settings"), *GEngineIni, ECVF_SetByProjectSetting);
+#endif
 }
 
 void FFXFSR3SettingsModule::ShutdownModule()

@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -30,10 +30,9 @@
 #endif
 THIRD_PARTY_INCLUDES_START
 
-#if !defined(FFX_BUILD_AS_DLL) || (FFX_BUILD_AS_DLL == 0)
 #include "shared/ffx_assert.cpp"
+#include "shared/ffx_breadcrumbs_list.cpp"
 #include "shared/ffx_object_management.cpp"
-#endif
 
 THIRD_PARTY_INCLUDES_END
 #if PLATFORM_WINDOWS
@@ -43,3 +42,5 @@ THIRD_PARTY_INCLUDES_END
 #undef strcpy_s
 #undef FFX_GCC
 #endif
+
+

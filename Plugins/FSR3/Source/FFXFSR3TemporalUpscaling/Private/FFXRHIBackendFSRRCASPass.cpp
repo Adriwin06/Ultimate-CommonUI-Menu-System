@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -165,10 +165,10 @@ public:
 			switch (job->computeJobDescriptor.pipeline.srvTextureBindings[i].resourceIdentifier)
 			{
 				case FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INPUT_EXPOSURE:
-					Parameters->r_input_exposure = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+					Parameters->r_input_exposure = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 					break;
 				case FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_RCAS_INPUT:
-					Parameters->r_rcas_input = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+					Parameters->r_rcas_input = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 					break;
 				default:
 				{
@@ -183,7 +183,7 @@ public:
 			{
 				case FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_UPSCALED_OUTPUT:
 				{
-					Parameters->rw_upscaled_output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+					Parameters->rw_upscaled_output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 					break;
 				}
 				default:

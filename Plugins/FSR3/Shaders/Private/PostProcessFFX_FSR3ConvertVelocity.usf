@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -62,7 +62,7 @@ void MainCS(uint3 LocalThreadId : SV_GroupThreadID, uint3 WorkGroupId : SV_Group
 			Velocity = ComputeStaticVelocity(ScreenPos, Depth).xy;
 		}
 
-		// FSR2 expects negative velocity from what UE4 produces.  FSR2 also wants the absolute result multiplied by (0.5, -0.5).  Combine these steps by multiplying by (-0.5, 0.5).
+		// FSR3 expects negative velocity from what UE produces.  FSR3 also wants the absolute result multiplied by (0.5, -0.5).  Combine these steps by multiplying by (-0.5, 0.5).
 		OutputTexture[DispatchThreadId.xy] = Velocity * float2(-0.5, 0.5);
 	}
 }

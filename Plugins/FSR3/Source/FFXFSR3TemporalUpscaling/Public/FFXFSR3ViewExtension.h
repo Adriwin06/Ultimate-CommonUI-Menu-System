@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -22,6 +22,13 @@
 #pragma once
 
 #include "SceneViewExtension.h"
+#include "FFXShared.h"
+
+#if UE_VERSION_AT_LEAST(5, 1, 0)
+typedef FRDGBuilder FRenderGraphType;
+#else
+typedef FRHICommandListImmediate FRenderGraphType;
+#endif
 
 class FFXFSR3TEMPORALUPSCALING_API FFXFSR3ViewExtension final : public FSceneViewExtensionBase
 {
@@ -31,11 +38,11 @@ public:
 	// ISceneViewExtension interface
 	void SetupViewFamily(FSceneViewFamily& InViewFamily) override;
 	void SetupView(FSceneViewFamily& InViewFamily, FSceneView& InView) override {}
-		
+
 	void BeginRenderViewFamily(FSceneViewFamily& InViewFamily) override;
-	void PreRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
-	void PreRenderView_RenderThread(FRDGBuilder& GraphBuilder, FSceneView& InView) override;
-	void PostRenderViewFamily_RenderThread(FRDGBuilder& GraphBuilder, FSceneViewFamily& InViewFamily) override;
+	void PreRenderViewFamily_RenderThread(FRenderGraphType& GraphBuilder, FSceneViewFamily& InViewFamily) override;
+	void PreRenderView_RenderThread(FRenderGraphType& GraphBuilder, FSceneView& InView) override;
+	void PostRenderViewFamily_RenderThread(FRenderGraphType& GraphBuilder, FSceneViewFamily& InViewFamily) override;
 	void PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& View, const FPostProcessingInputs& Inputs) override;
 
 private:

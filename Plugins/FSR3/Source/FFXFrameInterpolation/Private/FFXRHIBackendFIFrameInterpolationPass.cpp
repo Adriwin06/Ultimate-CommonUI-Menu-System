@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,7 @@ public:
 
 	static uint32 GetNumBoundSRVs()
 	{
-		return 12;
+		return 9;
 	}
 
 	static uint32 GetNumBoundUAVs()
@@ -69,18 +69,15 @@ public:
 	static uint32* GetBoundSRVs()
 	{
 		static uint32 SRVs[] = {
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_X,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_Y,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_Y,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_PREVIOUS_INTERPOLATION_SOURCE,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_CURRENT_INTERPOLATION_SOURCE,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DISOCCLUSION_MASK,                     
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_X,            
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_GAME_MOTION_VECTOR_FIELD_Y,            
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_X,    
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_MOTION_VECTOR_FIELD_Y,           
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCENE_CHANGE_DETECTION,   
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_PRESENT_BACKBUFFER,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_INPAINTING_PYRAMID,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_COUNTERS,
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DILATED_DEPTH
 		};
 		return SRVs;
 	}
@@ -88,18 +85,15 @@ public:
 	static const wchar_t** GetBoundSRVNames()
 	{
 		static const wchar_t* SRVs[] = {
-			L"r_previous_interpolation_source",
-			L"r_current_interpolation_source",
-			L"r_disocclusion_mask",
 			L"r_game_motion_vector_field_x",
 			L"r_game_motion_vector_field_y",
 			L"r_optical_flow_motion_vector_field_x",
 			L"r_optical_flow_motion_vector_field_y",
-			L"r_optical_flow_scd",
-			L"r_present_backbuffer",
+			L"r_previous_interpolation_source",
+			L"r_current_interpolation_source",
+			L"r_disocclusion_mask",
 			L"r_inpainting_pyramid",
 			L"r_counters",
-			L"r_dilated_depth",
 		};
 		return SRVs;
 	}

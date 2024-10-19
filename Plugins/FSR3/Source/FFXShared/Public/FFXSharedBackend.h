@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -31,11 +31,16 @@
 #endif
 
 class FRDGTexture;
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 enum EPixelFormat : uint8;
+#else
+enum EPixelFormat;
+#endif
 #if UE_VERSION_AT_LEAST(5, 2, 0)
 enum class ERHIAccess : uint32;
 #endif
 typedef struct FfxCreateResourceDescription FfxCreateResourceDescription;
+typedef struct ffxConfigureDescFrameGeneration ffxConfigureDescFrameGeneration;
 
 namespace FFXStrings
 {
@@ -50,46 +55,57 @@ enum class EFFXBackendAPI : uint8
 	Unknown
 };
 
-struct FFXSharedResource
+struct FFXSharedAllocCallbacks
 {
-	FfxResource Resource;
-	void* Data;
+	static void* ffxAlloc(void* pUserData, uint64_t size)
+	{
+		return FMemory::Malloc(size);
+	}
+
+	static void ffxDealloc(void* pUserData, void* pMem)
+	{
+		return FMemory::Free(pMem);
+	}
+
+	ffxAllocationCallbacks Cbs;
+
+	FFXSharedAllocCallbacks()
+	{
+		Cbs.pUserData = nullptr;
+		Cbs.alloc = &ffxAlloc;
+		Cbs.dealloc = &ffxDealloc;
+	}
 };
 
 class IFFXSharedBackend
 {
 public:
+	virtual ffxReturnCode_t ffxCreateContext(ffxContext* context, ffxCreateContextDescHeader* desc) = 0;
+	virtual ffxReturnCode_t ffxDestroyContext(ffxContext* context) = 0;
+	virtual ffxReturnCode_t ffxConfigure(ffxContext* context, const ffxConfigureDescHeader* desc) = 0;
+	virtual ffxReturnCode_t ffxQuery(ffxContext* context, ffxQueryDescHeader* desc) = 0;
+	virtual ffxReturnCode_t ffxDispatch(ffxContext* context, const ffxDispatchDescHeader* desc) = 0;
+
 	virtual void Init() = 0;
 	virtual EFFXBackendAPI GetAPI() const = 0;
-	virtual void SetFeatureLevel(FfxInterface& OutInterface, ERHIFeatureLevel::Type FeatureLevel) = 0;
-	virtual size_t GetGetScratchMemorySize() = 0;
-	virtual FfxErrorCode CreateInterface(FfxInterface& OutInterface, uint32 MaxContexts) = 0;
-	virtual FfxDevice GetDevice(void* device) = 0;
-	virtual FfxCommandList GetCommandList(void* list) = 0;
-	virtual FfxResource GetResource(void* resource, wchar_t const* name, FfxResourceStates state, uint32 shaderComponentMapping) = 0;
-	virtual FfxCommandQueue GetCommandQueue(void* cmdQueue) = 0;
+	virtual void SetFeatureLevel(ffxContext* context, ERHIFeatureLevel::Type FeatureLevel) = 0;
+
 	virtual FfxSwapchain GetSwapchain(void* swapChain) = 0;
-	virtual FfxDevice GetNativeDevice() = 0;
-    virtual FfxResource GetNativeResource(FRHITexture* Texture, FfxResourceStates State) = 0;
-    virtual FfxResource GetNativeResource(FRDGTexture* Texture, FfxResourceStates State) = 0;
+    virtual FfxApiResource GetNativeResource(FRHITexture* Texture, FfxApiResourceState State) = 0;
+    virtual FfxApiResource GetNativeResource(FRDGTexture* Texture, FfxApiResourceState State) = 0;
 	virtual FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList) = 0;
-	virtual uint32 GetNativeTextureFormat(FRHITexture* Texture) = 0;
 	virtual FfxShaderModel GetSupportedShaderModel() = 0;
 	virtual bool IsFloat16Supported() = 0;
 	virtual void ForceUAVTransition(FRHICommandListImmediate& RHICmdList, FRHITexture* OutputTexture, ERHIAccess Access) = 0;
-	virtual void UpdateSwapChain(FfxInterface& Interface, void* SwapChain, bool mode, bool allowAsyncWorkloads, bool showDebugView) = 0;
-	virtual FfxResource GetInterpolationOutput(FfxSwapchain SwapChain) = 0;
-	virtual FfxCommandList GetInterpolationCommandList(FfxSwapchain SwapChain) = 0;
-	virtual void BindUITexture(FfxSwapchain gameSwapChain, FfxResource uiResource) = 0;
-	virtual FFXSharedResource CreateResource(FfxInterface& Interface, const FfxCreateResourceDescription* desc) = 0;
-	virtual FfxErrorCode ReleaseResource(FfxInterface& Interface, FFXSharedResource Resource) = 0;
-	virtual void RegisterFrameResources(FRHIResource* FIResources, IRefCountedObject* FSR3Resources) = 0;
+	virtual void UpdateSwapChain(ffxContext* Context, ffxConfigureDescFrameGeneration& Desc) = 0;
+	virtual FfxApiResource GetInterpolationOutput(FfxSwapchain SwapChain) = 0;
+	virtual void* GetInterpolationCommandList(FfxSwapchain SwapChain) = 0;
+	virtual void RegisterFrameResources(FRHIResource* FIResources, uint64 FrameID) = 0;
 	virtual bool GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS) = 0;
-	virtual void CopySubRect(FfxCommandList CmdList, FfxResource Src, FfxResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint) = 0;
+	virtual void CopySubRect(FfxCommandList CmdList, FfxApiResource Src, FfxApiResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint) = 0;
 };
 
-extern FFXSHARED_API EPixelFormat GetUEFormat(FfxSurfaceFormat Format);
-extern FFXSHARED_API FfxSurfaceFormat GetFFXFormat(EPixelFormat UEFormat, bool bSRGB);
+extern FFXSHARED_API FfxApiSurfaceFormat GetFFXApiFormat(EPixelFormat UEFormat, bool bSRGB);
 extern FFXSHARED_API ERHIAccess GetUEAccessState(FfxResourceStates State);
 
 class IFFXSharedBackendModule : public IModuleInterface

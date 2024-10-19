@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -53,7 +53,7 @@ public:
 	void OnSlateWindowRendered(SWindow& SlateWindow, void* ViewportRHIPtr);
 	void OnBackBufferReadyToPresentCallback(class SWindow& SlateWindow, const FTexture2DRHIRef& BackBuffer);
 
-	IFFXFrameInterpolationCustomPresent* CreateCustomPresent(IFFXSharedBackend* Backend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxSurfaceFormat Format, FfxPresentCallbackFunc CompositionFunc) final;
+	IFFXFrameInterpolationCustomPresent* CreateCustomPresent(IFFXSharedBackend* Backend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxApiSurfaceFormat Format, EFFXBackendAPI Api) final;
 	bool GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS) final;
 
 private:
@@ -61,16 +61,19 @@ private:
 	{
 		FRDGTextureRef ViewFamilyTexture;
 		FRDGTextureRef SceneDepth;
+		FRDGTextureRef SceneVelocity;
 		FIntRect ViewRect;
 		FIntPoint InputExtentsQuantized;
 		FIntPoint OutputExtents;
+		FVector2D TemporalJitterPixels;
 		float CameraNear;
 		float CameraFOV;
+		float GameTimeMs;
 		bool bReset;
 		bool bEnabled;
 	};
 	void CalculateFPSTimings();
-	bool InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameInterpolationCustomPresent* Presenter, const FSceneView* View, FFXFrameInterpolationView const& ViewDesc, FRDGTextureRef FinalBuffer, FRDGTextureRef InterpolatedRDG, FRDGTextureRef BackBufferRDG);
+	bool InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameInterpolationCustomPresent* Presenter, const FSceneView* View, FFXFrameInterpolationView const& ViewDesc, FRDGTextureRef FinalBuffer, FRDGTextureRef InterpolatedRDG, FRDGTextureRef BackBufferRDG, uint32 Index);
 	TMap<const FSceneView*, FFXFrameInterpolationView> Views;
 	TSharedPtr<FFXFrameInterpolationViewExtension, ESPMode::ThreadSafe> ViewExtension;
     TRefCountPtr<IPooledRenderTarget> BackBufferRT;
@@ -82,6 +85,8 @@ private:
 	double LastTime;
 	float AverageTime;
 	float AverageFPS;
+	uint64 InterpolationCount;
+	uint64 PresentCount;
 	uint32 Index;
 	uint32 ResetState;
 	bool bInterpolatedFrame;

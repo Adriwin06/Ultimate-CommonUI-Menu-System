@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -25,9 +25,8 @@
 #include "SceneRendering.h"
 #include "FFXSharedBackend.h"
 
-struct FfxFsr3UpscalerContext;
-struct FfxInterface;
-struct FfxFsr3UpscalerContextDescription;
+typedef void* ffxContext;
+struct ffxCreateContextDescUpscale;
 
 #if UE_VERSION_AT_LEAST(5, 3, 0)
 using IFFXFSR3CustomTemporalAAHistory = UE::Renderer::Private::ITemporalUpscaler::IHistory;
@@ -35,21 +34,10 @@ using IFFXFSR3CustomTemporalAAHistory = UE::Renderer::Private::ITemporalUpscaler
 using IFFXFSR3CustomTemporalAAHistory = ICustomTemporalAAHistory;
 #endif
 
-
-struct FfxFsr3UpscalerSharedResources
-{
-	FFXSharedResource reconstructedPrevNearestDepth;
-	FFXSharedResource dilatedDepth;
-	FFXSharedResource dilatedMotionVectors;
-};
-
 class IFFXFSR3History : public IFFXFSR3CustomTemporalAAHistory
 {
 public:
-	virtual void AdvanceIndex() = 0;
-    virtual FfxFsr3UpscalerSharedResources* GetFSRResources() const = 0;
-    virtual FfxFsr3UpscalerContext* GetFSRContext() const = 0;
-    virtual FfxInterface* GetFFXInterface() const = 0;
-    virtual FfxFsr3UpscalerContextDescription* GetFSRContextDesc() const = 0;
+    virtual ffxContext* GetFSRContext() const = 0;
+    virtual ffxCreateContextDescUpscale* GetFSRContextDesc() const = 0;
     virtual TRefCountPtr<IPooledRenderTarget> GetMotionVectors() const = 0;
 };

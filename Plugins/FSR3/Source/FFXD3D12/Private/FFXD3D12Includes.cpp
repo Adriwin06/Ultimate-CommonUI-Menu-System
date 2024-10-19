@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,40 +38,233 @@ typedef LONG NTSTATUS;
 #endif
 THIRD_PARTY_INCLUDES_START
 
-#ifndef max
-#define max(a,b)            (((a) > (b)) ? (a) : (b))
-#endif
+#define FFX_FSR3UPSCALER 1
+#define FFX_FI 1
+#define FFX_OF 1
 
-#ifndef min
-#define min(a,b)            (((a) < (b)) ? (a) : (b))
-#endif
-
-#define FFX_FSR 1
-#define FFX_FSR3 1
+#define FFX_BREADCRUMBS 1
 
 #ifdef verify
 #undef verify
 #endif
 
-#if !defined(FFX_BUILD_AS_DLL) || (FFX_BUILD_AS_DLL == 0)
-#include "backends/dx12/ffx_dx12.cpp"
-#include "backends/shared/blob_accessors/ffx_frameinterpolation_shaderblobs.cpp"
-#include "backends/shared/blob_accessors/ffx_fsr1_shaderblobs.cpp"
-#include "backends/shared/blob_accessors/ffx_fsr2_shaderblobs.cpp"
-#include "backends/shared/blob_accessors/ffx_fsr3upscaler_shaderblobs.cpp"
-#include "backends/shared/blob_accessors/ffx_opticalflow_shaderblobs.cpp"
-#include "backends/shared/ffx_shader_blobs.cpp"
-#include "backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12.cpp"
-#include "backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_Helpers.cpp"
+#if defined(__cplusplus)
+extern "C" {
+#endif // #if defined(__cplusplus)
+
+	FFX_API FfxSurfaceFormat ffxGetSurfaceFormatDX12(DXGI_FORMAT format)
+	{
+		switch (format) {
+
+		case DXGI_FORMAT_R32G32B32A32_TYPELESS:
+			return FFX_SURFACE_FORMAT_R32G32B32A32_TYPELESS;
+		case DXGI_FORMAT_R32G32B32A32_FLOAT:
+			return FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT;
+		case DXGI_FORMAT_R32G32B32_FLOAT:
+			return FFX_SURFACE_FORMAT_R32G32B32_FLOAT;
+		case DXGI_FORMAT_R32G32B32A32_UINT:
+			return FFX_SURFACE_FORMAT_R32G32B32A32_UINT;
+
+		case DXGI_FORMAT_R16G16B16A16_TYPELESS:
+		case DXGI_FORMAT_R16G16B16A16_FLOAT:
+			return FFX_SURFACE_FORMAT_R16G16B16A16_FLOAT;
+
+		case DXGI_FORMAT_R32G32_TYPELESS:
+		case DXGI_FORMAT_R32G32_FLOAT:
+			return FFX_SURFACE_FORMAT_R32G32_FLOAT;
+
+		case DXGI_FORMAT_R32G8X24_TYPELESS:
+		case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+		case DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS:
+			return FFX_SURFACE_FORMAT_R32_FLOAT;
+
+		case DXGI_FORMAT_R24G8_TYPELESS:
+		case DXGI_FORMAT_D24_UNORM_S8_UINT:
+		case DXGI_FORMAT_R24_UNORM_X8_TYPELESS:
+			return FFX_SURFACE_FORMAT_R32_UINT;
+
+		case DXGI_FORMAT_X32_TYPELESS_G8X24_UINT:
+		case DXGI_FORMAT_X24_TYPELESS_G8_UINT:
+			return FFX_SURFACE_FORMAT_R8_UINT;
+
+		case DXGI_FORMAT_R10G10B10A2_TYPELESS:
+		case DXGI_FORMAT_R10G10B10A2_UNORM:
+			return FFX_SURFACE_FORMAT_R10G10B10A2_UNORM;
+
+		case DXGI_FORMAT_R11G11B10_FLOAT:
+			return FFX_SURFACE_FORMAT_R11G11B10_FLOAT;
+
+		case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+			return FFX_SURFACE_FORMAT_R8G8B8A8_TYPELESS;
+		case DXGI_FORMAT_R8G8B8A8_UNORM:
+			return FFX_SURFACE_FORMAT_R8G8B8A8_UNORM;
+		case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+			return FFX_SURFACE_FORMAT_R8G8B8A8_SRGB;
+		case DXGI_FORMAT_R8G8B8A8_SNORM:
+			return FFX_SURFACE_FORMAT_R8G8B8A8_SNORM;
+
+		case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+			return FFX_SURFACE_FORMAT_B8G8R8A8_TYPELESS;
+		case DXGI_FORMAT_B8G8R8A8_UNORM:
+			return FFX_SURFACE_FORMAT_B8G8R8A8_UNORM;
+		case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+			return FFX_SURFACE_FORMAT_B8G8R8A8_SRGB;
+
+		case DXGI_FORMAT_R16G16_TYPELESS:
+		case DXGI_FORMAT_R16G16_FLOAT:
+			return FFX_SURFACE_FORMAT_R16G16_FLOAT;
+		case DXGI_FORMAT_R16G16_UINT:
+			return FFX_SURFACE_FORMAT_R16G16_UINT;
+		case DXGI_FORMAT_R16G16_SINT:
+			return FFX_SURFACE_FORMAT_R16G16_SINT;
+		case DXGI_FORMAT_R32_UINT:
+			return FFX_SURFACE_FORMAT_R32_UINT;
+		case DXGI_FORMAT_R32_TYPELESS:
+		case DXGI_FORMAT_D32_FLOAT:
+		case DXGI_FORMAT_R32_FLOAT:
+			return FFX_SURFACE_FORMAT_R32_FLOAT;
+
+		case DXGI_FORMAT_R8G8_TYPELESS:
+		case DXGI_FORMAT_R8G8_UINT:
+			return FFX_SURFACE_FORMAT_R8G8_UINT;
+		case DXGI_FORMAT_R8G8_UNORM:
+			return FFX_SURFACE_FORMAT_R8G8_UNORM;
+
+		case DXGI_FORMAT_R16_TYPELESS:
+		case DXGI_FORMAT_R16_FLOAT:
+			return FFX_SURFACE_FORMAT_R16_FLOAT;
+		case DXGI_FORMAT_R16_UINT:
+			return FFX_SURFACE_FORMAT_R16_UINT;
+		case DXGI_FORMAT_D16_UNORM:
+		case DXGI_FORMAT_R16_UNORM:
+			return FFX_SURFACE_FORMAT_R16_UNORM;
+		case DXGI_FORMAT_R16_SNORM:
+			return FFX_SURFACE_FORMAT_R16_SNORM;
+
+		case DXGI_FORMAT_R8_TYPELESS:
+		case DXGI_FORMAT_R8_UNORM:
+		case DXGI_FORMAT_A8_UNORM:
+			return FFX_SURFACE_FORMAT_R8_UNORM;
+		case DXGI_FORMAT_R8_UINT:
+			return FFX_SURFACE_FORMAT_R8_UINT;
+
+		case DXGI_FORMAT_UNKNOWN:
+			return FFX_SURFACE_FORMAT_UNKNOWN;
+		default:
+			return FFX_SURFACE_FORMAT_UNKNOWN;
+		}
+	}
+
+	FFX_API DXGI_FORMAT ffxGetDX12FormatFromSurfaceFormat(FfxSurfaceFormat surfaceFormat)
+	{
+		switch (surfaceFormat) {
+
+		case (FFX_SURFACE_FORMAT_R32G32B32A32_TYPELESS):
+			return DXGI_FORMAT_R32G32B32A32_TYPELESS;
+		case (FFX_SURFACE_FORMAT_R32G32B32A32_UINT):
+			return DXGI_FORMAT_R32G32B32A32_UINT;
+		case (FFX_SURFACE_FORMAT_R32G32B32A32_FLOAT):
+			return DXGI_FORMAT_R32G32B32A32_FLOAT;
+		case (FFX_SURFACE_FORMAT_R16G16B16A16_FLOAT):
+			return DXGI_FORMAT_R16G16B16A16_FLOAT;
+		case (FFX_SURFACE_FORMAT_R32G32B32_FLOAT):
+			return DXGI_FORMAT_R32G32B32_FLOAT;
+		case (FFX_SURFACE_FORMAT_R32G32_FLOAT):
+			return DXGI_FORMAT_R32G32_FLOAT;
+		case (FFX_SURFACE_FORMAT_R32_UINT):
+			return DXGI_FORMAT_R32_UINT;
+		case(FFX_SURFACE_FORMAT_R10G10B10A2_UNORM):
+			return DXGI_FORMAT_R10G10B10A2_UNORM;
+		case (FFX_SURFACE_FORMAT_R8G8B8A8_TYPELESS):
+			return DXGI_FORMAT_R8G8B8A8_TYPELESS;
+		case (FFX_SURFACE_FORMAT_R8G8B8A8_UNORM):
+			return DXGI_FORMAT_R8G8B8A8_UNORM;
+		case (FFX_SURFACE_FORMAT_R8G8B8A8_SRGB):
+			return DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+		case (FFX_SURFACE_FORMAT_R8G8B8A8_SNORM):
+			return DXGI_FORMAT_R8G8B8A8_SNORM;
+		case (FFX_SURFACE_FORMAT_B8G8R8A8_TYPELESS):
+			return DXGI_FORMAT_B8G8R8A8_TYPELESS;
+		case (FFX_SURFACE_FORMAT_B8G8R8A8_UNORM):
+			return DXGI_FORMAT_B8G8R8A8_UNORM;
+		case (FFX_SURFACE_FORMAT_B8G8R8A8_SRGB):
+			return DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+		case (FFX_SURFACE_FORMAT_R11G11B10_FLOAT):
+			return DXGI_FORMAT_R11G11B10_FLOAT;
+		case (FFX_SURFACE_FORMAT_R16G16_FLOAT):
+			return DXGI_FORMAT_R16G16_FLOAT;
+		case (FFX_SURFACE_FORMAT_R16G16_UINT):
+			return DXGI_FORMAT_R16G16_UINT;
+		case (FFX_SURFACE_FORMAT_R16G16_SINT):
+			return DXGI_FORMAT_R16G16_SINT;
+		case (FFX_SURFACE_FORMAT_R16_FLOAT):
+			return DXGI_FORMAT_R16_FLOAT;
+		case (FFX_SURFACE_FORMAT_R16_UINT):
+			return DXGI_FORMAT_R16_UINT;
+		case (FFX_SURFACE_FORMAT_R16_UNORM):
+			return DXGI_FORMAT_R16_UNORM;
+		case (FFX_SURFACE_FORMAT_R16_SNORM):
+			return DXGI_FORMAT_R16_SNORM;
+		case (FFX_SURFACE_FORMAT_R8_UNORM):
+			return DXGI_FORMAT_R8_UNORM;
+		case (FFX_SURFACE_FORMAT_R8_UINT):
+			return DXGI_FORMAT_R8_UINT;
+		case (FFX_SURFACE_FORMAT_R8G8_UINT):
+			return DXGI_FORMAT_R8G8_UINT;
+		case (FFX_SURFACE_FORMAT_R8G8_UNORM):
+			return DXGI_FORMAT_R8G8_UNORM;
+		case (FFX_SURFACE_FORMAT_R32_FLOAT):
+			return DXGI_FORMAT_R32_FLOAT;
+		case (FFX_SURFACE_FORMAT_UNKNOWN):
+			return DXGI_FORMAT_UNKNOWN;
+
+		default:
+			return DXGI_FORMAT_UNKNOWN;
+		}
+	}
+
+	FFX_API D3D12_RESOURCE_STATES ffxGetDX12StateFromResourceState(FfxResourceStates state)
+	{
+		switch (state) {
+
+		case FFX_RESOURCE_STATE_GENERIC_READ:
+			return D3D12_RESOURCE_STATE_GENERIC_READ;
+		case FFX_RESOURCE_STATE_UNORDERED_ACCESS:
+			return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case FFX_RESOURCE_STATE_PIXEL_COMPUTE_READ:
+			return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		case FFX_RESOURCE_STATE_COMPUTE_READ:
+			return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		case FFX_RESOURCE_STATE_PIXEL_READ:
+			return D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+		case FFX_RESOURCE_STATE_COPY_SRC:
+			return D3D12_RESOURCE_STATE_COPY_SOURCE;
+		case FFX_RESOURCE_STATE_COPY_DEST:
+			return D3D12_RESOURCE_STATE_COPY_DEST;
+		case FFX_RESOURCE_STATE_INDIRECT_ARGUMENT:
+			return D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
+		case FFX_RESOURCE_STATE_PRESENT:
+			return D3D12_RESOURCE_STATE_PRESENT;
+		case FFX_RESOURCE_STATE_COMMON:
+			return D3D12_RESOURCE_STATE_COMMON;
+		case FFX_RESOURCE_STATE_RENDER_TARGET:
+			return D3D12_RESOURCE_STATE_RENDER_TARGET;
+		default:
+			return D3D12_RESOURCE_STATE_COMMON;
+		}
+	}
+
+#if defined(__cplusplus)
+}
+#endif // #if defined(__cplusplus)
+
 #include "backends/dx12/FrameInterpolationSwapchain/FrameInterpolationSwapchainDX12_UiComposition.cpp"
-#include "backends/dx12/GPUTimestamps.cpp"
-#endif
 
-#undef min
-#undef max
+#undef FFX_FSR3UPSCALER
+#undef FFX_FI
+#undef FFX_OF
 
-#undef FFX_FSR
-#undef FFX_FSR3
+#undef FFX_BREADCRUMBS
 
 THIRD_PARTY_INCLUDES_END
 #if PLATFORM_WINDOWS

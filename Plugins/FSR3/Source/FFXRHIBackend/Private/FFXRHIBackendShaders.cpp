@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -46,8 +46,10 @@ void FFXGlobalShader::ModifyCompilationEnvironment(const FGlobalShaderPermutatio
 		OutEnvironment.SetDefine(TEXT("unorm"), TEXT(" "));
 	}
 
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 	if (bPreferWave64 && IsFeatureLevelSupported(Parameters.Platform, ERHIFeatureLevel::SM6))
 	{
 		OutEnvironment.SetDefine(TEXT("FFX_PREFER_WAVE64"), TEXT("[WaveSize(64)]"));
 	}
+#endif
 }

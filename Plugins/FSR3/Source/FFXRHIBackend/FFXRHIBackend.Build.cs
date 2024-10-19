@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -28,6 +28,12 @@ public class FFXRHIBackend : ModuleRules
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
+		PrivateIncludePaths.AddRange(
+			new string[] {
+				Path.Combine(ModuleDirectory, "../fidelityfx-sdk/ffx-api/src"),
+			}
+			);
+
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
@@ -39,6 +45,8 @@ public class FFXRHIBackend : ModuleRules
 				"RHI",
 				"RHICore",
 				"CoreUObject",
+				"FFXFSR3Api",
+				"FFXOpticalFlowApi",
 				"FFXFrameInterpolationApi",
 				"FFXShared",
 				"FFXFSR3Settings"

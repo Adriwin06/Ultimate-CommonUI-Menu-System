@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -20,6 +20,7 @@
 // THE SOFTWARE.
 
 #include "FFXFrameInterpolationSlate.h"
+#include "RenderingThread.h"
 
 //------------------------------------------------------------------------------------------------------
 // Helper definitions.
@@ -76,6 +77,7 @@ FFXFrameInterpolationSlateRenderer::~FFXFrameInterpolationSlateRenderer()
 
 }
 
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 /** Returns a draw buffer that can be used by Slate windows to draw window elements */
 FSlateDrawBuffer& FFXFrameInterpolationSlateRenderer::AcquireDrawBuffer()
 {
@@ -136,6 +138,44 @@ void FFXFrameInterpolationSlateRenderer::ReleaseDrawBuffer(FSlateDrawBuffer& InW
         }
     );
 }
+#else
+/** Returns a draw buffer that can be used by Slate windows to draw window elements */
+FSlateDrawBuffer& FFXFrameInterpolationSlateRenderer::GetDrawBuffer()
+{
+	FreeBufferIndex = (FreeBufferIndex + 1) % NumDrawBuffers;
+
+	FSlateDrawBuffer* Buffer = &DrawBuffers[FreeBufferIndex];
+
+	while (!Buffer->Lock())
+	{
+		// If the buffer cannot be locked then the buffer is still in use.  If we are here all buffers are in use
+		// so wait until one is free.
+		if (IsInSlateThread())
+		{
+			// We can't flush commands on the slate thread, so simply spinlock until we're done
+			// this happens if the render thread becomes completely blocked by expensive tasks when the Slate thread is running
+			// in this case we cannot tick Slate.
+			FPlatformProcess::Sleep(0.001f);
+		}
+		else
+		{
+			FlushCommands();
+			UE_LOG(LogSlate, Warning, TEXT("Slate: Had to block on waiting for a draw buffer"));
+			FreeBufferIndex = (FreeBufferIndex + 1) % NumDrawBuffers;
+		}
+
+
+		Buffer = &DrawBuffers[FreeBufferIndex];
+	}
+
+	// Safely remove brushes by emptying the array and releasing references
+	DynamicBrushesToRemove[FreeBufferIndex].Empty();
+
+	Buffer->ClearBuffer();
+	Buffer->UpdateResourceVersion(ResourceVersion);
+	return *Buffer;
+}
+#endif
 
 bool FFXFrameInterpolationSlateRenderer::Initialize()
 {
@@ -188,7 +228,11 @@ bool FFXFrameInterpolationSlateRenderer::GenerateDynamicImageResource(FName Reso
     return UnderlyingRenderer->GenerateDynamicImageResource(ResourceName, TextureData);
 }
 
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 FSlateResourceHandle FFXFrameInterpolationSlateRenderer::GetResourceHandle(const FSlateBrush& Brush, FVector2f LocalSize, float DrawScale)
+#else
+FSlateResourceHandle FFXFrameInterpolationSlateRenderer::GetResourceHandle(const FSlateBrush& Brush, FVector2D LocalSize, float DrawScale)
+#endif
 {
     return UnderlyingRenderer->GetResourceHandle(Brush, LocalSize, DrawScale);
 }

@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -21,6 +21,11 @@
 
 #include "FFXFrameInterpolationCustomPresent.h"
 #include "RenderTargetPool.h"
+#include "FFXFSR3Settings.h"
+#include "GlobalShader.h"
+#include "ShaderCompilerCore.h"
+#include "PipelineStateCache.h"
+#include "ShaderParameterUtils.h"
 
 #if UE_VERSION_AT_LEAST(5, 2, 0)
 #include "DataDrivenShaderPlatformInfo.h"
@@ -107,71 +112,30 @@ private:
 IMPLEMENT_SHADER_TYPE(, FFXFIAdditionalUICS, TEXT("/Plugin/FSR3/Private/PostProcessFFX_FIAdditionalUI.usf"), TEXT("MainCS"), SF_Compute);
 
 //------------------------------------------------------------------------------------------------------
-// Static helper functions
-//------------------------------------------------------------------------------------------------------
-static FfxErrorCode ffxOpticalflowCreateSharedResources(IFFXSharedBackend* Backend, FfxInterface& Interface, FfxOpticalflowContext* context, FfxOpticalflowSharedResources* SharedResources)
-{
-	FFX_RETURN_ON_ERROR(
-		context,
-		FFX_ERROR_INVALID_POINTER);
-	FFX_RETURN_ON_ERROR(
-		SharedResources,
-		FFX_ERROR_INVALID_POINTER);
-
-	FfxOpticalflowSharedResourceDescriptions internalSurfaceDesc;
-	ffxOpticalflowGetSharedResourceDescriptions(context, &internalSurfaceDesc);
-
-	SharedResources->opticalFlow = Backend->CreateResource(Interface, &internalSurfaceDesc.opticalFlowVector);
-	SharedResources->opticalFlowSCD = Backend->CreateResource(Interface, &internalSurfaceDesc.opticalFlowSCD);
-	return FFX_OK;
-}
-
-//------------------------------------------------------------------------------------------------------
 // Implementation for FFXFrameInterpolationResources
 //------------------------------------------------------------------------------------------------------
 FFXFrameInterpolationResources::FFXFrameInterpolationResources(IFFXSharedBackend* InBackend, uint32 InUniqueID)
 : FRHIResource(RRT_None)
 , UniqueID(InUniqueID)
+, Context(nullptr)
 , Backend(InBackend)
 , bDebugView(false)
 {
-    FMemory::Memzero(Interface);
-    FMemory::Memzero(OpticalFlowContext);
-    FMemory::Memzero(OpticalFlowDesc);
     FMemory::Memzero(Desc);
-    FMemory::Memzero(Context);
 }
 
 FFXFrameInterpolationResources::~FFXFrameInterpolationResources()
 {
-    Backend->ReleaseResource(Interface, OpticalFlowResources.opticalFlow);
-    Backend->ReleaseResource(Interface, OpticalFlowResources.opticalFlowSCD);
-
-    if (OpticalFlowDesc.backendInterface.device)
-    {
-        ffxOpticalflowContextDestroy(&OpticalFlowContext);
-    }
-    if (Desc.backendInterface.device)
-    {
-        ffxFrameInterpolationContextDestroy(&Context);
-    }
-	if (Interface.scratchBuffer)
-	{
-		FMemory::Free(Interface.scratchBuffer);
-	}
+	Backend->ffxDestroyContext(&Context);
 }
 
 //------------------------------------------------------------------------------------------------------
 // Implementation for FFXFrameInterpolationCustomPresent
 //------------------------------------------------------------------------------------------------------
-FFXFIResourceRef FFXFrameInterpolationCustomPresent::UpdateContexts(FRDGBuilder& GraphBuilder, uint32 UniqueID, FfxFsr3UpscalerContextDescription const& FsrDesc, FIntPoint ViewportSizeXY, FfxSurfaceFormat BackBufferFormat)
+FFXFIResourceRef FFXFrameInterpolationCustomPresent::UpdateContexts(FRDGBuilder& GraphBuilder, uint32 UniqueID, ffxDispatchDescFrameGenerationPrepare const& FsrDesc, ffxCreateContextDescFrameGeneration const& FgDesc)
 {
 	bool bResourcesValid = false;
 	FFXFIResourceRef Resource;
-
-	FfxDimensions2D ViewportSize;
-	ViewportSize.width = FMath::Max(FsrDesc.displaySize.width, (uint32)ViewportSizeXY.X);
-	ViewportSize.height = FMath::Max(FsrDesc.displaySize.height, (uint32)ViewportSizeXY.Y);
 
 	if (!bResized)
 	{
@@ -187,17 +151,12 @@ FFXFIResourceRef FFXFrameInterpolationCustomPresent::UpdateContexts(FRDGBuilder&
 
 		if (bResourcesValid)
 		{
-			bResourcesValid &= ((Desc.flags & FFX_FRAMEINTERPOLATION_ENABLE_DEPTH_INVERTED) != 0) == ((FsrDesc.flags & FFX_FSR3UPSCALER_ENABLE_DEPTH_INVERTED) != 0);
-			bResourcesValid &= ((Desc.flags & FFX_FRAMEINTERPOLATION_ENABLE_DEPTH_INFINITE) != 0) == ((FsrDesc.flags & FFX_FSR3UPSCALER_ENABLE_DEPTH_INFINITE) != 0);
-			bResourcesValid &= ((Desc.flags & FFX_FRAMEINTERPOLATION_ENABLE_TEXTURE1D_USAGE) != 0) == ((FsrDesc.flags & FFX_FSR3UPSCALER_ENABLE_TEXTURE1D_USAGE) != 0);
-			bResourcesValid &= Resource->OpticalFlowDesc.resolution.width == ViewportSize.width;
-			bResourcesValid &= Resource->OpticalFlowDesc.resolution.height == ViewportSize.height;
-			bResourcesValid &= Resource->Desc.displaySize.width == ViewportSize.width;
-			bResourcesValid &= Resource->Desc.displaySize.height == ViewportSize.height;
-			bResourcesValid &= Resource->Desc.maxRenderSize.width == FsrDesc.maxRenderSize.width;
-			bResourcesValid &= Resource->Desc.maxRenderSize.height == FsrDesc.maxRenderSize.height;
-			bResourcesValid &= Resource->Desc.backendInterface.device == FsrDesc.backendInterface.device;
-			bResourcesValid &= Resource->Desc.backBufferFormat == BackBufferFormat;
+			bResourcesValid &= Resource->Desc.displaySize.width == FgDesc.displaySize.width;
+			bResourcesValid &= Resource->Desc.displaySize.height == FgDesc.displaySize.height;
+			bResourcesValid &= Resource->Desc.maxRenderSize.width == FgDesc.maxRenderSize.width;
+			bResourcesValid &= Resource->Desc.maxRenderSize.height == FgDesc.maxRenderSize.height;
+			bResourcesValid &= Resource->Desc.backBufferFormat == FgDesc.backBufferFormat;
+			bResourcesValid &= Resource->Desc.flags == FgDesc.flags;
 		}
 	}
 	else
@@ -208,38 +167,10 @@ FFXFIResourceRef FFXFrameInterpolationCustomPresent::UpdateContexts(FRDGBuilder&
 	if (!bResourcesValid)
 	{
 		Resource = new FFXFrameInterpolationResources(Backend, UniqueID);
-		Backend->CreateInterface(Resource->Interface, 2);
+		Resource->Desc = FgDesc;
 
-		Resource->OpticalFlowDesc.backendInterface = Resource->Interface;
-		Resource->OpticalFlowDesc.flags = 0;
-		Resource->OpticalFlowDesc.resolution.width = ViewportSize.width;
-		Resource->OpticalFlowDesc.resolution.height = ViewportSize.height;
-
-		FfxErrorCode Code = ffxOpticalflowContextCreate(&Resource->OpticalFlowContext, &Resource->OpticalFlowDesc);
-		if (Code == FFX_OK)
-		{
-			Code = ffxOpticalflowCreateSharedResources(Backend, Resource->Interface, &Resource->OpticalFlowContext, &Resource->OpticalFlowResources);
-			if (Code == FFX_OK)
-			{
-				Desc.backendInterface = Resource->Interface;
-				Desc.displaySize.width = ViewportSize.width;
-				Desc.displaySize.height = ViewportSize.height;
-				Desc.maxRenderSize.width = FsrDesc.maxRenderSize.width;
-				Desc.maxRenderSize.height = FsrDesc.maxRenderSize.height;
-				Desc.backBufferFormat = BackBufferFormat;
-				Desc.flags = 0;
-				Desc.flags |= (FsrDesc.flags & FFX_FSR3UPSCALER_ENABLE_DEPTH_INVERTED) ? FFX_FRAMEINTERPOLATION_ENABLE_DEPTH_INVERTED : 0;
-				Desc.flags |= (FsrDesc.flags & FFX_FSR3UPSCALER_ENABLE_DEPTH_INFINITE) ? FFX_FRAMEINTERPOLATION_ENABLE_DEPTH_INFINITE : 0;
-				Desc.flags |= (FsrDesc.flags & FFX_FSR3UPSCALER_ENABLE_TEXTURE1D_USAGE) ? FFX_FRAMEINTERPOLATION_ENABLE_TEXTURE1D_USAGE : 0;
-				FMemory::Memcpy(Resource->Desc, Desc);
-				Code = ffxFrameInterpolationContextCreate(&Resource->Context, &Resource->Desc);
-				if (Code != FFX_OK)
-				{
-					Resource.SafeRelease();
-				}
-			}
-		}
-		else
+		auto Code = Backend->ffxCreateContext(&Resource->Context, &Resource->Desc.header);
+		if (Code != FFX_API_RETURN_OK)
 		{
 			Resource.SafeRelease();
 		}
@@ -259,6 +190,7 @@ FFXFrameInterpolationCustomPresent::FFXFrameInterpolationCustomPresent()
 , RHIViewport(nullptr)
 , Status(FFXFrameInterpolationCustomPresentStatus::PresentRT)
 , Mode(EFFXFrameInterpolationPresentModeRHI)
+, Api(EFFXBackendAPI::Unknown)
 , bNeedsNativePresentRT(false)
 , bPresentRHI(false)
 , bHasValidInterpolatedRT(false)
@@ -280,8 +212,10 @@ void FFXFrameInterpolationCustomPresent::InitViewport(FViewport* InViewport, FVi
 	RHIViewport->SetCustomPresent(this);
 }
 
-bool FFXFrameInterpolationCustomPresent::InitSwapChain(IFFXSharedBackend* InBackend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxSurfaceFormat Format, FfxPresentCallbackFunc CompositionFunc)
+bool FFXFrameInterpolationCustomPresent::InitSwapChain(IFFXSharedBackend* InBackend, uint32_t Flags, FIntPoint RenderSize, FIntPoint DisplaySize, FfxSwapchain RawSwapChain, FfxCommandQueue Queue, FfxApiSurfaceFormat Format, EFFXBackendAPI InApi)
 {
+	Api = InApi;
+
     FfxErrorCode Result = FFX_OK;
     if (Backend != InBackend || Desc.flags != Flags || Desc.maxRenderSize.width != RenderSize.X || Desc.maxRenderSize.height != RenderSize.Y || Desc.displaySize.width != DisplaySize.X || Desc.displaySize.height != DisplaySize.Y || Format != Desc.backBufferFormat)
     {
@@ -308,7 +242,14 @@ void FFXFrameInterpolationCustomPresent::OnBackBufferResize()
 	{
 		RHICmdList.EnqueueLambda([this](FRHICommandListImmediate& cmd) mutable
 		{
-			Backend->UpdateSwapChain(Desc.backendInterface, RHIViewport->GetNativeSwapChain(), false, false, false);
+			ffxConfigureDescFrameGeneration ConfigDesc;
+			FMemory::Memzero(ConfigDesc);
+			ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+			ConfigDesc.swapChain = Backend->GetSwapchain(RHIViewport->GetNativeSwapChain());
+			ConfigDesc.frameGenerationEnabled = false;
+			ConfigDesc.allowAsyncWorkloads = false;
+
+			Backend->UpdateSwapChain(GetContext(), ConfigDesc);
 		});
 	});
 
@@ -344,11 +285,15 @@ void FFXFrameInterpolationCustomPresent::BeginDrawing()
 // Present.  Must match value previously returned by NeedsNativePresent for this frame.
 bool FFXFrameInterpolationCustomPresent::Present(int32& InOutSyncInterval)
 {
-	if (bUseFFXSwapchain && !bPresentRHI && Current.Interpolated.GetReference())
+	bool bDrawDebugView = false;
+#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT || UE_BUILD_TEST)
+	bDrawDebugView = CVarFFXFIShowDebugView.GetValueOnAnyThread() != 0;
+#endif
+	if (bUseFFXSwapchain && !bPresentRHI && !bDrawDebugView && Current.Interpolated.GetReference())
 	{
 		FfxSwapchain SwapChain = GetBackend()->GetSwapchain(RHIViewport->GetNativeSwapChain());
-		FfxResource OutputRes = GetBackend()->GetInterpolationOutput(SwapChain);
-		FfxResource Interpolated = GetBackend()->GetNativeResource(Current.Interpolated->GetRHI(), FFX_RESOURCE_STATE_COPY_DEST);
+		FfxApiResource OutputRes = GetBackend()->GetInterpolationOutput(SwapChain);
+		FfxApiResource Interpolated = GetBackend()->GetNativeResource(Current.Interpolated->GetRHI(), CVarFFXFICaptureDebugUI.GetValueOnAnyThread() ? FFX_API_RESOURCE_STATE_COMPUTE_READ : FFX_API_RESOURCE_STATE_COPY_DEST);
 		FfxCommandList CmdList = GetBackend()->GetInterpolationCommandList(SwapChain);
 		FIntPoint Size = FIntPoint(OutputRes.description.width, OutputRes.description.height);
 		if (CmdList)
@@ -357,7 +302,13 @@ bool FFXFrameInterpolationCustomPresent::Present(int32& InOutSyncInterval)
 		}
 	}
 
-	return (!bUseFFXSwapchain || bPresentRHI);
+	int32 PaceRHIFrames = CVarFSR3PaceRHIFrames.GetValueOnAnyThread();
+	if (!bUseFFXSwapchain && (Api == EFFXBackendAPI::Unreal) && (PaceRHIFrames != 0) && bPresentRHI && !bDrawDebugView && Current.Interpolated.GetReference())
+	{
+		InOutSyncInterval = 1;
+	}
+
+	return (!bUseFFXSwapchain || bDrawDebugView || bPresentRHI);
 }
 
 // Called from RHI thread after native Present has been called
@@ -402,7 +353,7 @@ void FFXFrameInterpolationCustomPresent::CopyBackBufferRT(FTexture2DRHIRef InBac
 				check(Mode == EFFXFrameInterpolationPresentModeRHI);
 				auto& Dest = Current.Interpolated;
                 GRenderTargetPool.FindFreeElement(RHICmdList, RTDesc, Dest, TEXT("Interpolated"));
-				check(InBackBuffer->GetDesc().Extent == Dest->GetDesc().Extent);
+				check(FIntPoint(InBackBuffer->GetSizeXYZ().X, InBackBuffer->GetSizeXYZ().Y) == Dest->GetDesc().Extent);
 				RHICmdList.Transition({
 					FRHITransitionInfo(InBackBuffer, ERHIAccess::Unknown, ERHIAccess::CopySrc),
 					FRHITransitionInfo(Dest->GetRHI(), ERHIAccess::Unknown, ERHIAccess::CopyDest)
@@ -420,8 +371,6 @@ void FFXFrameInterpolationCustomPresent::CopyBackBufferRT(FTexture2DRHIRef InBac
             }
             case FFXFrameInterpolationCustomPresentStatus::PresentRT:
             {
-				static IConsoleVariable* CVarFFXFICaptureDebugUIRef = IConsoleManager::Get().FindConsoleVariable(TEXT("r.FidelityFX.FI.CaptureDebugUI"));
-
 				RHICmdList.PushEvent(TEXT("FFXFrameInterpolationCustomPresent::CopyBackBufferRT PresentRT"), FColor::White);
 
 				auto& SecondFrameUI = Current.RealFrame;
@@ -432,13 +381,10 @@ void FFXFrameInterpolationCustomPresent::CopyBackBufferRT(FTexture2DRHIRef InBac
 					FRHITransitionInfo(SecondFrameUI->GetRHI(), ERHIAccess::Unknown, ERHIAccess::CopyDest)
 					});
 
-				check(InBackBuffer->GetDesc().Extent == SecondFrameUI->GetDesc().Extent);
+				check(FIntPoint(InBackBuffer->GetSizeXYZ().X, InBackBuffer->GetSizeXYZ().Y) == SecondFrameUI->GetDesc().Extent);
 				RHICmdList.CopyTexture(InBackBuffer, SecondFrameUI->GetRHI(), Info);
 
-				FfxResource NullResource;
-				FMemory::Memzero(NullResource);
-				GetBackend()->BindUITexture(RHIViewport->GetNativeSwapChain(), NullResource);
-				if (CVarFFXFICaptureDebugUIRef && CVarFFXFICaptureDebugUIRef->GetInt() && bHasValidInterpolatedRT && (Mode == EFFXFrameInterpolationPresentModeRHI))
+				if (CVarFFXFICaptureDebugUI.GetValueOnAnyThread() && bHasValidInterpolatedRT && (Mode == EFFXFrameInterpolationPresentModeRHI))
 				{
 					auto& FirstFrame = InterpolatedNoUI;
 					auto& SecondFrame = RealFrameNoUI;
@@ -455,7 +401,7 @@ void FFXFrameInterpolationCustomPresent::CopyBackBufferRT(FTexture2DRHIRef InBac
 						FRHITransitionInfo(RWSecondFrameUI, ERHIAccess::Unknown, ERHIAccess::UAVCompute),
 						});
 
-					auto Extent = InBackBuffer->GetDesc().Extent;
+					FIntPoint Extent(InBackBuffer->GetSizeXYZ().X, InBackBuffer->GetSizeXYZ().Y);
 					SetComputePipelineState(RHICmdList, ComputeShader.GetComputeShader());
 					ComputeShader->SetParameters(RHICmdList, FUintVector2(Extent.X, Extent.Y), FUintVector2(0, 0), FirstFrame->GetRHI(), FirstFrameUI->GetRHI(), SecondFrame->GetRHI(), RWSecondFrameUI);
 
@@ -466,7 +412,7 @@ void FFXFrameInterpolationCustomPresent::CopyBackBufferRT(FTexture2DRHIRef InBac
 						FRHITransitionInfo(InBackBuffer, ERHIAccess::Unknown, ERHIAccess::CopyDest)
 						});
 
-					check(SecondFrameUI->GetDesc().Extent == InBackBuffer->GetDesc().Extent);
+					check(SecondFrameUI->GetDesc().Extent == FIntPoint(InBackBuffer->GetSizeXYZ().X, InBackBuffer->GetSizeXYZ().Y));
 
 					RHICmdList.CopyTexture(SecondFrameUI->GetRHI(), InBackBuffer, Info);
 				}

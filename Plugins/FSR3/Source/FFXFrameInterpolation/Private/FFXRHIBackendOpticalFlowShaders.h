@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -38,11 +38,6 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FFXOpticalFlowParameters, )
 	SHADER_PARAMETER(uint32, iFrameIndex)
 	SHADER_PARAMETER(uint32, backbufferTransferFunction)
 	SHADER_PARAMETER(FVector2f, minMaxLuminance)
-	SHADER_PARAMETER(FUintVector4, pad4)
-	SHADER_PARAMETER(FUintVector4, pad5)
-	SHADER_PARAMETER(FUintVector4, pad6)
-	SHADER_PARAMETER(FUintVector4, pad7)
-	SHADER_PARAMETER(FUintVector4, pad8)
 END_UNIFORM_BUFFER_STRUCT()
 
 //-------------------------------------------------------------------------------------
@@ -52,10 +47,6 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FFXOpticalFlowSPDParameters, )
 	SHADER_PARAMETER(uint32, mips)
 	SHADER_PARAMETER(uint32, numworkGroups)
 	SHADER_PARAMETER(FUintVector2, workGroupOffset)
-	SHADER_PARAMETER(uint32, numworkGroupsOpticalFlowInputPyramid)
-	SHADER_PARAMETER(uint32, pad0)
-	SHADER_PARAMETER(uint32, pad1)
-	SHADER_PARAMETER(uint32, pda2)
 END_UNIFORM_BUFFER_STRUCT()
 
 //-------------------------------------------------------------------------------------

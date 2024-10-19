@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -69,8 +69,8 @@ public:
 	static uint32* GetBoundSRVs()
 	{
 		static uint32 SRVs[] = {
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DILATED_DEPTH,                         
-			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS,    
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS,
+			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_DILATED_DEPTH,
 			FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_CURRENT_INTERPOLATION_SOURCE,
 		};
 		return SRVs;
@@ -79,8 +79,8 @@ public:
 	static const wchar_t** GetBoundSRVNames()
 	{
 		static const wchar_t* SRVs[] = {
-			L"r_dilated_depth",
 			L"r_dilated_motion_vectors",
+			L"r_dilated_depth",
 			L"r_current_interpolation_source",
 		};
 		return SRVs;

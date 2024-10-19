@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -75,9 +75,34 @@ enum class EFFXFSR3LandscapeHISMMode : int32
 	StaticWPO UMETA(DisplayName = "Instances with World-Position-Offset"),
 };
 
+//-------------------------------------------------------------------------------------
+// The modes for rendering UI when using Frame Generation.
+//-------------------------------------------------------------------------------------
+UENUM()
+enum class EFFXFSR3FrameGenUIMode : int32
+{
+	SlateRedraw UMETA(DisplayName = "Slate Redraw"),
+	UIExtraction UMETA(DisplayName = "UI Extraction")
+};
+
+//-------------------------------------------------------------------------------------
+// The modes for pacing frames when using the RHI backend.
+//-------------------------------------------------------------------------------------
+UENUM()
+enum class EFFXFSR3PaceRHIFrameMode : int32
+{
+	None UMETA(DisplayName = "None"),
+	CustomPresentVSync UMETA(DisplayName = "Custom Present VSync")
+};
+
 //------------------------------------------------------------------------------------------------------
 // Console variables that control how FSR3 operates.
 //------------------------------------------------------------------------------------------------------
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarEnableFSR3;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarEnableFSR3InEditor;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3AdjustMipBias;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3ForceVertexDeformationOutputsVelocity;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3ForceLandscapeHISMMobility;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3Sharpness;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3AutoExposure;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3HistoryFormat;
@@ -108,7 +133,9 @@ extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3ReactiveMaskPreDO
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarEnableFFXFI;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFICaptureDebugUI;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFIUpdateGlobalFrameTime;
-#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT)
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFIModifySlateDeltaTime;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFIUIMode;
+#if (UE_BUILD_DEBUG || UE_BUILD_DEVELOPMENT || UE_BUILD_TEST)
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFIShowDebugTearLines;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFIShowDebugView;
 #endif
@@ -117,6 +144,7 @@ extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFFXFIShowDebugView;
 // Console variables for the RHI backend.
 //-------------------------------------------------------------------------------------
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3UseRHI;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3PaceRHIFrames;
 
 //-------------------------------------------------------------------------------------
 // Console variables for the D3D12 backend.
@@ -128,7 +156,7 @@ extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3AllowAsyncWorkloa
 //-------------------------------------------------------------------------------------
 // Settings for FSR3 exposed through the Editor UI.
 //-------------------------------------------------------------------------------------
-UCLASS(Config = Engine, DefaultConfig, DisplayName = "FidelityFX Super Resolution 3.0")
+UCLASS(Config = Engine, DefaultConfig, DisplayName = "FidelityFX Super Resolution 3.1")
 class FFXFSR3SETTINGS_API UFFXFSR3Settings : public UDeveloperSettings
 {
 	GENERATED_UCLASS_BODY()
@@ -170,11 +198,20 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Frame Generation Settings", meta = (ConsoleVariable = "r.FidelityFX.FI.UpdateGlobalFrameTime", DisplayName = "Update Global Frame Time", ToolTip = "Update the GAverageMS and GAverageFPS engine globals with the frame time & FPS including frame generation."))
 		bool bUpdateGlobalFrameTime;
 
+	UPROPERTY(Config, EditAnywhere, Category = "Frame Generation Settings", meta = (ConsoleVariable = "r.FidelityFX.FI.ModifySlateDeltaTime", DisplayName = "Modify Slate Delta Time", ToolTip = "Set the FSlateApplication delta time to 0.0 when redrawing the UI for the 'Slate Redraw' UI mode to prevent widgets' NativeTick implementations updating incorrectly, ignored when using 'UI Extraction'."))
+		bool bModifySlateDeltaTime;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Frame Generation Settings", meta = (ConsoleVariable = "r.FidelityFX.FI.UIMode", DisplayName = "UI Mode", ToolTip = "The method to render the UI when using Frame Generation.\nSlate Redraw (0): will cause Slate to render the UI on to both the real & generation images each frame, this is higher quality but requires UI elements to be able to render multiple times per game frame.\nUI Extraction (1): will compare the pre & post UI frame to extract the UI and copy it on to the generated frame, this might result in lower quality for translucent UI elements but doesn't require re-rendering UI elements."))
+		EFFXFSR3FrameGenUIMode UIMode;
+
 	UPROPERTY(Config, EditAnywhere, Category = "Frame Generation Settings", meta = (ConsoleVariable = "r.FidelityFX.FI.AllowAsyncWorkloads", DisplayName = "D3D12 Async. Interpolation", ToolTip = "True to use async. execution of Frame Interpolation, false to run Frame Interpolation synchronously with the game."))
 		bool bD3D12AsyncInterpolation;
 
 	UPROPERTY(Config, EditAnywhere, Category = "Frame Generation Settings", meta = (ConsoleVariable = "r.FidelityFX.FI.OverrideSwapChainDX12", DisplayName = "D3D12 Async. Present", ToolTip = "True to use FSR3's D3D12 swap-chain override that improves frame pacing, false to use the fallback implementation based on Unreal's RHI."))
 		bool bD3D12AsyncPresent;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Frame Generation Settings", meta = (ConsoleVariable = "r.FidelityFX.FI.RHIPacingMode", DisplayName = "RHI Pacing Mode", ToolTip = "The modes for pacing frames when using the RHI backend.\nNone (0): No frame pacing - default.\nCPU Wait (1): Wait on the CPU before the second presented frame for Max(VBlank Interval, Half GPU Frame Time) - this doesn't interfere with presentation state but won't hold frames on screen for ideal durations and can still tear.\nCustom Present VSync (2): enable VSync for the second presented frame, tearing will only affect the interpolated frame which will be held on screen for at least one VBlank but interferes with presentation state which may not always work."))
+		EFFXFSR3PaceRHIFrameMode PaceMode;
 
 	UPROPERTY(Config, EditAnywhere, Category = "Quality Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.QualityMode", DisplayName = "Quality Mode", ToolTip = "Selects the default quality mode to be used when upscaling with FSR3."))
 		EFFXFSR3QualityMode QualityMode;

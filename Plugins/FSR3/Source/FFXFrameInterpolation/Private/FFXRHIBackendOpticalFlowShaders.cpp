@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -24,6 +24,13 @@
 #include "FFXRHIBackendOpticalFlowShaders.h"
 #include "FFXRHIBackendSubPass.h"
 #include "FFXRHIBackend.h"
+#include "ShaderCompilerCore.h"
+#include "RHIStaticStates.h"
+#if UE_VERSION_AT_LEAST(5, 2, 0)
+#include "DataDrivenShaderPlatformInfo.h"
+#else
+#include "RHIDefinitions.h"
+#endif
 
 #include "FFXOpticalFlowApi.h"
 
@@ -74,7 +81,12 @@ FFXRHIBackendRegisterEffect<FFX_EFFECT_OPTICALFLOW, GetOpticalFlowPass> FFXRHIBa
 
 bool FFXOpticalFlowGlobalShader::ShouldCompilePermutation(const FGlobalShaderPermutationParameters& Parameters)
 {
-	return FFXGlobalShader::ShouldCompilePermutation(Parameters);
+#if UE_VERSION_AT_LEAST(5, 1, 0)
+	bool const bWaveOps = FDataDrivenShaderPlatformInfo::GetSupportsWaveOperations(Parameters.Platform) == ERHIFeatureSupport::RuntimeGuaranteed;
+#else
+	bool const bWaveOps = RHISupportsWaveOperations(Parameters.Platform);
+#endif
+	return bWaveOps && FFXGlobalShader::ShouldCompilePermutation(Parameters);
 }
 
 void FFXOpticalFlowGlobalShader::ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters& Parameters, FShaderCompilerEnvironment& OutEnvironment)
@@ -124,23 +136,23 @@ void FFXOpticalFlowGlobalShader::BindParameters(FRDGBuilder& GraphBuilder, FFXBa
 	{
 		if (!wcscmp(job->computeJobDescriptor.pipeline.srvTextureBindings[i].name, L"r_input_color"))
 		{
-			Parameters->r_input_color = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+			Parameters->r_input_color = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.srvTextureBindings[i].name, L"r_optical_flow_input"))
 		{
-			Parameters->r_optical_flow_input = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+			Parameters->r_optical_flow_input = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.srvTextureBindings[i].name, L"r_optical_flow_previous_input"))
 		{
-			Parameters->r_optical_flow_previous_input = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+			Parameters->r_optical_flow_previous_input = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.srvTextureBindings[i].name, L"r_optical_flow"))
 		{
-			Parameters->r_optical_flow = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+			Parameters->r_optical_flow = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.srvTextureBindings[i].name, L"r_optical_flow_previous"))
 		{
-			Parameters->r_optical_flow_previous = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].internalIndex);
+			Parameters->r_optical_flow_previous = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 		}
 	}
 
@@ -148,55 +160,55 @@ void FFXOpticalFlowGlobalShader::BindParameters(FRDGBuilder& GraphBuilder, FFXBa
 	{
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input"))
 		{
-			Parameters->rw_optical_flow_input = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input_level_1"))
 		{
-			Parameters->rw_optical_flow_input_level_1 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input_level_1 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input_level_2"))
 		{
-			Parameters->rw_optical_flow_input_level_2 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input_level_2 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input_level_3"))
 		{
-			Parameters->rw_optical_flow_input_level_3 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input_level_3 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input_level_4"))
 		{
-			Parameters->rw_optical_flow_input_level_4 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input_level_4 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input_level_5"))
 		{
-			Parameters->rw_optical_flow_input_level_5 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input_level_5 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_input_level_6"))
 		{
-			Parameters->rw_optical_flow_input_level_6 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_input_level_6 = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow"))
 		{
-			Parameters->rw_optical_flow = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_next_level"))
 		{
-			Parameters->rw_optical_flow_next_level = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_next_level = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_scd_histogram"))
 		{
-			Parameters->rw_optical_flow_scd_histogram = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_scd_histogram = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_scd_previous_histogram"))
 		{
-			Parameters->rw_optical_flow_scd_previous_histogram = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_scd_previous_histogram = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_scd_temp"))
 		{
-			Parameters->rw_optical_flow_scd_temp = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_scd_temp = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 		if (!wcscmp(job->computeJobDescriptor.pipeline.uavTextureBindings[i].name, L"rw_optical_flow_scd_output"))
 		{
-			Parameters->rw_optical_flow_scd_output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].internalIndex), job->computeJobDescriptor.uavTextureMips[i]));
+			Parameters->rw_optical_flow_scd_output = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 		}
 	}
 

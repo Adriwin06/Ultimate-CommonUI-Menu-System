@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -56,76 +56,70 @@ public:
 	{
 		static const wchar_t* SRVs[] = {
 			L"r_input_exposure",
+			L"r_dilated_reactive_masks",
 			L"r_dilated_motion_vectors",
 			L"r_internal_upscaled_color",
-			L"r_lock_status",
-			L"r_prepared_input_color",
-			L"r_luma_history",
 			L"r_lanczos_lut",
-			L"r_imgMips",
-			L"r_dilated_reactive_masks",
-			L"r_input_motion_vectors",
+			L"r_farthest_depth_mip1",
+			L"r_current_luma",
+			L"r_luma_instability",
+			L"r_input_color_jittered",
 		};
 		return SRVs;
 	}
 
 	static const wchar_t** GetBoundUAVNames()
 	{
-		static const wchar_t* SRVs[] = {
+		static const wchar_t* UAVs[] = {
 			L"rw_internal_upscaled_color",
-			L"rw_lock_status",
-			L"rw_luma_history",
-			L"rw_new_locks",
 			L"rw_upscaled_output",
+			L"rw_new_locks",
 		};
-		return SRVs;
+		return UAVs;
 	}
 
 	static const wchar_t** GetBoundCBNames()
 	{
-		static const wchar_t* SRVs[] = {
+		static const wchar_t* CBs[] = {
 			L"cbFSR3Upscaler",
 		};
-		return SRVs;
+		return CBs;
 	}
 
 	static uint32* GetBoundSRVs()
 	{
 		static uint32 SRVs[] = {
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INPUT_EXPOSURE,                          
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INPUT_EXPOSURE,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_DILATED_REACTIVE_MASKS,
 			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_DILATED_MOTION_VECTORS,                  
 			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INTERNAL_UPSCALED_COLOR,                 
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LOCK_STATUS,                             
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_PREPARED_INPUT_COLOR,                    
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LUMA_HISTORY,                            
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LANCZOS_LUT,                             
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_SCENE_LUMINANCE,                         
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_DILATED_REACTIVE_MASKS,
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INPUT_MOTION_VECTORS,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LANCZOS_LUT,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_FARTHEST_DEPTH_MIP1,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_CURRENT_LUMA,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LUMA_INSTABILITY,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INPUT_COLOR,
 		};
 		return SRVs;
 	}
 
 	static uint32 GetNumBoundSRVs()
 	{
-		return 10;
+		return 9;
 	}
 
 	static uint32* GetBoundUAVs()
 	{
 		static uint32 UAVs[] = { 
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INTERNAL_UPSCALED_COLOR,              
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LOCK_STATUS,                          
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_LUMA_HISTORY,                         
-			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_NEW_LOCKS,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_INTERNAL_UPSCALED_COLOR,
 			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_UPSCALED_OUTPUT,
+			FFX_FSR3UPSCALER_RESOURCE_IDENTIFIER_NEW_LOCKS,
 		};
 		return UAVs;
 	}
 
 	static uint32 GetNumBoundUAVs()
 	{
-		return 5;
+		return 3;
 	}
 
 	static uint32* GetBoundCBs()

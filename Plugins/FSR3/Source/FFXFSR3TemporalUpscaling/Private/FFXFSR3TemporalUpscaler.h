@@ -1,6 +1,6 @@
-// This file is part of the FidelityFX Super Resolution 3.0 Unreal Engine Plugin.
+// This file is part of the FidelityFX Super Resolution 3.1 Unreal Engine Plugin.
 //
-// Copyright (c) 2023 Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2024 Advanced Micro Devices, Inc. All rights reserved.
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -41,6 +41,10 @@ using FFXFSR3PassInput = ITemporalUpscaler::FPassInputs;
 using FFXFSR3View = FViewInfo;
 #endif
 
+#ifndef ENGINE_HAS_DENOISE_INDIRECT
+#define ENGINE_HAS_DENOISE_INDIRECT 0
+#endif
+
 struct FPostProcessingInputs;
 
 //-------------------------------------------------------------------------------------
@@ -60,10 +64,11 @@ public:
 
 	void ReleaseState(FSR3StateRef State);
 
+	static class IFFXSharedBackend* GetApiAccessor(EFFXBackendAPI& Api);
 	static float GetResolutionFraction(uint32 Mode);
 
 #if DO_CHECK || DO_GUARD_SLOW || DO_ENSURE
-	static void OnFSRMessage(FfxMsgType type, const wchar_t* message);
+	static void OnFSRMessage(uint32 type, const wchar_t* message);
 #endif // DO_CHECK || DO_GUARD_SLOW || DO_ENSURE
 
 	static void SaveScreenPercentage();
@@ -80,7 +85,9 @@ public:
 		const FFXFSR3View& View,
 		const FFXFSR3PassInput& PassInputs) const override;
 
+#if UE_VERSION_AT_LEAST(5, 1, 0)
 	IFFXFSR3TemporalUpscaler* Fork_GameThread(const class FSceneViewFamily& InViewFamily) const override;
+#endif
 
 	float GetMinUpsampleResolutionFraction() const override;
 	float GetMaxUpsampleResolutionFraction() const override;
@@ -155,6 +162,16 @@ public:
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
 
+#if ENGINE_HAS_DENOISE_INDIRECT
+	FSSDSignalTextures DenoiseIndirect(
+		FRDGBuilder& GraphBuilder,
+		const FViewInfo& View,
+		FPreviousViewInfo* PreviousViewInfos,
+		const FSceneTextureParameters& SceneTextures,
+		const FIndirectInputs& Inputs,
+		const FAmbientOcclusionRayTracingConfig Config) const override;
+#endif
+
 	FDiffuseIndirectOutputs DenoiseSkyLight(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& View,
@@ -163,6 +180,7 @@ public:
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
 
+#if UE_VERSION_OLDER_THAN(5, 4, 0)
 	FDiffuseIndirectOutputs DenoiseReflectedSkyLight(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& View,
@@ -170,7 +188,8 @@ public:
 		const FSceneTextureParameters& SceneTextures,
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
-	
+#endif
+
 	FSSDSignalTextures DenoiseDiffuseIndirectHarmonic(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& View,
