@@ -31,8 +31,8 @@ The goal of this project is to make the ultimate game menu system that has every
 There are currently 4 different branches:
 
 - [NvRTX](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX): This branch has the most settings since it includes many settings from the [NvRTX branch](https://developer.nvidia.com/game-engines/unreal-engine/rtx-branch) of Unreal Engine.
-- [5.4](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.4): This branch is based on the main branch and is a port to Unreal Engine 5.4, with new Unreal Engine 5.4-specific settings. It will be merged to main when the FSR3 plugin becomes available for Unreal Engine 5.4. This branch will also be the one to receive new functionalities since it's the future main branch.
-- [main](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main): This is the default branch and the one you should use if your game is not using the [NvRTX Branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX) of Unreal Engine or Unreal Engine 5.4.
+- [main](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main): This is the default branch and the one you should use if your game is not using the [NvRTX Branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX).
+- [Lyra](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/Lyra): This branch make the menu look like Lyra, and even better. Big thanks to [ArbyKay](https://github.com/ArbyKay) for this.
 - [Enhanced Inputs](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/Enhanced-Inputs): This branch is experimental, and updates are very rare, so it will almost always be outdated compared to the other branches. Here, I experiment and try to make Enhanced Inputs work with CommonUI.
 
 ## Plugins Used
@@ -66,7 +66,6 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
   - Bloom Size Scale, Lumen GI Scene Lighting Update Speed, Lumen GI Final Gather Lighting Update Speed, Exposure EV100 Min, Exposure EV100 Max, AO Power and AO Quality settings are not working. The issue stems from these variables not being assigned to a pin in a "Make PostProcessSettings" node, because the pin doesn't show up, despite checking the "Show pin" box. It seems like it is an Engine bug.
 
 ## To do
-  - Add other settings like audio device, audio mode, color blind mode, etc and settings from the NvRTX branch
   - Enhance Enhanced Input system implementation (Available in experimental version in [this branch](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/tree/Enhanced-Inputs))
   - Add comparaison images for each settings, and custom description widgets when it's needed
   - Fix all bugs.
