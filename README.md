@@ -31,13 +31,13 @@ The goal of this project is to make the ultimate game menu system that has every
 There are currently 4 different branches:
 
 - [main](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main): This branch uses Unreal Engine 5.4, it is the default branch and the one you should use if your game is not using the [NvRTX Branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX) or the [5.3 branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.3).
-- [5.3](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.3): This branch is for peoples who still use Unreal Engine 5.3, but since it's an outdated Unreal Engine 5 version, it won't be updated anymore. Switch to the the [main branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main) for latest updates.
+- [5.3](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.3): This branch is for peoples who still use Unreal Engine 5.3, but since it's an outdated Unreal Engine 5 version, it won't be updated anymore. Switch to the [main branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main) for latest updates.
 - [NvRTX](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX): This branch has the most settings since it includes many settings from the [NvRTX branch](https://developer.nvidia.com/game-engines/unreal-engine/rtx-branch) of Unreal Engine, it uses the 5.3 version of their branch.
 - [Lyra](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/Lyra): This branch make the menu look like Lyra, and even better. Big thanks to [ArbyKay](https://github.com/ArbyKay) for this. It uses Unreal Engine 5.4.
 - [Enhanced Inputs](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/Enhanced-Inputs): This branch is experimental, and updates are very rare, so it will almost always be outdated compared to the other branches. Here, I experiment and try to make Enhanced Inputs work with CommonUI. It uses Unreal Engine 5.3.
 
 ## Plugins Used
-If you have a missing plugins error, it's probably because I forgot to disable the plugins that I use to developp this project and makes my worflow easier, but they are absolutely not requiered.
+If you have a missing plugins error, it's probably because I forgot to disable the plugins that I use to develop this project and makes my worflow easier, but they are absolutely not required.
 The plugins that are used in the menu need to be installed in order for this to properly work. Fortunately, they are now included in the project files.  Here is a table of these plugins: 
 | Name | Description |
 | ------------- | ------------- |
@@ -68,11 +68,11 @@ I recommend launching the game in "Standalone Game" mode instead of "Selected Vi
 
 ## To do
   - Enhance Enhanced Input system implementation (Available in experimental version in [this branch](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/tree/Enhanced-Inputs))
-  - Add comparaison images for each settings, and custom description widgets when it's needed
+  - Add comparison images for each setting, and custom description widgets when it's needed
   - Fix all bugs.
 
 ### To maybe do in C++
   - CommonBoundActionBar actions, instead of hidden action button in the widget that got displayed in this bar.
   - Update the style of buttons in the CommonBoundActionBar of the "Options" menu when switching between controller and mouse & keyboard inputs, avoiding the use of two separate bars with different styles that are hidden based on the input type.
   - Prompt system.
-  - Tab List View automation to eliminate the need for separate button blueprints for each tab button.
+  - Tab List View automation to eliminate the need for separate button Blueprint for each tab button.
