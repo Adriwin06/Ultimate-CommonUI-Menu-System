@@ -47,17 +47,17 @@ UStreamlineFeatureSupport ToUStreamlineFeatureSupport(EStreamlineFeatureSupport 
 
 	switch (Support)
 	{
-	case EStreamlineFeatureSupport::Supported: return UStreamlineFeatureSupport::Supported;
+		case EStreamlineFeatureSupport::Supported: return UStreamlineFeatureSupport::Supported;
 
-	default:
-		/* Gotta catch them all*/
-	case EStreamlineFeatureSupport::NotSupported: return UStreamlineFeatureSupport::NotSupported;
+		default:
+			/* Gotta catch them all*/
+		case EStreamlineFeatureSupport::NotSupported: return UStreamlineFeatureSupport::NotSupported;
 
-	case EStreamlineFeatureSupport::NotSupportedIncompatibleHardware: return UStreamlineFeatureSupport::NotSupportedIncompatibleHardware;
-	case EStreamlineFeatureSupport::NotSupportedDriverOutOfDate: return UStreamlineFeatureSupport::NotSupportedDriverOutOfDate;
-	case EStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate: return UStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate;
-	case EStreamlineFeatureSupport::NotSupportedHardwareSchedulingDisabled: return UStreamlineFeatureSupport::NotSupportedHardewareSchedulingDisabled;
-	case EStreamlineFeatureSupport::NotSupportedIncompatibleRHI: return UStreamlineFeatureSupport::NotSupportedByRHI;
+		case EStreamlineFeatureSupport::NotSupportedIncompatibleHardware: return UStreamlineFeatureSupport::NotSupportedIncompatibleHardware;
+		case EStreamlineFeatureSupport::NotSupportedDriverOutOfDate: return UStreamlineFeatureSupport::NotSupportedDriverOutOfDate;
+		case EStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate: return UStreamlineFeatureSupport::NotSupportedOperatingSystemOutOfDate;
+		case EStreamlineFeatureSupport::NotSupportedHardwareSchedulingDisabled: return UStreamlineFeatureSupport::NotSupportedHardewareSchedulingDisabled;
+		case EStreamlineFeatureSupport::NotSupportedIncompatibleRHI: return UStreamlineFeatureSupport::NotSupportedByRHI;
 	}
 }
 
@@ -86,37 +86,54 @@ namespace
 }
 #endif
 
-namespace
+int32 UStreamlineLibrary::ValidateAndConvertToIndex(UStreamlineFeature Feature)
 {
-	uint32 SanitizeFeatureEnum(UStreamlineFeature Feature)
+	const int32 FeatureInt = static_cast<int32>(Feature);
+
+	if (FeatureInt < UStreamlineLibrary::Features.Num())
 	{
-		// TODO check range of Feature
-		return static_cast<uint32>(Feature);
+		return FeatureInt;
 	}
 
+	else
+	{
+		return 0;
+	}
 }
-
 
 
 void UStreamlineLibrary::BreakStreamlineFeatureRequirements(UStreamlineFeatureRequirementsFlags Requirements, bool& D3D11Supported, bool& D3D12Supported, bool& VulkanSupported, bool& VSyncOffRequired, bool& HardwareSchedulingRequired)
 {
-	D3D11Supported = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::D3D11Supported);
-	D3D12Supported = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::D3D12Supported);
-	VulkanSupported = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::VulkanSupported);
-	VSyncOffRequired = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::VSyncOffRequired);
-	HardwareSchedulingRequired = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::HardwareSchedulingRequired);
+	if (ValidateEnumValue(Requirements, __FUNCTION__))
+	{
+		D3D11Supported = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::D3D11Supported);
+		D3D12Supported = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::D3D12Supported);
+		VulkanSupported = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::VulkanSupported);
+		VSyncOffRequired = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::VSyncOffRequired);
+		HardwareSchedulingRequired = EnumHasAllFlags(Requirements, UStreamlineFeatureRequirementsFlags::HardwareSchedulingRequired);
+	}
 }
 
 FStreamlineFeatureRequirements UStreamlineLibrary::GetStreamlineFeatureInformation(UStreamlineFeature Feature)
 {
-	return Features[SanitizeFeatureEnum(Feature)];
+	if (ValidateEnumValue(Feature, __FUNCTION__))
+	{
+		return Features[ValidateAndConvertToIndex(Feature)];
+	}
+
+	return FStreamlineFeatureRequirements();
 }
 
 bool UStreamlineLibrary::IsStreamlineFeatureSupported(UStreamlineFeature Feature)
 {
 	TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(false)
 
-	return QueryStreamlineFeatureSupport(Feature) == UStreamlineFeatureSupport::Supported;
+	if (ValidateEnumValue(Feature, __FUNCTION__))
+	{
+		return QueryStreamlineFeatureSupport(Feature) == UStreamlineFeatureSupport::Supported;
+	}
+
+	return false;
 }
 
 
@@ -124,7 +141,12 @@ UStreamlineFeatureSupport UStreamlineLibrary::QueryStreamlineFeatureSupport(UStr
 {
 	TRY_INIT_STREAMLINE_LIBRARY_AND_RETURN(UStreamlineFeatureSupport::NotSupported)
 
-	return Features[SanitizeFeatureEnum(Feature)].Support;
+	if (ValidateEnumValue(Feature, __FUNCTION__))
+	{
+		return Features[ValidateAndConvertToIndex(Feature)].Support;
+	}
+
+	return UStreamlineFeatureSupport::NotSupported;
 }
 
 void UStreamlineLibrary::Startup()
@@ -133,7 +155,7 @@ void UStreamlineLibrary::Startup()
 	// This initialization will likely not succeed unless this module has been moved to PostEngineInit, and that's ok
 	TryInitStreamlineLibrary();
 #else
-	UE_LOG(LogStreamlineBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DLSS-G and will always return UStreamlineDLSSGSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off DLSS-G related UI elements."));
+	UE_LOG(LogStreamlineBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable Streamline features and will always return UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off related UI elements."));
 #endif
 }
 void UStreamlineLibrary::Shutdown()
@@ -147,7 +169,7 @@ void UStreamlineLibrary::RegisterFeatureSupport(UStreamlineFeature InFeature, US
 {
 #if WITH_STREAMLINE
 	sl::Feature SLFeature = FromUStreamlineFeature(InFeature);
-	FStreamlineFeatureRequirements& Requirements = Features[SanitizeFeatureEnum(InFeature)];
+	FStreamlineFeatureRequirements& Requirements = Features[ValidateAndConvertToIndex(InFeature)];
 	if (IsStreamlineSupported())
 	{
 
@@ -168,8 +190,8 @@ void UStreamlineLibrary::RegisterFeatureSupport(UStreamlineFeature InFeature, US
 			UE_SL_ENUM_CHECK(eHardwareSchedulingRequired, HardwareSchedulingRequired)
 #undef UE_SL_ENUM_CHECK
 
-			// strip the API support bits for those that are not implemented, but keep the other flags intact
-			const sl::FeatureRequirementFlags ImplementedAPIFlags = PlatformGetAllImplementedStreamlineRHIs();
+		// strip the API support bits for those that are not implemented, but keep the other flags intact
+		const sl::FeatureRequirementFlags ImplementedAPIFlags = PlatformGetAllImplementedStreamlineRHIs();
 		const sl::FeatureRequirementFlags AllAPIFlags = sl::FeatureRequirementFlags::eD3D11Supported | sl::FeatureRequirementFlags::eD3D12Supported | sl::FeatureRequirementFlags::eVulkanSupported;
 		const sl::FeatureRequirementFlags SLRequirementFlags = sl::FeatureRequirementFlags(SLBitwiseAnd(SLRequirements.flags, ImplementedAPIFlags) | SLBitwiseAnd(SLRequirements.flags, ~AllAPIFlags));
 

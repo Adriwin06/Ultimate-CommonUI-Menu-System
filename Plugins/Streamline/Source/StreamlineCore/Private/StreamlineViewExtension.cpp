@@ -34,6 +34,9 @@
 #define ENGINE_SUPPORTS_CLEARQUADALPHA ((ENGINE_MAJOR_VERSION == 5) && (ENGINE_MINOR_VERSION >= 2))
 #endif
 
+#ifndef XR_WORKAROUND
+#define XR_WORKAROUND 0
+#endif
 
 TArray<FStreamlineViewExtension::FTrackedView> FStreamlineViewExtension::TrackedViews;
 
@@ -84,10 +87,10 @@ static TAutoConsoleVariable<int32> CVarStreamlineViewIdOverride(
 	ECVF_Default);
 
 static TAutoConsoleVariable<int32> CVarStreamlineViewIndexToTag(
-	TEXT("r.Streamline.ViewIndexToTag"), 0,
+	TEXT("r.Streamline.ViewIndexToTag"), -1,
 	TEXT("Which view of a view family to tag\n")
-	TEXT("-1: all views\n")
-	TEXT("0: first view (default) \n")
+	TEXT("-1: all views (default)\n")
+	TEXT("0: first view\n")
 	TEXT("1..n: nth view, typically up to 3 when having 4 player split screen view families\n"),
 	ECVF_Default);
 
@@ -97,6 +100,16 @@ static TAutoConsoleVariable<bool> CVarStreamlineClearColorAlpha(
 	TEXT("Clear alpha of scenecolor at the end of the Streamline view extension to allow subsequent UI drawcalls be represented correctly in the alpha channel (default = true)\n"),
 	ECVF_RenderThreadSafe);
 
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+static bool bLogStreamlineLogTrackedViews = false;
+static FAutoConsoleVariableRef CVarStreamlineLogTrackedViews(
+	TEXT("r.Streamline.LogTrackedViews"),
+	bLogStreamlineLogTrackedViews,
+	TEXT("Enable/disable whether to log which views & backbuffers are associated with each other at various parts of rendering. Most useful when developing & debugging multi view port multi window code. Can be overriden with -sl{no}logviewtracking\n"),
+	ECVF_Default);
+#else
+static constexpr bool bLogStreamlineLogTrackedViews = false;
+#endif
 
 DECLARE_GPU_STAT(Streamline)
 DECLARE_GPU_STAT(StreamlineDeepDVC)
@@ -115,7 +128,6 @@ bool HasViewIdOverride()
 	{
 		return CVarStreamlineViewIdOverride->GetInt() == 1;
 	}
-
 }
 
 FStreamlineViewExtension::FStreamlineViewExtension(const FAutoRegister& AutoRegister, FStreamlineRHI* InStreamlineRHIExtensions)
@@ -141,7 +153,7 @@ FStreamlineViewExtension::FStreamlineViewExtension(const FAutoRegister& AutoRegi
 			
 				FViewportRHIRef ViewportReference = *(FViewportRHIRef*)InViewport;
 				void* NativeSwapchain = ViewportReference->GetNativeSwapChain();
-				StreamlineRHIExtensions->OnSwapchainCreated(NativeSwapchain);
+				StreamlineRHIExtensions->OnSwapchainDestroyed(NativeSwapchain);
 			}
 		);
 
@@ -161,6 +173,16 @@ FStreamlineViewExtension::FStreamlineViewExtension(const FAutoRegister& AutoRegi
 			}
 		);
 	}
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+	if (FParse::Param(FCommandLine::Get(), TEXT("sllogviewtracking")))
+	{
+		bLogStreamlineLogTrackedViews = true;
+	}
+	if (FParse::Param(FCommandLine::Get(), TEXT("slnologviewtracking")))
+	{
+		bLogStreamlineLogTrackedViews = false;
+	}
+#endif
 }
 
 void FStreamlineViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
@@ -184,9 +206,24 @@ void FStreamlineViewExtension::BeginRenderViewFamily(FSceneViewFamily& InViewFam
 }
 
 
+bool FStreamlineViewExtension::DebugViewTracking()
+{
+#if DEBUG_STREAMLINE_VIEW_TRACKING
+
+
+	return bLogStreamlineLogTrackedViews;
+#else
+	return false;
+#endif
+}
+
 void FStreamlineViewExtension::LogTrackedViews(const TCHAR* CallSite)
 {
 #if DEBUG_STREAMLINE_VIEW_TRACKING
+	if (!DebugViewTracking())
+	{
+		return;
+	}
 	const FString ViewRectString = FString::JoinBy(TrackedViews, TEXT(", "), [](const FTrackedView& State)
 	{ 
 		FString TextureName = TEXT("Call me nobody");
@@ -197,7 +234,7 @@ void FStreamlineViewExtension::LogTrackedViews(const TCHAR* CallSite)
 			if (Texture && Texture->IsValid())
 			{
 				TextureName = FString::Printf(TEXT("%s %p"), *Texture->GetName().ToString(), Texture->GetTexture2D());
-#if (ENGINE_MAJOR_VERSION  == 4)
+#if (ENGINE_MAJOR_VERSION  == 4) || ((ENGINE_MAJOR_VERSION  == 5) && (ENGINE_MINOR_VERSION < 1))
 				TextureDimensionAsString = Texture->GetSizeXYZ().ToString();
 #else
 				TextureDimensionAsString = Texture->GetSizeXY().ToString();
@@ -212,8 +249,33 @@ void FStreamlineViewExtension::LogTrackedViews(const TCHAR* CallSite)
 #endif
 }
 
+// When editing this, please make sure to also update IsProperGraphicsView
+void LogViewNotTrackedReason(const TCHAR* Callsite, const FSceneView& View)
+{
+	if (View.bIsSceneCapture)
+	{
+		FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return View.bIsSceneCapture Key=%u, %s"), Callsite, View.GetViewKey(), *CurrentThreadName()));
+	}
 
+	if (View.bIsOfflineRender)
+	{
+		FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return View.bIsOfflineRender Key=%u, %s"), Callsite, View.GetViewKey(), *CurrentThreadName()));
+	}
 
+	if (!View.bIsGameView)
+	{
+		FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return !View.bIsGameView Key=%u, %s"), Callsite, View.GetViewKey(), *CurrentThreadName()));
+	}
+#if !XR_WORKAROUND
+	if (View.StereoPass != EStereoscopicPass::eSSP_FULL)
+	{
+		FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return View.StereoPass != EStereoscopicPass::eSSP_FULL Key=%u, %s"), Callsite, View.GetViewKey(), *CurrentThreadName()));
+	}
+#endif
+
+}
+
+// When editing this, please make sure to also update LogViewNotTrackedReason
 const bool IsProperGraphicsView(const FSceneView& InView)
 {
 	if (InView.bIsSceneCapture)
@@ -233,8 +295,16 @@ const bool IsProperGraphicsView(const FSceneView& InView)
 		return false;
 	}
 
+	//For vr rendering we disable FG
+#if !XR_WORKAROUND
+	if (InView.StereoPass != EStereoscopicPass::eSSP_FULL)
+	{
+		return false;
+	}
+#endif
 	return true;
 }
+
 
 void FStreamlineViewExtension::AddTrackedView(const FSceneView& InView)
 {
@@ -245,15 +315,7 @@ void FStreamlineViewExtension::AddTrackedView(const FSceneView& InView)
 	if (!IsProperGraphicsView(InView))
 	{
 #if DEBUG_STREAMLINE_VIEW_TRACKING
-		if (InView.bIsSceneCapture)
-		{
-			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return InView.bIsSceneCapture Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), NewViewKey, *CurrentThreadName()));
-		}
-
-		if (!InView.bIsGameView)
-		{
-			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return !InView.bIsGameView Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), NewViewKey, *CurrentThreadName()));
-		}
+		LogViewNotTrackedReason(ANSI_TO_TCHAR(__FUNCTION__), ViewInfo);
 #endif
 		return;
 	}
@@ -277,12 +339,34 @@ void FStreamlineViewExtension::AddTrackedView(const FSceneView& InView)
 	
 	if (TargetTexture && TargetTexture->GetName() != TEXT("HitProxyTexture"))
 	{
-
-		check( (TargetTexture->GetName() == TEXT("BufferedRT"))
+		const bool bIsExpectedRenderTarget  = 
+		 (    (TargetTexture->GetName() == TEXT("BufferedRT"))
 			|| (TargetTexture->GetName() == TEXT("BackbufferReference"))
 			|| (TargetTexture->GetName() == TEXT("FD3D11Viewport::GetSwapChainSurface")) // (⊙_⊙)？
-			||	(ENGINE_MAJOR_VERSION == 4) 
-			|| ((ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 1)));
+	#if XR_WORKAROUND
+			|| (TargetTexture->GetName().ToString().Contains(TEXT("XRSwapChainBackingTex")))
+	#endif
+			|| (ENGINE_MAJOR_VERSION == 4) 
+			|| ((ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION < 1))
+		);
+
+		if (!bIsExpectedRenderTarget)
+		{
+
+			FString TextureDimensionAsString = TEXT("HerpxDerp");
+
+			const FString TextureName = FString::Printf(TEXT("%s %p"), *TargetTexture->GetName().ToString(), TargetTexture->GetTexture2D());
+#if (ENGINE_MAJOR_VERSION  == 4) || ((ENGINE_MAJOR_VERSION  == 5) && (ENGINE_MINOR_VERSION < 1))
+			TextureDimensionAsString = TargetTexture->GetSizeXYZ().ToString();
+#else
+			TextureDimensionAsString = TargetTexture->GetSizeXY().ToString();
+#endif
+
+			UE_LOG(LogStreamline, Error, TEXT("found unexpected Viewfamily rendertarget %s %s. This might cause instability in other parts of the Streamline plugin."), 
+				*TextureName,
+				*TextureDimensionAsString
+				);
+		}
 		FoundTrackedView->Texture = TargetTexture;
 	}
 
@@ -319,7 +403,7 @@ void FStreamlineViewExtension::UntrackViewsForBackbuffer(void* InBackBuffer)
 						{
 							bRemove = true;
 #if DEBUG_STREAMLINE_VIEW_TRACKING
-							UE_LOG(LogStreamline, Log, TEXT("Untracking backbuffer %s native %p ViewKey = %u"), *TrackedView.Texture->GetName().ToString(), NativeTracked, TrackedView.ViewKey);
+							UE_CLOG( DebugViewTracking(), LogStreamline, Log, TEXT("Untracking backbuffer %s native %p ViewKey = %u"), *TrackedView.Texture->GetName().ToString(), NativeTracked, TrackedView.ViewKey);
 #endif
 						}
 					}
@@ -398,11 +482,7 @@ void FStreamlineViewExtension::PreRenderViewFamily_RenderThread(FGraphBuilderOrC
 #endif
 		EnqueueLambda([this, StaleView](FRHICommandList& Cmd)
 		{
-		
-#if DEBUG_STREAMLINE_VIEW_TRACKING
-			UE_LOG(LogStreamline, Log, TEXT("%s %s freeing resources for View Id %u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), StaleView);
-#endif
-
+			UE_CLOG(DebugViewTracking(), LogStreamline, Log, TEXT("%s %s freeing resources for View Id %u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), StaleView);
 			StreamlineRHIExtensions->ReleaseStreamlineResourcesForAllFeatures(StaleView);
 		});
 	}
@@ -458,19 +538,13 @@ FScreenPassTexture FStreamlineViewExtension::PostProcessPassAtEnd_RenderThread(F
 	{
 
 #if DEBUG_STREAMLINE_VIEW_TRACKING
-		if (FramesWhereStreamlineConstantsWereSet.Contains(MakeTuple(GFrameCounterRenderThread, View.GetViewKey())))
+		if (DebugViewTracking())
 		{
-			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return FramesWhereStreamlineConstantsWereSet.Contains(GFrameCounterRenderThread) Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
-		}
-
-		if (View.bIsSceneCapture)
-		{
-			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return View.bIsSceneCapture Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
-		}
-
-		if (!View.bIsGameView)
-		{
-			FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return !View.bIsGameView Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
+			if (FramesWhereStreamlineConstantsWereSet.Contains(MakeTuple(GFrameCounterRenderThread, View.GetViewKey())))
+			{
+				FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s return FramesWhereStreamlineConstantsWereSet.Contains(GFrameCounterRenderThread) Key=%u, %s"), ANSI_TO_TCHAR(__FUNCTION__), View.GetViewKey(), *CurrentThreadName()));
+			}
+			LogViewNotTrackedReason(ANSI_TO_TCHAR(__FUNCTION__), View);
 		}
 #endif
 

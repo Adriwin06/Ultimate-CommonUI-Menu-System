@@ -44,8 +44,11 @@ static TAutoConsoleVariable<int32> CVarStreamlineDLSSGEnable(
 	ECVF_Default);
 
 static TAutoConsoleVariable<int32> CVarStreamlineDLSSGAdjustMotionBlurTimeScale(
-	TEXT("r.Streamline.DLSSG.AdjustMotionBlurTimeScale"), 1,
-	TEXT("When DLSS-G is active, adjust the motion blur timescale based on the generated frames (default = 1)\n"),
+	TEXT("r.Streamline.DLSSG.AdjustMotionBlurTimeScale"), 2,
+	TEXT("When DLSS-G is active, adjust the motion blur timescale based on the generated frames\n")
+	TEXT("0: disabled\n")
+	TEXT("1: enabled, not supporting auto mode\n")
+	TEXT("2: enabled, supporting auto mode by using last frame's actually presented frames (default)\n"),
 	ECVF_Default);
 
 
@@ -143,29 +146,54 @@ static void DLSSGAPIErrorCallBack(const sl::APIError& lastError)
 	FStreamlineCoreModule::GetStreamlineRHI()->APIErrorHandler(lastError);
 }
 
+
+// TODO template shenanigans to infer from TSharedPtr mode, to allow modifed UE4 with threadsafe shared pointers work automatically
+constexpr bool AreSlateSharedPointersThreadSafe()
+{
+#if ENGINE_MAJOR_VERSION == 4
+	return false;
+#else
+	return true;
+#endif
+}
+
 static FIntRect GetViewportRect(SWindow& InWindow)
 {
 	// During app shutdown, the window might not have a viewport anymore, so using SWindow::GetViewportSize() that handles that transparently.
 	FIntRect ViewportRect = FIntRect(FIntPoint::ZeroValue,InWindow.GetViewportSize().IntPoint());
+
 	
-	if (TSharedPtr<ISlateViewport> Viewport = InWindow.GetViewport())
+	if (AreSlateSharedPointersThreadSafe())
 	{
-		if (TSharedPtr<SWidget> Widget = Viewport->GetWidget().Pin())
+		if (TSharedPtr<ISlateViewport> Viewport = InWindow.GetViewport())
 		{
-			FGeometry Geom = Widget->GetPaintSpaceGeometry();
+			if (TSharedPtr<SWidget> Widget = Viewport->GetWidget().Pin())
+			{
+				FGeometry Geom = Widget->GetPaintSpaceGeometry();
 
-			FIntPoint Min = { int32(Geom.GetAbsolutePosition().X),int32(Geom.GetAbsolutePosition().Y) };
-			FIntPoint Max = { int32((Geom.GetAbsolutePosition() + Geom.GetAbsoluteSize()).X),
-								int32((Geom.GetAbsolutePosition() + Geom.GetAbsoluteSize()).Y) };
+				FIntPoint Min = { int32(Geom.GetAbsolutePosition().X),int32(Geom.GetAbsolutePosition().Y) };
+				FIntPoint Max = { int32((Geom.GetAbsolutePosition() + Geom.GetAbsoluteSize()).X),
+									int32((Geom.GetAbsolutePosition() + Geom.GetAbsoluteSize()).Y) };
 
-			ViewportRect = FIntRect(Min.X, Min.Y, Max.X, Max.Y);
+				ViewportRect = FIntRect(Min.X, Min.Y, Max.X, Max.Y);
+			}
 		}
+	}
+	else
+	{
+		// this is off by a bit in UE5 due to additional borders and editor UI scaling that's not present in UE4
+		// but we expect to run this only in UE4, if at all
+		const FSlateRect ClientRectInScreen = InWindow.GetClientRectInScreen();
+		const FSlateRect ClientRectInWindow = ClientRectInScreen.OffsetBy(-InWindow.GetPositionInScreen());
+
+		const FIntRect RectFromWindow = FIntRect(ClientRectInWindow.Left, ClientRectInWindow.Top, ClientRectInWindow.Right, ClientRectInWindow.Bottom);
+		ViewportRect = RectFromWindow;
 	}
 
 	return ViewportRect;
 }
 
-static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow, const FTexture2DRHIRef& InBackBuffer)
+static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow, const FTextureRHIRef& InBackBuffer)
 {
 	check(IsInRenderingThread());
 
@@ -181,9 +209,9 @@ static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow, const FTexture2DR
 	}
 
 	// we need to "consume" the views for this backbuffer, even if we don't tag them
-
+#if DEBUG_STREAMLINE_VIEW_TRACKING
 	FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s Entry %s Backbuffer=%p"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), InBackBuffer->GetTexture2D()));
-
+#endif
 	TArray<FStreamlineViewExtension::FTrackedView>& TrackedViews = FStreamlineViewExtension::GetTrackedViews();
 
 
@@ -191,29 +219,38 @@ static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow, const FTexture2DR
 	// in game mode, this is the actual backbuffer (same as the argument to this callback)
 	// in the editor, this is a different, intermediate rendertarget (BufferedRT)
 	// so we need to handle either case to associate views to this backbuffer
-	FRHITexture2D* RealOrBufferedBackBuffer = InBackBuffer->GetTexture2D();
+	FRHITexture* RealOrBufferedBackBuffer = InBackBuffer->GetTexture2D();
 
-	if (TSharedPtr<ISlateViewport> Viewport = InWindow.GetViewport())
+	if (AreSlateSharedPointersThreadSafe())
 	{
-		FSceneViewport* SceneViewport = static_cast<FSceneViewport*> (Viewport.Get());
-		const FTexture2DRHIRef& SceneViewPortRenderTarget = SceneViewport->GetRenderTargetTexture();
-
-		if (SceneViewPortRenderTarget.IsValid())
+		if (TSharedPtr<ISlateViewport> Viewport = InWindow.GetViewport())
 		{
+			FSceneViewport* SceneViewport = static_cast<FSceneViewport*> (Viewport.Get());
+			const FTextureRHIRef& SceneViewPortRenderTarget = SceneViewport->GetRenderTargetTexture();
+
+			if (SceneViewPortRenderTarget.IsValid())
+			{
 #if ENGINE_MAJOR_VERSION == 4 
-			check(GIsEditor);
+				check(GIsEditor);
 #else
-			// TODO: the following check asserts when taking a screenshot in game with F9.
-			// We should fix this properly, but it's Friday afternoon so I'm changing it to a non-fatal ensure for now
-			ensure(GIsEditor || (FRDGBuilder::IsDumpingFrame() && (InBackBuffer == SceneViewPortRenderTarget->GetTexture2D())));
+				// TODO: the following check asserts when taking a screenshot in game with F9.
+				// We should fix this properly, but it's Friday afternoon so I'm changing it to a non-fatal ensure for now
+				ensure(GIsEditor || (FRDGBuilder::IsDumpingFrame() && (InBackBuffer == SceneViewPortRenderTarget->GetTexture2D())));
 #endif
 
-			RealOrBufferedBackBuffer = SceneViewPortRenderTarget->GetTexture2D();
+				RealOrBufferedBackBuffer = SceneViewPortRenderTarget->GetTexture2D();
+			}
+		}
+		else
+		{
+			check(!GIsEditor);
 		}
 	}
 	else
 	{
-		check(!GIsEditor);
+		// this is not trivial/impossible to implement without getting the window/ rendertarget information from the gamethread
+		// this is OK in UE5 since by default we can talk to the gamethread from the renderthread here in a thread safe way
+		// but not in UE4
 	}
 
 	// Note: we cannot empty the array after we found the views for the current backbufffer since we get multiple present callbacks in case when we have multiple 
@@ -254,17 +291,19 @@ static void DLSSGOnBackBufferReadyToPresent(SWindow& InWindow, const FTexture2DR
 		}
 	}
 
-	{
 #if DEBUG_STREAMLINE_VIEW_TRACKING
+	if (FStreamlineViewExtension::DebugViewTracking())
+	{
 		const FString ViewRectString = FString::JoinBy(ViewsInThisBackBuffer, TEXT(", "), [](const FStreamlineViewExtension::FTrackedView& State)
-			{
-				return FString::FromInt(State.ViewKey);
-			}
+		{
+			return FString::FromInt(State.ViewKey);
+		}
 		);
 		UE_LOG(LogStreamline, Log, TEXT("  ViewsInThisBackBuffer=%s"), *ViewRectString);
-#endif
 		FStreamlineViewExtension::LogTrackedViews(*FString::Printf(TEXT("%s Exit %s Backbuffer=%p "), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), InBackBuffer->GetTexture2D()));
 	}
+#endif
+	
 
 	if (!ShouldTagStreamlineBuffersForDLSSFG())
 	{
@@ -418,7 +457,8 @@ namespace
 #if WITH_DLSS_FG_VRAM_ESTIMATE
 	float GLastDLSSGVRAMEstimate = 0;
 #endif
-	int32 GLastDLSSGMinWidthOrHeight = 0;
+	int32 GDLSSGMinWidthOrHeight = 0;
+
 }
 
 
@@ -465,7 +505,7 @@ STREAMLINECORE_API EStreamlineFeatureSupport QueryStreamlineDLSSGSupport()
 		if (EStreamlineFeatureSupport::Supported == GStreamlineDLSSGSupport)
 		{
 			// to get the min suppported width/height
-			GetDLSSGStatusFromStreamline();
+			GetDLSSGStatusFromStreamline(true);
 		}
 	}
 
@@ -506,7 +546,7 @@ bool IsDLSSGActive()
 	}
 }
 
-static constexpr int32 GetDLSSGNumFrames()
+int32 GetStreamlineDLSSGNumFramesToGenerate()
 {
 	// currently Streamline only supports 1
 	return 1;
@@ -541,16 +581,22 @@ namespace sl
 }
 
 
-void GetDLSSGStatusFromStreamline()
+void GetDLSSGStatusFromStreamline(bool bQueryOncePerAppLifetimeValues)
 {
 	extern ENGINE_API float GAverageFPS;
 
 	GLastDLSSGFrameRate = GAverageFPS;
 	GLastDLSSGFramesPresented = 1;
+
+
 #if WITH_DLSS_FG_VRAM_ESTIMATE
 	GLastDLSSGVRAMEstimate = 0;
 #endif
-	GLastDLSSGMinWidthOrHeight = 0;
+
+	if (bQueryOncePerAppLifetimeValues)
+	{
+		GDLSSGMinWidthOrHeight = 0;
+	}
 
 	if (IsStreamlineDLSSGSupported())
 	{
@@ -572,7 +618,7 @@ void GetDLSSGStatusFromStreamline()
 		StreamlineConstantsDLSSG.mode = (!HasViewIdOverride()) ?  SLDLSSGModeFromCvar() : sl::DLSSGMode::eOff;
 
 		// TODO incorporate the checks (foreground, viewport large enough) from SetStreamlineDLSSGState
-		StreamlineConstantsDLSSG.numFramesToGenerate = GetDLSSGNumFrames();
+		StreamlineConstantsDLSSG.numFramesToGenerate = GetStreamlineDLSSGNumFramesToGenerate();
 
 		CALL_SL_FEATURE_FN(sl::kFeatureDLSS_G, slDLSSGGetState, Viewport, State, &StreamlineConstantsDLSSG);
 
@@ -587,9 +633,12 @@ void GetDLSSGStatusFromStreamline()
 		GLastDLSSGVRAMEstimate = float(State.estimatedVRAMUsageInBytes) / (1024 * 1024);
 		SET_FLOAT_STAT(STAT_DLSSGVRAMEstimate, GLastDLSSGVRAMEstimate);
 #endif
+		if (bQueryOncePerAppLifetimeValues)
+		{
+			GDLSSGMinWidthOrHeight = State.minWidthOrHeight;
+			SET_DWORD_STAT(STAT_DLSSGMinWidthOrHeight, GDLSSGMinWidthOrHeight);
 
-		GLastDLSSGMinWidthOrHeight = State.minWidthOrHeight;
-		SET_DWORD_STAT(STAT_DLSSGMinWidthOrHeight, GLastDLSSGMinWidthOrHeight);
+		}
 
 #if DO_CHECK
 		if (CVarStreamlineDLSSGCheckStatusPerFrame.GetValueOnAnyThread())
@@ -619,7 +668,7 @@ void SetStreamlineDLSSGState(FRHICommandListImmediate& RHICmdList, uint32 ViewID
 #else
 		const bool bIsForeground = FApp::HasFocus();
 #endif
-		const bool bIsLargeEnough = FMath::Min( SecondaryViewRect.Width(), SecondaryViewRect.Height()) >= GLastDLSSGMinWidthOrHeight;
+		const bool bIsLargeEnough = FMath::Min( SecondaryViewRect.Width(), SecondaryViewRect.Height()) >= GDLSSGMinWidthOrHeight;
 		
 		sl::DLSSGMode DLSSGMode = (bIsForeground && bIsLargeEnough) ? SLDLSSGModeFromCvar() : sl::DLSSGMode::eOff;
 		
@@ -640,7 +689,7 @@ void SetStreamlineDLSSGState(FRHICommandListImmediate& RHICmdList, uint32 ViewID
 			{
 				sl::DLSSGOptions StreamlineConstantsDLSSG;
 				StreamlineConstantsDLSSG.mode = DLSSGMode;
-				StreamlineConstantsDLSSG.numFramesToGenerate = GetDLSSGNumFrames();
+				StreamlineConstantsDLSSG.numFramesToGenerate = GetStreamlineDLSSGNumFramesToGenerate();
 				StreamlineConstantsDLSSG.flags = DLSSGFlags;
 				StreamlineConstantsDLSSG.onErrorCallback = DLSSGAPIErrorCallBack;
 				CALL_SL_FEATURE_FN(sl::kFeatureDLSS_G, slDLSSGSetOptions, sl::ViewportHandle(ViewID), StreamlineConstantsDLSSG);
@@ -683,16 +732,17 @@ void BeginRenderViewFamilyDLSSG(FSceneViewFamily& InViewFamily)
 {
 	if(IsDLSSGActive() && CVarStreamlineDLSSGAdjustMotionBlurTimeScale.GetValueOnAnyThread() && InViewFamily.Views.Num())
 	{
+		// this is 1 when FG is off (or auto modes turns it off)
+		const int32 PresentedFrames = CVarStreamlineDLSSGAdjustMotionBlurTimeScale.GetValueOnAnyThread() == 2 ? FMath::Max(1, GLastDLSSGFramesPresented) : 1 + GetStreamlineDLSSGNumFramesToGenerate();
+		const float TimeScaleCorrection = 1.0f / float(PresentedFrames);
+
 		for (int32 ViewIndex = 0; ViewIndex < InViewFamily.Views.Num(); ++ViewIndex)
 		{
 			if (FSceneViewStateInterface* ViewStateInterface = InViewFamily.Views[ViewIndex]->State)
 			{
 				// The things we do to avoid engine changes ...
 				FSceneViewState* ViewState = static_cast<FSceneViewState*>(ViewStateInterface);
-
-				static_assert (1 == GetDLSSGNumFrames(), "motion vector scale code might need to be adjusted based on runtime generated frames");
-				const float TimeScaleCorrection = 1.0f / (1.0f + GetDLSSGNumFrames());
-
+				
 				float& MotionBlurTimeScale = ViewState->MotionBlurTimeScale;
 				float& MotionBlurTargetDeltaTime = ViewState->MotionBlurTargetDeltaTime;
 

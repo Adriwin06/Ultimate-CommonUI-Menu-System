@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 111,
-	"VersionName": "1.3.2-SL2.4.10",
+	"Version": 112,
+	"VersionName": "1.3.3-SL2.4.15",
 	"FriendlyName": "NVIDIA DLSS Frame Generation",
 	"Description": "NVIDIA DLSS Frame Generation and Reflex (Streamline)",
 	"Category": "Rendering",

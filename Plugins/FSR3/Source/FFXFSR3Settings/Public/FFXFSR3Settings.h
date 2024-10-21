@@ -126,6 +126,16 @@ extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3QualityMode;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3QuantizeInternalTextures;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveMaskPreDOFTranslucencyScale;
 extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3ReactiveMaskPreDOFTranslucencyMax;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveMaskCustomStencilScale;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveHistoryCustomStencilScale;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveMaskDeferredDecalScale;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveHistoryDeferredDecalScale;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3CustomStencilMask;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3CustomStencilShift;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveMaskTAAResponsiveValue;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3ReactiveHistoryTAAResponsiveValue;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<float> CVarFSR3VelocityFactor;
+extern FFXFSR3SETTINGS_API TAutoConsoleVariable<int32> CVarFSR3DeferDelete;
 
 //------------------------------------------------------------------------------------------------------
 // Console variables for Frame Interpolation.
@@ -234,6 +244,9 @@ public:
 	UPROPERTY(Config, EditAnywhere, Category = "Quality Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ForceLandscapeHISMMobility", DisplayName = "Force Landscape HISM Mobility", ToolTip = "Allow FSR3 to force the mobility of Landscape actors Hierarchical Instance Static Mesh components that use World-Position-Offset materials so they render valid velocities.\nSetting 'All Instances' is faster on the CPU, 'Instances with World-Position-Offset' is faster on the GPU."))
 		EFFXFSR3LandscapeHISMMode ForceLandscapeHISMMobility;
 
+	UPROPERTY(Config, EditAnywhere, Category = "Quality Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.VelocityFactor", DisplayName = "Velocity Factor", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 1.0), value of 0.0f can improve temporal stability of bright pixels."))
+		float VelocityFactor;
+
 	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.CreateReactiveMask", DisplayName = "Reactive Mask", ToolTip = "Enable to generate a mask from the SceneColor, GBuffer, SeparateTranslucency & ScreenspaceReflections that determines how reactive each pixel should be."))
 		bool bReactiveMask;
 
@@ -281,6 +294,30 @@ public:
 
 	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveMaskPreDOFTranslucencyMax", DisplayName = "Pre Depth-of-Field Translucency Max/Average", ToolTip = "Toggle to determine whether to use the max(SceneColorPostDepthOfField - SceneColorPreDepthOfField) or length(SceneColorPostDepthOfField - SceneColorPreDepthOfField) to determine the contribution of Pre-Depth-of-Field translucency."))
 		bool bPreDOFTranslucencyMax;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveMaskDeferredDecalScale", DisplayName = "Deferred Decal Reactive Mask Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 0.0), scales how much deferred decal values contribute to the reactive mask. Higher values will make translucent materials more reactive which can reduce smearing."))
+		float ReactiveMaskDeferredDecalScale;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveHistoryDeferredDecalScale", DisplayName = "Deferred Decal Reactive History Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 0.0), scales how much deferred decal values contribute to supressing hitory. Higher values will make translucent materials more reactive which can reduce smearing."))
+		float ReactiveHistoryDeferredDecalScale;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveMaskTAAResponsiveValue", DisplayName = "Responsive TAA Reactive Mask Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 0.0), value to write to reactive mask when pixels are marked in the stencil buffer as TAA Responsive. Higher values will make translucent materials more reactive which can reduce smearing."))
+		float ReactiveMaskTAAResponsiveValue;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveHistoryTAAResponsiveValue", DisplayName = "Responsive TAA Reactive Mask Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 0.0), value to write to reactive history when pixels are marked in the stencil buffer as TAA Responsive. Higher values will make translucent materials more reactive which can reduce smearing."))
+		float ReactiveHistoryTAAResponsiveValue;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveMaskCustomStencilScale", DisplayName = "Custom Stencil Reactive Mask Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 0.0), scales how much customm stencil values contribute to the reactive mask. Higher values will make translucent materials more reactive which can reduce smearing."))
+		float ReactiveMaskCustomStencilScale;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.ReactiveHistoryCustomStencilScale", DisplayName = "Custom Stencil Reactive History Scale", ClampMin = 0, ClampMax = 1, ToolTip = "Range from 0.0 to 1.0 (Default 0.0), scales how much customm stencil values contribute to supressing hitory. Higher values will make translucent materials more reactive which can reduce smearing."))
+		float ReactiveHistoryCustomStencilScale;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.CustomStencilMask", DisplayName = "CustomS tencil Bit Mask", ClampMin = 0, ClampMax = 255, ToolTip = "A bitmask 0-255 (0-0xff) used when accessing the custom stencil to read reactive mask values. Setting to 0 will disable use of the custom-depth/stencil buffer. Default is 0."))
+		int32 CustomStencilMask;
+
+	UPROPERTY(Config, EditAnywhere, Category = "Reactive Mask Settings", meta = (ConsoleVariable = "r.FidelityFX.FSR3.CustomStencilShift", DisplayName = "Custom Stencil Bit Shift", ClampMin = 0, ClampMax = 31, ToolTip = "Bitshift to apply to the value read from the custom stencil when using it to provide reactive mask values. Default is 0."))
+		int32 CustomStencilShift;
 };
 
 class FFXFSR3SettingsModule final : public IModuleInterface

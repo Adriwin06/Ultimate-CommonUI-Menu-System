@@ -36,7 +36,7 @@
 extern IFFXRHIBackendSubPass* GetPrepareInputsPass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
 extern IFFXRHIBackendSubPass* GetLumaPyramidPass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
 extern IFFXRHIBackendSubPass* GetShadingChangePass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
-extern IFFXRHIBackendSubPass* GetShadingChangePass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
+extern IFFXRHIBackendSubPass* GetShadingChangePyramidPass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
 extern IFFXRHIBackendSubPass* GetPrepareReactivityPass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
 extern IFFXRHIBackendSubPass* GetLumaInstabilityPass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
 extern IFFXRHIBackendSubPass* GetAccumulatePass(FfxPass pass, uint32_t permutationOptions, const FfxPipelineDescription* desc, FfxPipelineState* outPipeline, bool bSupportHalf, bool bPreferWave64);
@@ -61,7 +61,7 @@ IFFXRHIBackendSubPass* GetFSRPass(FfxPass pass, uint32_t permutationOptions, con
 			SubPass = GetLumaPyramidPass(pass, permutationOptions, desc, outPipeline, bSupportHalf, bPreferWave64);
 			break;
 		case FFX_FSR3UPSCALER_PASS_SHADING_CHANGE_PYRAMID:
-			SubPass = GetShadingChangePass(pass, permutationOptions, desc, outPipeline, bSupportHalf, bPreferWave64);
+			SubPass = GetShadingChangePyramidPass(pass, permutationOptions, desc, outPipeline, bSupportHalf, bPreferWave64);
 			break;
 		case FFX_FSR3UPSCALER_PASS_SHADING_CHANGE:
 			SubPass = GetShadingChangePass(pass, permutationOptions, desc, outPipeline, bSupportHalf, bPreferWave64);

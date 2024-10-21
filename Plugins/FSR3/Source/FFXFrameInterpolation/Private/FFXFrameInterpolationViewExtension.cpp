@@ -33,7 +33,7 @@ FFXFrameInterpolationViewExtension::FFXFrameInterpolationViewExtension(const FAu
 
 void FFXFrameInterpolationViewExtension::PrePostProcessPass_RenderThread(FRDGBuilder& GraphBuilder, const FSceneView& View, const FPostProcessingInputs& Inputs)
 {
-	if (View.GetFeatureLevel() >= ERHIFeatureLevel::SM5)
+	if (View.GetFeatureLevel() > ERHIFeatureLevel::SM5)
 	{
 		FrameInterpolation->SetupView(View, Inputs);
 	}

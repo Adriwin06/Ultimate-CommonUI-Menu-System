@@ -65,6 +65,8 @@ BEGIN_UNIFORM_BUFFER_STRUCT(FFXFSRPassParameters, )
 	SHADER_PARAMETER(float, fDeltaPreExposure)
 	SHADER_PARAMETER(float, fViewSpaceToMetersFactor)
 	SHADER_PARAMETER(float, fFrameIndex)
+
+	SHADER_PARAMETER(float, fVelocityFactor)
 END_UNIFORM_BUFFER_STRUCT()
 
 //-------------------------------------------------------------------------------------

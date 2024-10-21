@@ -168,21 +168,8 @@ bool FStreamlineRHI::IsSwapchainHookingAllowed() const
 	}
 
 
-	int32 MaxNumSwapchainProxies = CVarStreamlineMaxNumSwapchainProxies.GetValueOnGameThread();
-
-	// automatic 
-	if (MaxNumSwapchainProxies == -1)
-	{
-		// TODO make this depend on the required features and their limitations.
-		MaxNumSwapchainProxies = 1;
-	}
-
 	// no maximum
-	if (MaxNumSwapchainProxies == 0)
-	{
-		/* 🦗 🦗 🦗 */
-	}
-	else
+	if (const int32 MaxNumSwapchainProxies = GetMaxNumSwapchainProxies())
 	{
 		if (NumActiveSwapchainProxies >= MaxNumSwapchainProxies)
 		{
@@ -193,6 +180,9 @@ bool FStreamlineRHI::IsSwapchainHookingAllowed() const
 #if WITH_EDITOR
 	if (GIsEditor)
 	{
+#if ENGINE_MAJOR_VERSION == 4
+		return false;
+#endif
 		if (bIsPIEActive)
 		{
 			EStreamlineSettingOverride PIEOverride = GetDefault<UStreamlineOverrideSettings>()->EnableDLSSFGInPlayInEditorViewportsOverride;
@@ -209,6 +199,30 @@ bool FStreamlineRHI::IsSwapchainHookingAllowed() const
 	}
 #endif
 	return true;
+}
+
+int32 FStreamlineRHI::GetMaxNumSwapchainProxies() const
+{
+	const int32 MaxNumSwapchainProxies = CVarStreamlineMaxNumSwapchainProxies.GetValueOnGameThread();
+
+	// automatic 
+	if (MaxNumSwapchainProxies == -1)
+	{
+		// TODO make this depend on the required features and their limitations.
+		return 1;
+	}
+	else
+	{
+		return MaxNumSwapchainProxies;
+	}
+}
+
+void  FStreamlineRHI::ValidateNumSwapchainProxies(const char* CallSite) const
+{
+	if (NumActiveSwapchainProxies < 0 || NumActiveSwapchainProxies > GetMaxNumSwapchainProxies())
+	{
+		UE_LOG(LogStreamlineRHI, Error, TEXT("%s NumActiveSwapchainProxies=%d is outside of the valid range of [0, %d]. This can cause instability, particularly in the editor when multiple windows are created and destroyed. NVIDIA would appreciate a report to dlss-support@nvidia.com"), ANSI_TO_TCHAR(CallSite), NumActiveSwapchainProxies, /*GetMaxNumSwapchainProxies()*/ 1);
+	}
 }
 
 bool FStreamlineRHI::IsSwapchainProviderInstalled() const
@@ -249,30 +263,30 @@ void FStreamlineRHI::OnSwapchainCreated(void* InNativeSwapchain) const
 {
 
 	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Enter %s NumActiveSwapchainProxies=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), NumActiveSwapchainProxies);
-
+	ValidateNumSwapchainProxies(__FUNCTION__);
 	const bool bIsSwapchainProxy = IsStreamlineSwapchainProxy(InNativeSwapchain);
 	if (bIsSwapchainProxy)
 	{
 		++NumActiveSwapchainProxies;
 	}
 	UE_LOG(LogStreamlineRHI, Log, TEXT("NativeSwapChain=%p IsSwapChainProxy=%u , NumActiveSwapchainProxies=%d"), InNativeSwapchain, bIsSwapchainProxy, NumActiveSwapchainProxies);
-	
+	ValidateNumSwapchainProxies(__FUNCTION__);
 	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Leave %u"), ANSI_TO_TCHAR(__FUNCTION__), NumActiveSwapchainProxies);
 }
 
 void FStreamlineRHI::OnSwapchainDestroyed(void* InNativeSwapchain) const
 {
 	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Enter %s NumActiveSwapchainProxies=%u"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), NumActiveSwapchainProxies);
-
+	ValidateNumSwapchainProxies(__FUNCTION__);
 	const bool bIsSwapchainProxy = IsStreamlineSwapchainProxy(InNativeSwapchain);
 	
 	if (bIsSwapchainProxy)
 	{
 		--NumActiveSwapchainProxies;
-		check(NumActiveSwapchainProxies >= 0);
 	}
 
 	UE_LOG(LogStreamlineRHI, Log, TEXT("NativeSwapchain=%p IsSwapChainProxy=%u, NumActiveSwapchainProxies=%d "), InNativeSwapchain, bIsSwapchainProxy, NumActiveSwapchainProxies);
+	ValidateNumSwapchainProxies(__FUNCTION__);
 	UE_LOG(LogStreamlineRHI, Log, TEXT("%s Leave %u"), ANSI_TO_TCHAR(__FUNCTION__), NumActiveSwapchainProxies);
 }
 

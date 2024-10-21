@@ -392,7 +392,8 @@ void FDLSSModule::StartupModule()
 		}
 	}
 
-	UE_LOG(LogDLSS, Log, TEXT("NVIDIA NGX DLSS supported %u"), QueryDLSSSRSupport() == EDLSSSupport::Supported);
+	UE_LOG(LogDLSS, Log, TEXT("NVIDIA NGX DLSS supported SR=%u RR=%u"), QueryDLSSSRSupport() == EDLSSSupport::Supported, QueryDLSSRRSupport() == EDLSSSupport::Supported);
+	
 
 	// and the other related interfaces
 

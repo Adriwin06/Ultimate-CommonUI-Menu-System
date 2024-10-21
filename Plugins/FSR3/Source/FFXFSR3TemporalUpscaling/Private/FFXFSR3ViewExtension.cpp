@@ -97,79 +97,88 @@ FFXFSR3ViewExtension::FFXFSR3ViewExtension(const FAutoRegister& AutoRegister) : 
 		TSharedPtr<FFXFSR3TemporalUpscaler, ESPMode::ThreadSafe> FSR3TemporalUpscaler = MakeShared<FFXFSR3TemporalUpscaler, ESPMode::ThreadSafe>();
 		FSR3Module.SetTemporalUpscaler(FSR3TemporalUpscaler);
 	}
-
-	if (CVarEnableFSR3.GetValueOnAnyThread())
-	{
-		// Initialize by default for game, but not the editor unless we intend to use FSR3 in the viewport by default
-		if (!GIsEditor || CVarEnableFSR3InEditor.GetValueOnAnyThread())
-		{
-			// Set this at startup so that it will apply consistently
-			if (CVarFSR3AdjustMipBias.GetValueOnGameThread())
-			{
-				if (CVarMinAutomaticViewMipBiasMin != nullptr)
-				{
-					CVarMinAutomaticViewMipBiasMin->Set(float(0.f + log2(1.f / 3.0f) - 1.0f + FLT_EPSILON), EConsoleVariableFlags::ECVF_SetByCode);
-				}
-				if (CVarMinAutomaticViewMipBiasOffset != nullptr)
-				{
-					CVarMinAutomaticViewMipBiasOffset->Set(float(-1.0f + FLT_EPSILON), EConsoleVariableFlags::ECVF_SetByCode);
-				}
-			}
-
-			if (CVarFSR3ForceVertexDeformationOutputsVelocity.GetValueOnGameThread())
-			{
-				if (CVarVertexDeformationOutputsVelocity != nullptr)
-				{
-					CVarVertexDeformationOutputsVelocity->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
-				}
-				if (CVarVelocityEnableLandscapeGrass != nullptr)
-				{
-					CVarVelocityEnableLandscapeGrass->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
-				}
-			}
-
-			if (CVarFSR3CreateReactiveMask->GetInt())
-			{
-				if (CVarSeparateTranslucency != nullptr)
-				{
-					CVarSeparateTranslucency->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
-				}
-
-				if (CVarSSRExperimentalDenoiser != nullptr)
-				{
-					CVarFSR3UseExperimentalSSRDenoiser->Set(SSRExperimentalDenoiser, EConsoleVariableFlags::ECVF_SetByCode);
-					CVarSSRExperimentalDenoiser->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
-				}
-			}
-		}
-		else
-		{
-			// Pretend it is disabled so that when the Editor does enable FSR3 the state change is picked up properly.
-			PreviousFSR3State = false;
-			PreviousFSR3StateRT = false;
-			CurrentFSR3StateRT = false;
-		}
-	}
-	else
-	{
-		// Disable FSR3 as it could not be initialised, this avoids errors if it is enabled later.
-		PreviousFSR3State = false;
-		PreviousFSR3StateRT = false;
-		CurrentFSR3StateRT = false;
-		CVarEnableFSR3->Set(0, EConsoleVariableFlags::ECVF_SetByGameOverride);
-	}
 }
 
 void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 {
 	if (InViewFamily.GetFeatureLevel() >= ERHIFeatureLevel::SM6)
 	{
+		static IConsoleVariable* CVarMinAutomaticViewMipBiasMin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Min"));
+		static IConsoleVariable* CVarMinAutomaticViewMipBiasOffset = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Offset"));
 		static IConsoleVariable* CVarVertexDeformationOutputsVelocity = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Velocity.EnableVertexDeformation"));
 		static IConsoleVariable* CVarVelocityEnableLandscapeGrass = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Velocity.EnableLandscapeGrass"));
+		static IConsoleVariable* CVarSeparateTranslucency = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SeparateTranslucency"));
+		static IConsoleVariable* CVarSSRExperimentalDenoiser = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SSR.ExperimentalDenoiser"));
 		IFFXFSR3TemporalUpscalingModule& FSR3ModuleInterface = FModuleManager::GetModuleChecked<IFFXFSR3TemporalUpscalingModule>(TEXT("FFXFSR3TemporalUpscaling"));
 		check(FSR3ModuleInterface.GetFSR3Upscaler());
+
+		if (CVarEnableFSR3.GetValueOnAnyThread() && !FSR3ModuleInterface.GetFSR3Upscaler()->IsApiSupported())
+		{
+			FSR3ModuleInterface.GetFSR3Upscaler()->Initialize();
+
+			if (CVarEnableFSR3.GetValueOnAnyThread() && FSR3ModuleInterface.GetFSR3Upscaler()->IsApiSupported())
+			{
+				// Initialize by default for game, but not the editor unless we intend to use FSR3 in the viewport by default
+				if (!GIsEditor || CVarEnableFSR3InEditor.GetValueOnAnyThread())
+				{
+					// Set this at startup so that it will apply consistently
+					if (CVarFSR3AdjustMipBias.GetValueOnGameThread())
+					{
+						if (CVarMinAutomaticViewMipBiasMin != nullptr)
+						{
+							CVarMinAutomaticViewMipBiasMin->Set(float(0.f + log2(1.f / 3.0f) - 1.0f + FLT_EPSILON), EConsoleVariableFlags::ECVF_SetByCode);
+						}
+						if (CVarMinAutomaticViewMipBiasOffset != nullptr)
+						{
+							CVarMinAutomaticViewMipBiasOffset->Set(float(-1.0f + FLT_EPSILON), EConsoleVariableFlags::ECVF_SetByCode);
+						}
+					}
+
+					if (CVarFSR3ForceVertexDeformationOutputsVelocity.GetValueOnGameThread())
+					{
+						if (CVarVertexDeformationOutputsVelocity != nullptr)
+						{
+							CVarVertexDeformationOutputsVelocity->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
+						}
+						if (CVarVelocityEnableLandscapeGrass != nullptr)
+						{
+							CVarVelocityEnableLandscapeGrass->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
+						}
+					}
+
+					if (CVarFSR3CreateReactiveMask->GetInt())
+					{
+						if (CVarSeparateTranslucency != nullptr)
+						{
+							CVarSeparateTranslucency->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
+						}
+
+						if (CVarSSRExperimentalDenoiser != nullptr)
+						{
+							CVarFSR3UseExperimentalSSRDenoiser->Set(SSRExperimentalDenoiser, EConsoleVariableFlags::ECVF_SetByCode);
+							CVarSSRExperimentalDenoiser->Set(1, EConsoleVariableFlags::ECVF_SetByCode);
+						}
+					}
+				}
+				else
+				{
+					// Pretend it is disabled so that when the Editor does enable FSR3 the state change is picked up properly.
+					PreviousFSR3State = false;
+					PreviousFSR3StateRT = false;
+					CurrentFSR3StateRT = false;
+				}
+			}
+			else
+			{
+				// Disable FSR3 as it could not be initialised, this avoids errors if it is enabled later.
+				PreviousFSR3State = false;
+				PreviousFSR3StateRT = false;
+				CurrentFSR3StateRT = false;
+				CVarEnableFSR3->Set(0, EConsoleVariableFlags::ECVF_SetByGameOverride);
+			}
+		}
+
 		int32 EnableFSR3 = CVarEnableFSR3.GetValueOnAnyThread();
-		FSR3ModuleInterface.GetFSR3Upscaler()->Initialize();
 
 		if (EnableFSR3)
 		{
@@ -200,10 +209,6 @@ void FFXFSR3ViewExtension::SetupViewFamily(FSceneViewFamily& InViewFamily)
 		{
 			// Update tracking of the FSR3 state when it is changed
 			PreviousFSR3State = EnableFSR3;
-			static IConsoleVariable* CVarMinAutomaticViewMipBiasMin = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Min"));
-			static IConsoleVariable* CVarMinAutomaticViewMipBiasOffset = IConsoleManager::Get().FindConsoleVariable(TEXT("r.ViewTextureMipBias.Offset"));
-			static IConsoleVariable* CVarSeparateTranslucency = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SeparateTranslucency"));
-			static IConsoleVariable* CVarSSRExperimentalDenoiser = IConsoleManager::Get().FindConsoleVariable(TEXT("r.SSR.ExperimentalDenoiser"));
 
 			if (EnableFSR3)
 			{

@@ -45,6 +45,12 @@ struct FShaderCodePackedResourceCounts;
 #include "D3D12Util.h"
 #endif
 
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI && ENGINE_ID3D12DYNAMICRHI_NEEDS_CMDLIST
+	#define RHICMDLIST_ARG_PASSTHROUGH CmdList,
+#else
+	#define RHICMDLIST_ARG_PASSTHROUGH 
+#endif
+
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "Windows/IDXGISwapchainProvider.h"
@@ -219,7 +225,7 @@ public:
 				check(Resource.Texture->IsValid());
 
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
-				NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(D3D12RHI->RHIGetResourceDeviceIndex(Resource.Texture));
+				NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH D3D12RHI->RHIGetResourceDeviceIndex(Resource.Texture));
 #else
 				FD3D12TextureBase* DeviceQueryD3D12Texture = GetD3D12TextureFromRHITexture(Resource.Texture);
 				D3D12Device = DeviceQueryD3D12Texture->GetParentDevice();
@@ -366,7 +372,7 @@ public:
 	virtual void* GetCommandBuffer(FRHICommandList& CmdList, FRHITexture* Texture) override final
 	{
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
-		ID3D12GraphicsCommandList* NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(D3D12RHI->RHIGetResourceDeviceIndex(Texture));
+		ID3D12GraphicsCommandList* NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH D3D12RHI->RHIGetResourceDeviceIndex(Texture));
 #else
 		FD3D12TextureBase* D3D12Texture = GetD3D12TextureFromRHITexture(Texture);
 		FD3D12Device* Device = D3D12Texture->GetParentDevice();
@@ -380,7 +386,7 @@ public:
 	{
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
 		const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(Texture);
-		D3D12RHI->RHIFinishExternalComputeWork(DeviceIndex, D3D12RHI->RHIGetGraphicsCommandList(DeviceIndex));
+		D3D12RHI->RHIFinishExternalComputeWork(RHICMDLIST_ARG_PASSTHROUGH DeviceIndex, D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH DeviceIndex));
 #else
 		FD3D12Device* Device = D3D12RHI->GetAdapter().GetDevice(CmdList.GetGPUMask().ToIndex());
 		Device->GetCommandContext().StateCache.ForceSetComputeRootSignature();
@@ -459,7 +465,9 @@ public:
 
 		if (Result == sl::Result::eOk)
 		{
-			return NativeInterface != NativeSwapchain;
+			const bool bIsProxy = NativeInterface != NativeSwapchain;
+			//UE_LOG(LogStreamlineD3D12RHI, Log, TEXT("%s %s NativeInterface=%p NativeSwapchain=%p isProxy=%u "), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), NativeSwapchain, NativeInterface.GetReference(), bIsProxy);
+			return bIsProxy;
 		}
 		else
 		{

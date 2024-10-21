@@ -272,7 +272,9 @@ public:
 
 		if (Result == sl::Result::eOk)
 		{
-			return NativeInterface != NativeSwapchain;
+			const bool bIsProxy = NativeInterface != NativeSwapchain;
+			//UE_LOG(LogStreamlineD3D11RHI, Log, TEXT("%s %s NativeInterface=%p NativeSwapchain=%p isProxy=%u "), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), NativeSwapchain, NativeInterface.GetReference(), bIsProxy);
+			return bIsProxy;
 		}
 		else
 		{

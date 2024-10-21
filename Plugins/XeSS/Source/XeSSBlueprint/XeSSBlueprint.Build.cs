@@ -27,85 +27,53 @@ public class XeSSBlueprint : ModuleRules
 	public XeSSBlueprint(ReadOnlyTargetRules Target) : base(Target)
 	{
 		int EngineMajorVersion = ReadOnlyBuildVersion.Current.MajorVersion;
+		int EngineMinorVersion = ReadOnlyBuildVersion.Current.MinorVersion;
 
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicIncludePaths.AddRange(
-			new string[]
-			{
-				// ... add public include paths required here ...
-			}
-			);
-
-		// For ScenePrivate.h
-		PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"));
-
-		PublicDependencyModuleNames.AddRange(
-			new string[]
-			{
-			}
-			);
-
+		if (EngineMajorVersion < 5 || EngineMajorVersion == 5 && EngineMinorVersion < 3)
+		{
+			// For PostProcess/TemporalAA.h
+			PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"));
+		}
 
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-					"Core",
-					"CoreUObject",
-					"Engine",
-					"Renderer",
-					"RenderCore",
-					"Projects",
-					"RHI",
+				"Core",
+				"CoreUObject",
+				"Engine",
+				"Renderer",
+				"RenderCore",
+				"Projects",
+				"RHI",
 			}
-			);
-
-		if (EngineMajorVersion >= 5)
-		{
-			PrivateDependencyModuleNames.Add("RHICore");
-		}
-
-		DynamicallyLoadedModuleNames.AddRange(
-			new string[]
-			{
-			}
-			);
+		);
 
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
-			PublicDefinitions.Add("USE_XESS=1");
-
-			PublicIncludePaths.AddRange(
-				new string[]
-				{
-					Path.Combine(ModuleDirectory, "../XeSS/Public")
-				}
-			);
+			PublicDefinitions.Add("WITH_XESS=1");
 
 			PrivateIncludePaths.AddRange(
 				new string[]
 				{
-					Path.Combine(ModuleDirectory, "../XeSS/Private")
-				}
-			);
-
-			PublicDependencyModuleNames.AddRange(
-				new string[]
-				{
+					Path.Combine(ModuleDirectory, "../XeSS/Private"),
 				}
 			);
 
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
-					"XeSSPlugin",
-					"IntelXeSS"
+					"IntelXeSS",
+					"XeSSCommon",
+					"XeSSCore",
+					"XeSSUnreal",
 				}
 			);
 		}
 		else
 		{
-			PublicDefinitions.Add("USE_XESS=0");
+			PublicDefinitions.Add("WITH_XESS=0");
 			System.Console.WriteLine("XeSS not supported on this platform");
 		}
 	}

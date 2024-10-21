@@ -150,7 +150,7 @@ public:
 	FfxSwapchain GetSwapchain(void* swapChain) final;
 	FfxApiResource GetNativeResource(FRHITexture* Texture, FfxApiResourceState State) final;
 	FfxApiResource GetNativeResource(FRDGTexture* Texture, FfxApiResourceState State) final;
-	FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList) final;
+	FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList, FRHITexture* Texture) final;
 	FfxShaderModel GetSupportedShaderModel() final;
 	bool IsFloat16Supported() final;
 	void ForceUAVTransition(FRHICommandListImmediate& RHICmdList, FRHITexture* OutputTexture, ERHIAccess Access) final;
@@ -160,4 +160,5 @@ public:
 	void RegisterFrameResources(FRHIResource* FIResources, uint64 FrameID) final;
 	bool GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS) final;
 	void CopySubRect(FfxCommandList CmdList, FfxApiResource Src, FfxApiResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint) final;
+	void Flush(FRHITexture* Tex, FRHICommandListImmediate& RHICmdList) final;
 };

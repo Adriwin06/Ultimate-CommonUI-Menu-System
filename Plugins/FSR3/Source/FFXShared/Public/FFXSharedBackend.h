@@ -93,7 +93,7 @@ public:
 	virtual FfxSwapchain GetSwapchain(void* swapChain) = 0;
     virtual FfxApiResource GetNativeResource(FRHITexture* Texture, FfxApiResourceState State) = 0;
     virtual FfxApiResource GetNativeResource(FRDGTexture* Texture, FfxApiResourceState State) = 0;
-	virtual FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList) = 0;
+	virtual FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList, FRHITexture* Texture) = 0;
 	virtual FfxShaderModel GetSupportedShaderModel() = 0;
 	virtual bool IsFloat16Supported() = 0;
 	virtual void ForceUAVTransition(FRHICommandListImmediate& RHICmdList, FRHITexture* OutputTexture, ERHIAccess Access) = 0;
@@ -103,6 +103,7 @@ public:
 	virtual void RegisterFrameResources(FRHIResource* FIResources, uint64 FrameID) = 0;
 	virtual bool GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS) = 0;
 	virtual void CopySubRect(FfxCommandList CmdList, FfxApiResource Src, FfxApiResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint) = 0;
+	virtual void Flush(FRHITexture* Tex, FRHICommandListImmediate& RHICmdList) = 0;
 };
 
 extern FFXSHARED_API FfxApiSurfaceFormat GetFFXApiFormat(EPixelFormat UEFormat, bool bSRGB);

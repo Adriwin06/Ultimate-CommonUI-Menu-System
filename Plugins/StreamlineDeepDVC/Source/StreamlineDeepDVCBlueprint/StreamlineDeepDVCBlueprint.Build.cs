@@ -47,6 +47,13 @@ public class StreamlineDeepDVCBlueprint : ModuleRules
 	
 		PublicDefinitions.Add("WITH_STREAMLINE=" + (bPlatformSupportsStreamline ? '1' : '0'));
 
+		PublicDependencyModuleNames.AddRange(
+			new string[]
+			{
+				"StreamlineBlueprint"
+			}
+		);
+
 		if (bPlatformSupportsStreamline)
 		{ 
 			PublicIncludePaths.AddRange(
@@ -74,7 +81,6 @@ public class StreamlineDeepDVCBlueprint : ModuleRules
 					"StreamlineRHI",
 					"Streamline",
 
-					"StreamlineBlueprint"
 				}
 			);
 		}

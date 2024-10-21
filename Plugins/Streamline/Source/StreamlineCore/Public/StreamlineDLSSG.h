@@ -33,4 +33,4 @@ class FSceneViewFamily;
 class FRDGBuilder;
 void AddStreamlineDLSSGStateRenderPass(FRDGBuilder& GraphBuilder, uint32 ViewID, const FIntRect& SecondaryViewRect);
 void BeginRenderViewFamilyDLSSG(FSceneViewFamily& InViewFamily);
-void GetDLSSGStatusFromStreamline();
+void GetDLSSGStatusFromStreamline(bool bQueryOncePerAppLifetimeValues = false);

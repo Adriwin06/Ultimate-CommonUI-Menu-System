@@ -221,7 +221,7 @@ public:
 
 protected:
 
-
+	
 	FStreamlineRHI(const FStreamlineRHICreateArguments& Arguments);
 
 #if WITH_EDITOR
@@ -243,7 +243,8 @@ protected:
 	mutable int32 NumActiveSwapchainProxies = 0;
 	virtual bool IsStreamlineSwapchainProxy(void* NativeSwapchain) const = 0;
 	
-
+	int32 GetMaxNumSwapchainProxies() const;
+	void ValidateNumSwapchainProxies(const char* CallSite) const;
 #if PLATFORM_WINDOWS
 	// whether an HRESULT is a DXGI_STATUS_*
 	bool IsDXGIStatus(const HRESULT HR);

@@ -60,10 +60,6 @@ THIRD_PARTY_INCLUDES_END
 #undef FFX_GCC
 #endif
 
-#define FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_VECTOR                            0
-#define FFX_FSR3_RESOURCE_IDENTIFIER_OPTICAL_FLOW_SCD_OUTPUT                        1
-#define FFX_FSR3_RESOURCE_IDENTIFIER_COUNT                                          2
-
 struct FFXTextureBulkData final : public FResourceBulkDataInterface
 {
 	FFXTextureBulkData()
@@ -376,7 +372,7 @@ static FfxErrorCode GetDeviceCapabilities_UE(FfxInterface* backendInterface, Ffx
 	return FFX_OK;
 }
 
-static FfxErrorCode CreateDevice_UE(FfxInterface* backendInterface, FfxEffectBindlessConfig* bindlessConfig, FfxUInt32* effectContextId)
+static FfxErrorCode CreateDevice_UE(FfxInterface* backendInterface, FfxEffect effect, FfxEffectBindlessConfig* bindlessConfig, FfxUInt32* effectContextId)
 {
 	FFXBackendState* backendContext = (FFXBackendState*)backendInterface->scratchBuffer;
 	if (backendContext->device != backendInterface->device)
@@ -465,16 +461,25 @@ static FfxErrorCode FlushRenderJobs_UE(FfxInterface* backendInterface, FfxComman
 					FRDGTexture* RdgTex = Context->GetRDGTexture(*GraphBuilder, job->clearJobDescriptor.target.internalIndex);
 					if (RdgTex)
 					{
-						FRDGTextureUAVRef UAV = GraphBuilder->CreateUAV(RdgTex);
 						if (IsFloatFormat(RdgTex->Desc.Format))
 						{
-							AddClearUAVPass(*GraphBuilder, UAV, job->clearJobDescriptor.color);
+							for (uint8 MipLevel = 0; MipLevel < RdgTex->Desc.NumMips; MipLevel++)
+							{
+								FRDGTextureUAVDesc Desc(RdgTex, MipLevel);
+								FRDGTextureUAVRef UAV = GraphBuilder->CreateUAV(Desc);
+								AddClearUAVPass(*GraphBuilder, UAV, job->clearJobDescriptor.color);
+							}
 						}
 						else
 						{
 							uint32 UintVector[4];
 							FMemory::Memcpy(UintVector, job->clearJobDescriptor.color, sizeof(uint32) * 4);
-							AddClearUAVPass(*GraphBuilder, UAV, UintVector);
+							for (uint8 MipLevel = 0; MipLevel < RdgTex->Desc.NumMips; MipLevel++)
+							{
+								FRDGTextureUAVDesc Desc(RdgTex, MipLevel);
+								FRDGTextureUAVRef UAV = GraphBuilder->CreateUAV(Desc);
+								AddClearUAVPass(*GraphBuilder, UAV, UintVector);
+							}
 						}
 					}
 					else
@@ -1421,7 +1426,7 @@ FfxApiResource FFXRHIBackend::GetNativeResource(FRHITexture* Texture, FfxApiReso
 
 	return Result;
 }
-FfxCommandList FFXRHIBackend::GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList)
+FfxCommandList FFXRHIBackend::GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList, FRHITexture* Texture)
 {
 	return (FfxCommandList)&RHICmdList;
 }
@@ -1491,6 +1496,11 @@ bool FFXRHIBackend::GetAverageFrameTimes(float& AvgTimeMs, float& AvgFPS)
 }
 
 void FFXRHIBackend::CopySubRect(FfxCommandList CmdList, FfxApiResource Src, FfxApiResource Dst, FIntPoint OutputExtents, FIntPoint OutputPoint)
+{
+	// Deliberately blank
+}
+
+void FFXRHIBackend::Flush(FRHITexture* Tex, FRHICommandListImmediate& RHICmdList)
 {
 	// Deliberately blank
 }

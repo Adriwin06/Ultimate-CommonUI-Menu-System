@@ -60,7 +60,6 @@ public:
 	/** Retrieves all supported DLSS-FG modes. Can be used to populate UI */
 	UFUNCTION(BlueprintPure, Category = "Streamline|DLSS-FG", meta = (DisplayName = "Get Supported DLSS-FG Modes"))
 	static STREAMLINEBLUEPRINT_API TArray<UStreamlineDLSSGMode> GetSupportedDLSSGModes();
-
 	/**
 	 * Sets the console variables to enable/disable DLSS-FG
 	 * Off = DLSS-FG disabled
@@ -79,9 +78,8 @@ public:
 	static STREAMLINEBLUEPRINT_API UStreamlineDLSSGMode GetDefaultDLSSGMode();
 
 	/* Returns the actual framerate and number of frames presented, whether DLSS-FG is active or not */
-	UFUNCTION(BlueprintPure, Category = "Streamline|DLSS-FG", meta = (DisplayName = "Get DLSS-FG frame frame rate and presented frames"))
+	UFUNCTION(BlueprintPure, Category = "Streamline|DLSS-FG", meta = (DisplayName = "Get DLSS-FG  frame rate and presented frames"))
 	static STREAMLINEBLUEPRINT_API void GetDLSSGFrameTiming(float& FrameRateInHertz, int32& FramesPresented);
-
 
 	static void Startup();
 	static void Shutdown();

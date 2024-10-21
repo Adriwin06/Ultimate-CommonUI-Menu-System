@@ -240,6 +240,75 @@ TAutoConsoleVariable<int32> CVarFSR3ReactiveMaskPreDOFTranslucencyMax(
 	ECVF_RenderThreadSafe
 );
 
+TAutoConsoleVariable<float> CVarFSR3ReactiveMaskCustomStencilScale(
+	TEXT("r.FidelityFX.FSR3.ReactiveMaskCustomStencilScale"),
+	0.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.0), scales how much customm stencil values contribute to the reactive mask. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<float> CVarFSR3ReactiveHistoryCustomStencilScale(
+	TEXT("r.FidelityFX.FSR3.ReactiveHistoryCustomStencilScale"),
+	0.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.0), scales how much customm stencil values contribute to supressing hitory. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<float> CVarFSR3ReactiveMaskDeferredDecalScale(
+	TEXT("r.FidelityFX.FSR3.ReactiveMaskDeferredDecalScale"),
+	0.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.0), scales how much deferred decal values contribute to the reactive mask. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<float> CVarFSR3ReactiveHistoryDeferredDecalScale(
+	TEXT("r.FidelityFX.FSR3.ReactiveHistoryDeferredDecalScale"),
+	0.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.0), scales how much deferred decal values contribute to supressing hitory. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<int32> CVarFSR3CustomStencilMask(
+	TEXT("r.FidelityFX.FSR3.CustomStencilMask"),
+	0,
+	TEXT("A bitmask 0-255 (0-0xff) used when accessing the custom stencil to read reactive mask values. Setting to 0 will disable use of the custom-depth/stencil buffer. Default is 0."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<int32> CVarFSR3CustomStencilShift(
+	TEXT("r.FidelityFX.FSR3.CustomStencilShift"),
+	0,
+	TEXT("Bitshift to apply to the value read from the custom stencil when using it to provide reactive mask values. Default is 0."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<float> CVarFSR3ReactiveMaskTAAResponsiveValue(
+	TEXT("r.FidelityFX.FSR3.ReactiveMaskTAAResponsiveValue"),
+	0.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.0), value to write to reactive mask when pixels are marked in the stencil buffer as TAA Responsive. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<float> CVarFSR3ReactiveHistoryTAAResponsiveValue(
+	TEXT("r.FidelityFX.FSR3.ReactiveHistoryTAAResponsiveValue"),
+	0.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 0.0), value to write to reactive history when pixels are marked in the stencil buffer as TAA Responsive. Higher values will make translucent materials more reactive which can reduce smearing."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<float> CVarFSR3VelocityFactor(
+	TEXT("r.FidelityFX.FSR3.VelocityFactor"),
+	1.0f,
+	TEXT("Range from 0.0 to 1.0 (Default 1.0), value of 0.0f can improve temporal stability of bright pixels."),
+	ECVF_RenderThreadSafe
+);
+
+TAutoConsoleVariable<int32> CVarFSR3DeferDelete(
+	TEXT("r.FidelityFX.FSR3.DeferDelete"),
+	0,
+	TEXT("Number of frames to defer deletion - defaults to 0 which relies on the RHI to ensure resources aren't released while in use on the GPU."),
+	ECVF_RenderThreadSafe
+);
 
 //------------------------------------------------------------------------------------------------------
 // Console variables for Frame Interpolation.

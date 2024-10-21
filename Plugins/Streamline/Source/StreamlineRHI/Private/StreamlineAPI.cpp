@@ -506,7 +506,7 @@ sl::Result SLgetNativeInterface(void* proxyInterface, void** baseInterface)
 #if LOG_SL_FUNCTIONS
 	if (LogStreamlineFunctions())
 	{
-		UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName());
+		UE_LOG(LogStreamlineRHI, Log, TEXT("%s %s proxyInterface=%p"), ANSI_TO_TCHAR(__FUNCTION__), *CurrentThreadName(), proxyInterface);
 	}
 #endif
 

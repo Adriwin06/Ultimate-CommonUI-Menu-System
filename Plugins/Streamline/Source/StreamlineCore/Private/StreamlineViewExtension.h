@@ -19,9 +19,9 @@
 #include "SceneViewExtension.h"
 #include "Runtime/Launch/Resources/Version.h"
 
-// See StreamlineCore.Builds.cs for a convenient way to set this to 1 for local debugging
+
 #ifndef DEBUG_STREAMLINE_VIEW_TRACKING
-#define DEBUG_STREAMLINE_VIEW_TRACKING 0
+#define DEBUG_STREAMLINE_VIEW_TRACKING (!(UE_BUILD_TEST || UE_BUILD_SHIPPING))
 #endif
 
 class FSceneTextureParameters;
@@ -70,6 +70,8 @@ public:
 	// that might need to get indexed by the viewfamily or smth
 private: static TArray<FTrackedView> TrackedViews;
 public:
+
+	static bool DebugViewTracking();
 
 	static void LogTrackedViews(const TCHAR* CallSite);
 	static TArray<FTrackedView>& GetTrackedViews()

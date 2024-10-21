@@ -24,11 +24,10 @@ public class StreamlineCore : ModuleRules
 #endif
 
 
-		
-		if (ReadOnlyBuildVersion.Current.MajorVersion == 4 && ReadOnlyBuildVersion.Current.MinorVersion == 26)
-		{
-			PrivateDefinitions.Add("DEBUG_STREAMLINE_VIEW_TRACKING=1");
-		}
+
+		// that now gets defined in StreamlineViewExtension.h based on build config and r.Streamline.LogTrackedViews and -sllogviewtracking
+		//PrivateDefinitions.Add("DEBUG_STREAMLINE_VIEW_TRACKING=1");
+
 
 
 

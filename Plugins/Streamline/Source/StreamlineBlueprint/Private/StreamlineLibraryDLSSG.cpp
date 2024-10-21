@@ -10,9 +10,8 @@
 */
 
 #include "StreamlineLibraryDLSSG.h"
-#include "StreamlineLibraryPrivate.h"
-#if WITH_STREAMLINE
 
+#if WITH_STREAMLINE
 #include "StreamlineCore.h"
 #include "StreamlineRHI.h"
 #include "StreamlineReflex.h"
@@ -26,12 +25,26 @@
 #include "Interfaces/IPluginManager.h"
 
 #define LOCTEXT_NAMESPACE "FStreammlineBlueprintModule"
+DEFINE_LOG_CATEGORY_STATIC(LogStreamlineDLSSGBlueprint, Log, All);
 
+// that eventually should get moved into a separate DLSS-FG BP library plugin
+#if WITH_STREAMLINE
 
-static const FName SetDLSSGModeInvalidEnumValueError= FName("SetDLSSGModeInvalidEnumValueError");
-static const FName IsDLSSGModeSupportedInvalidEnumValueError = FName("IsDLSSGModeSupportedInvalidEnumValueError");
+#define TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(ReturnValueOrEmptyOrVoidPreFiveThree) \
+if (!TryInitDLSSGLibrary()) \
+{ \
+	UE_LOG(LogStreamlineDLSSGBlueprint, Error, TEXT("%s should not be called before PostEngineInit"), ANSI_TO_TCHAR(__FUNCTION__)); \
+	return ReturnValueOrEmptyOrVoidPreFiveThree; \
+}
+
+#else
+
+#define TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(ReturnValueWhichCanBeEmpty) 
+
+#endif
 
 UStreamlineFeatureSupport UStreamlineLibraryDLSSG::DLSSGSupport = UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+
 #if WITH_STREAMLINE
 
 bool UStreamlineLibraryDLSSG::bDLSSGLibraryInitialized = false;
@@ -74,70 +87,47 @@ void UStreamlineLibraryDLSSG::GetDLSSOnScreenMessages(TMultiMap<FCoreDelegates::
 
 #endif
 
+
 bool UStreamlineLibraryDLSSG::IsDLSSGModeSupported(UStreamlineDLSSGMode DLSSGMode)
 {
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(false);
+
 	const UEnum* Enum = StaticEnum<UStreamlineDLSSGMode>();
 
-	// UEnums are strongly typed, but then one can also cast a byte to an UEnum ...
-	if (Enum->IsValidEnumValue(int64(DLSSGMode)) && (Enum->GetMaxEnumValue() != int64(DLSSGMode)))
+	if (ValidateEnumValue(DLSSGMode, __FUNCTION__))
 	{
 		if (DLSSGMode == UStreamlineDLSSGMode::Off)
 		{
 			return true;
 		}
-#if WITH_STREAMLINE
-		if (!TryInitDLSSGLibrary())
-		{
-			UE_LOG(LogStreamlineBlueprint, Error, TEXT("IsDLSSGModeSupported should not be called before PostEngineInit"));
-			return false;
-		}
-		if (!IsDLSSGSupported())
-		{
-			return false;
-		}
-		else
-		{
-			return true; // TODO
-		}
-#else
-		return false;
-#endif
-	}
-	else
-	{
-#if !UE_BUILD_SHIPPING
-		FFrame::KismetExecutionMessage(*FString::Printf(
-			TEXT("IsDLSSGModeSupported should not be called with an invalid DLSSGMode enum value (%d) \"%s\""),
-			int64(DLSSGMode), *StaticEnum<UStreamlineDLSSGMode>()->GetDisplayNameTextByValue(int64(DLSSGMode)).ToString()),
-			ELogVerbosity::Error, IsDLSSGModeSupportedInvalidEnumValueError);
-#endif 
-		return false;
-	}
 
+		if (!IsDLSSGSupported()) // that returns false if WITH_STREAMLINE is false 
+		{
+			return false;
+		}
+
+		return true; // TODO, right now On and Auto are always supported
+	}
+	
+	return false;
 }
 
 TArray<UStreamlineDLSSGMode> UStreamlineLibraryDLSSG::GetSupportedDLSSGModes()
 {
 	TArray<UStreamlineDLSSGMode> SupportedQualityModes;
-#if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
+
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(SupportedQualityModes);
+
+	const UEnum* Enum = StaticEnum<UStreamlineDLSSGMode>();
+	for (int32 EnumIndex = 0; EnumIndex < Enum->NumEnums(); ++EnumIndex)
 	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("GetSupportedDLSSGModes should not be called before PostEngineInit"));
-		return SupportedQualityModes;
-	}
-#endif
-	{
-		const UEnum* Enum = StaticEnum<UStreamlineDLSSGMode>();
-		for (int32 EnumIndex = 0; EnumIndex < Enum->NumEnums(); ++EnumIndex)
+		const int64 EnumValue = Enum->GetValueByIndex(EnumIndex);
+		if (EnumValue != Enum->GetMaxEnumValue())
 		{
-			const int64 EnumValue = Enum->GetValueByIndex(EnumIndex);
-			if (EnumValue != Enum->GetMaxEnumValue())
+			const UStreamlineDLSSGMode QualityMode = UStreamlineDLSSGMode(EnumValue);
+			if (IsDLSSGModeSupported(QualityMode))
 			{
-				const UStreamlineDLSSGMode QualityMode = UStreamlineDLSSGMode(EnumValue);
-				if (IsDLSSGModeSupported(QualityMode))
-				{
-					SupportedQualityModes.Add(QualityMode);
-				}
+				SupportedQualityModes.Add(QualityMode);
 			}
 		}
 	}
@@ -146,13 +136,9 @@ TArray<UStreamlineDLSSGMode> UStreamlineLibraryDLSSG::GetSupportedDLSSGModes()
 
 bool UStreamlineLibraryDLSSG::IsDLSSGSupported()
 {
-#if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
-	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("IsDLSSGSupported should not be called before PostEngineInit"));
-		return false;
-	}
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(false);
 
+#if WITH_STREAMLINE
 	return QueryDLSSGSupport() == UStreamlineFeatureSupport::Supported;
 #else
 	return false;
@@ -161,13 +147,8 @@ bool UStreamlineLibraryDLSSG::IsDLSSGSupported()
 
 UStreamlineFeatureSupport UStreamlineLibraryDLSSG::QueryDLSSGSupport()
 {
-#if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
-	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("QueryDLSSGSupport should not be called before PostEngineInit"));
-		return UStreamlineFeatureSupport::NotSupported;
-	}
-#endif
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(UStreamlineFeatureSupport::NotSupported);
+
 	return DLSSGSupport;
 }
 
@@ -199,7 +180,7 @@ static UStreamlineDLSSGMode DLSSGModeEnumFromIntCvar(int32 DLSSGMode)
 	case 2:
 		return UStreamlineDLSSGMode::Auto;
 	default:
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("Invalid r.Streamline.DLSSG.Enable value %d"), DLSSGMode);
+		UE_LOG(LogStreamlineDLSSGBlueprint, Error, TEXT("Invalid r.Streamline.DLSSG.Enable value %d"), DLSSGMode);
 		return UStreamlineDLSSGMode::Off;
 	}
 }
@@ -207,17 +188,13 @@ static UStreamlineDLSSGMode DLSSGModeEnumFromIntCvar(int32 DLSSGMode)
 
 void UStreamlineLibraryDLSSG::SetDLSSGMode(UStreamlineDLSSGMode DLSSGMode)
 {
-#if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
-	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("SetDLSSGMode should not be called before PostEngineInit"));
-		return;
-	}
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(void());
 
+#if WITH_STREAMLINE
 	const UEnum* Enum = StaticEnum<UStreamlineDLSSGMode>();
 
 	// UEnums are strongly typed, but then one can also cast a byte to an UEnum ...
-	if(Enum->IsValidEnumValue(int64(DLSSGMode)) && (Enum->GetMaxEnumValue() != int64(DLSSGMode)))
+	if (ValidateEnumValue(DLSSGMode, __FUNCTION__))
 	{
 		static auto CVarDLSSGEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.DLSSG.Enable"));
 		if (CVarDLSSGEnable)
@@ -234,40 +211,24 @@ void UStreamlineLibraryDLSSG::SetDLSSGMode(UStreamlineDLSSGMode DLSSGMode)
 #endif 
 		}
 	}
-	else
-	{
-#if !UE_BUILD_SHIPPING
-		FFrame::KismetExecutionMessage(*FString::Printf(
-			TEXT("SetDLSSGMode should not be called with an invalid DLSSGMode enum value (%d) \"%s\""), 
-			int64(DLSSGMode), *StaticEnum<UStreamlineDLSSGMode>()->GetDisplayNameTextByValue(int64(DLSSGMode)).ToString()),
-			ELogVerbosity::Error, SetDLSSGModeInvalidEnumValueError);
-#endif 
-	}
 #endif	// WITH_STREAMLINE
 }
 
 STREAMLINEBLUEPRINT_API void UStreamlineLibraryDLSSG::GetDLSSGFrameTiming(float& FrameRateInHertz, int32& FramesPresented)
 {
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(void());
+
 #if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
-	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("GetDLSSGFrameTiming should not be called before PostEngineInit"));
-		return;
-	}
 	GetStreamlineDLSSGFrameTiming(FrameRateInHertz, FramesPresented);
 #endif
-
 }
 
 UStreamlineDLSSGMode UStreamlineLibraryDLSSG::GetDLSSGMode()
 {
-#if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
-	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("GetDLSSGMode should not be called before PostEngineInit"));
-		return UStreamlineDLSSGMode::Off;
-	}
 
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(UStreamlineDLSSGMode::Off);
+
+#if WITH_STREAMLINE
 	static const auto CVarDLSSGEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.DLSSG.Enable"));
 	if (CVarDLSSGEnable != nullptr)
 	{
@@ -279,13 +240,8 @@ UStreamlineDLSSGMode UStreamlineLibraryDLSSG::GetDLSSGMode()
 
 UStreamlineDLSSGMode UStreamlineLibraryDLSSG::GetDefaultDLSSGMode()
 {
-#if WITH_STREAMLINE
-	if (!TryInitDLSSGLibrary())
-	{
-		UE_LOG(LogStreamlineBlueprint, Error, TEXT("GetDefaultDLSSGMode should not be called before PostEngineInit"));
-		return UStreamlineDLSSGMode::Off;
-	}
-#endif
+	TRY_INIT_STREAMLINE_DLSSG_LIBRARY_AND_RETURN(UStreamlineDLSSGMode::Off);
+
 	if (UStreamlineLibraryDLSSG::IsDLSSGSupported())
 	{
 		return UStreamlineDLSSGMode::Off;
@@ -295,6 +251,7 @@ UStreamlineDLSSGMode UStreamlineLibraryDLSSG::GetDefaultDLSSGMode()
 		return UStreamlineDLSSGMode::Off;
 	}
 }
+
 
 #if WITH_STREAMLINE
 
@@ -356,7 +313,7 @@ void UStreamlineLibraryDLSSG::Startup()
 
 	UStreamlineLibrary::RegisterFeatureSupport(UStreamlineFeature::DLSSG, UStreamlineLibraryDLSSG::QueryDLSSGSupport());
 #else
-	UE_LOG(LogStreamlineBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DLSS-G and will always return UStreamlineDLSSGSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off DLSS-G related UI elements."));
+	UE_LOG(LogStreamlineDLSSGBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DLSS-G and will always return UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off DLSS-G related UI elements."));
 	UStreamlineLibraryDLSSG::DLSSGSupport = UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 #endif
 }

@@ -54,6 +54,15 @@ public class StreamlineD3D12RHI : ModuleRules
 		if (ReadOnlyBuildVersion.Current.MajorVersion == 5 && ReadOnlyBuildVersion.Current.MinorVersion >= 1)
 		{
 			PrivateDefinitions.Add("ENGINE_PROVIDES_ID3D12DYNAMICRHI=1");
+
+			if (ReadOnlyBuildVersion.Current.MajorVersion == 5 && ReadOnlyBuildVersion.Current.MinorVersion >= 5) 
+			{
+				PrivateDefinitions.Add("ENGINE_ID3D12DYNAMICRHI_NEEDS_CMDLIST=1");
+			}
+			else
+			{
+				PrivateDefinitions.Add("ENGINE_ID3D12DYNAMICRHI_NEEDS_CMDLIST=0");
+			}
 		}
 		else
 		{

@@ -40,6 +40,8 @@
 #include "Engine/GameViewportClient.h"
 #include "UnrealClient.h"
 
+#include "IAntiLag2.h"
+
 //------------------------------------------------------------------------------------------------------
 // Helper variable declarations.
 //------------------------------------------------------------------------------------------------------
@@ -714,14 +716,14 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 				}
 				else
 				{
-					CmdBuffer = Presenter->GetBackend()->GetNativeCommandBuffer(cmd);
+					CmdBuffer = Presenter->GetBackend()->GetNativeCommandBuffer(cmd, Context->MotionVectorRT->GetRHI());
 				}
 				if (CmdBuffer)
 				{
 					// Prepare the interpolation context on the current RHI command list
 					{
 						ffxDispatchDescFrameGenerationPrepare UpscalerDesc = PrepareDesc;
-						UpscalerDesc.commandList = Presenter->GetBackend()->GetNativeCommandBuffer(cmd);
+						UpscalerDesc.commandList = Presenter->GetBackend()->GetNativeCommandBuffer(cmd, Context->MotionVectorRT->GetRHI());
 
 						auto Code = Presenter->GetBackend()->ffxDispatch(&Context->Context, &UpscalerDesc.header);
 						check(Code == FFX_API_RETURN_OK);
@@ -745,10 +747,7 @@ bool FFXFrameInterpolation::InterpolateView(FRDGBuilder& GraphBuilder, FFXFrameI
 				delete interpolateParams;
 			});
 
-			RHICmdList.ImmediateFlush(EImmediateFlushType::DispatchToRHIThread);
-#if UE_VERSION_OLDER_THAN(5, 1, 0)
-			RHICmdList.SubmitCommandsHint();
-#endif
+			Presenter->GetBackend()->Flush(Context->MotionVectorRT->GetRHI(), RHICmdList);
 
 			if (Presenter->GetMode() != EFFXFrameInterpolationPresentModeNative)
 			{
@@ -794,11 +793,11 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 	auto ViewportRHI = Viewport ? Viewport->GetViewportRHI() : nullptr;
 	FIntPoint ViewportSizeXY = Viewport ? Viewport->GetSizeXY() : FIntPoint::ZeroValue;
 	FFXFrameInterpolationCustomPresent* Presenter = ViewportRHI.IsValid() ? (FFXFrameInterpolationCustomPresent*)ViewportRHI->GetCustomPresent() : nullptr;
-	bool bAllowed = CVarEnableFFXFI.GetValueOnAnyThread() != 0 && Presenter;
+	bool bAllowed = CVarEnableFFXFI.GetValueOnAnyThread() != 0 && Presenter && (Views.Num() > 0);
 #if WITH_EDITORONLY_DATA
 	bAllowed &= !GIsEditor;
 #endif
-	if (bAllowed && (Views.Num() > 0))
+	if (bAllowed)
 	{
 		FTexture2DRHIRef BackBuffer = RHIGetViewportBackBuffer(ViewportRHI);
 		FRDGTextureRef BackBufferRDG = RegisterExternalTexture(GraphBuilder, BackBuffer, nullptr);
@@ -864,7 +863,7 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 		{
 			if (Pair.Key->State)
 			{
-				if ((Pair.Key->Family->GetTemporalUpscalerInterface() && Pair.Key->Family->GetTemporalUpscalerInterface()->GetDebugName() == FString(TEXT("FFXFSR3TemporalUpscaler"))) && Pair.Value.bEnabled && Pair.Value.ViewFamilyTexture && (ViewportSizeXY.X == Pair.Value.ViewFamilyTexture->Desc.Extent.X) && (ViewportSizeXY.Y == Pair.Value.ViewFamilyTexture->Desc.Extent.Y))
+				if (Pair.Value.bEnabled && Pair.Value.ViewFamilyTexture && (ViewportSizeXY.X == Pair.Value.ViewFamilyTexture->Desc.Extent.X) && (ViewportSizeXY.Y == Pair.Value.ViewFamilyTexture->Desc.Extent.Y))
 				{
 					bool const bInterpolated = InterpolateView(GraphBuilder, Presenter, Pair.Key, Pair.Value, FinalBuffer, InterpolatedRDG, BackBufferRDG, InterpolateIndex);
 					InterpolateIndex = bInterpolated ? InterpolateIndex +1 : InterpolateIndex;
@@ -873,40 +872,47 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 			}
 		}
 
-		if ((Presenter->GetBackend()->GetAPI() != EFFXBackendAPI::Unreal) && (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative))
-		{
-			GraphBuilder.AddPass(
-				RDG_EVENT_NAME("FidelityFX-FrameInterpolation Unset CommandList"),
-				ERDGPassFlags::None | ERDGPassFlags::NeverCull,
-				[](FRHICommandListImmediate& RHICmdList)
-				{
-					RHICmdList.EnqueueLambda([](FRHICommandListImmediate& cmd)
-					{
-						GCommandList = nullptr;
-					});
-				});
-		}
-
 		Presenter->EndFrame();
+	}
+
+	{
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("FidelityFX-FrameInterpolation Unset CommandList"),
+			ERDGPassFlags::None | ERDGPassFlags::NeverCull,
+			[](FRHICommandListImmediate& RHICmdList)
+			{
+				RHICmdList.EnqueueLambda([](FRHICommandListImmediate& cmd)
+				{
+					GCommandList = nullptr;
+				});
+			});
 	}
 
 	Views.Empty();
 
-	if (!bAllowed && ViewportRHI.IsValid())
+	if (!bAllowed && Presenter)
 	{
-		if (Presenter)
+		Presenter->SetEnabled(false);
+		if (Presenter->GetContext())
 		{
-			Presenter->SetEnabled(false);
-			if (Presenter->GetContext())
+			ffxConfigureDescFrameGeneration ConfigDesc;
+			FMemory::Memzero(ConfigDesc);
+			ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+			ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(ViewportRHI->GetNativeSwapChain());
+			ConfigDesc.frameGenerationEnabled = false;
+			ConfigDesc.allowAsyncWorkloads = false;
 			{
-				ffxConfigureDescFrameGeneration ConfigDesc;
-				FMemory::Memzero(ConfigDesc);
-				ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
-				ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(ViewportRHI->GetNativeSwapChain());
-				ConfigDesc.frameGenerationEnabled = false;
-				ConfigDesc.allowAsyncWorkloads = false;
-
-				Presenter->GetBackend()->UpdateSwapChain(Presenter->GetContext(), ConfigDesc);
+				GraphBuilder.AddPass(
+					RDG_EVENT_NAME("FidelityFX-FrameInterpolation UpdateSwapChain"),
+					ERDGPassFlags::None | ERDGPassFlags::NeverCull,
+					[Presenter, ConfigDesc](FRHICommandListImmediate& RHICmdList)
+					{
+						RHICmdList.EnqueueLambda([Presenter, ConfigDesc](FRHICommandListImmediate& cmd)
+						{
+							auto Config = ConfigDesc;
+							Presenter->GetBackend()->UpdateSwapChain(Presenter->GetContext(), Config);
+						});
+					});
 			}
 		}
 	}
@@ -922,6 +928,21 @@ void FFXFrameInterpolation::InterpolateFrame(FRDGBuilder& GraphBuilder)
 	else
 	{
 		ResetState = bAllowed ? 2u : 0u;
+	}
+
+	IAntiLag2Module* AntiLag2Interface = (IAntiLag2Module*)FModuleManager::Get().GetModule(TEXT("AntiLag2"));
+	if (AntiLag2Interface)
+	{
+		GraphBuilder.AddPass(
+			RDG_EVENT_NAME("FidelityFX-FrameInterpolation Set AntLag2 FrameGen Mode"),
+			ERDGPassFlags::None | ERDGPassFlags::NeverCull,
+			[AntiLag2Interface, bAllowed](FRHICommandListImmediate& RHICmdList)
+			{
+				RHICmdList.EnqueueLambda([AntiLag2Interface, bAllowed](FRHICommandListImmediate& cmd)
+					{
+						AntiLag2Interface->MarkEndOfFrameRendering();
+					});
+			});
 	}
 }
 
@@ -1028,18 +1049,15 @@ void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& Sl
 {
     /** Callback for when a backbuffer is ready for reading (called on render thread) */
 	FRHIViewport** ViewportPtr = Windows.Find(&SlateWindow);
-    if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread())
-    {
-        FViewportRHIRef Viewport = *ViewportPtr;
-        FFXFrameInterpolationCustomPresent* Presenter = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
+	FViewportRHIRef Viewport = ViewportPtr ? *ViewportPtr : nullptr;
+    FFXFrameInterpolationCustomPresent* Presenter = Viewport ? (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent() : nullptr;
 
-		if (Presenter)
+	if (Presenter && CVarEnableFFXFI.GetValueOnAnyThread())
+    {
+		PresentCount += (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative) ? 1llu : 0llu;
+		if (ResetState)
 		{
-			PresentCount += (Presenter->GetMode() == EFFXFrameInterpolationPresentModeNative) ? 1llu : 0llu;
-			if (ResetState)
-			{
-				Presenter->CopyBackBufferRT(BackBuffer);
-			}
+			Presenter->CopyBackBufferRT(BackBuffer);
 		}
     }
 
@@ -1048,24 +1066,24 @@ void FFXFrameInterpolation::OnBackBufferReadyToPresentCallback(class SWindow& Sl
 
 	if (ResetState == 0)
 	{
-		if (ViewportPtr && CVarEnableFFXFI.GetValueOnAnyThread())
+		if (Presenter && CVarEnableFFXFI.GetValueOnAnyThread())
 		{
-			FViewportRHIRef Viewport = *ViewportPtr;
-			FFXFrameInterpolationCustomPresent* Presenter = (FFXFrameInterpolationCustomPresent*)Viewport->GetCustomPresent();
-			if (Presenter)
+			Presenter->SetEnabled(false);
+			if (Presenter->GetContext())
 			{
-				Presenter->SetEnabled(false);
-				if (Presenter->GetContext())
-				{
-					ffxConfigureDescFrameGeneration ConfigDesc;
-					FMemory::Memzero(ConfigDesc);
-					ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
-					ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(Viewport->GetNativeSwapChain());
-					ConfigDesc.frameGenerationEnabled = false;
-					ConfigDesc.allowAsyncWorkloads = false;
+				ffxConfigureDescFrameGeneration ConfigDesc;
+				FMemory::Memzero(ConfigDesc);
+				ConfigDesc.header.type = FFX_API_CONFIGURE_DESC_TYPE_FRAMEGENERATION;
+				ConfigDesc.swapChain = Presenter->GetBackend()->GetSwapchain(Viewport->GetNativeSwapChain());
+				ConfigDesc.frameGenerationEnabled = false;
+				ConfigDesc.allowAsyncWorkloads = false;
 
-					Presenter->GetBackend()->UpdateSwapChain(Presenter->GetContext(), ConfigDesc);
-				}
+				FRHICommandListImmediate& RHICmdList = FRHICommandListExecutor::GetImmediateCommandList();
+				RHICmdList.EnqueueLambda([Presenter, ConfigDesc](FRHICommandListImmediate& cmd)
+				{
+					auto Config = ConfigDesc;
+					Presenter->GetBackend()->UpdateSwapChain(Presenter->GetContext(), Config);
+				});
 			}
 		}
 	}

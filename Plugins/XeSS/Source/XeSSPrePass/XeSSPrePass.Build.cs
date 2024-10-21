@@ -30,44 +30,21 @@ public class XeSSPrePass : ModuleRules
 
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicIncludePaths.AddRange(
-			new string[] 
-			{
-				Path.Combine(ModuleDirectory, "../XeSS/Public")
-			}
-			);
-
 		PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"));
-
-		PublicDependencyModuleNames.AddRange(
-			new string[]
-			{
-			}
-			);
-
 
 		PrivateDependencyModuleNames.AddRange(
 			new string[]
 			{
-					"Core",
-					"CoreUObject",
-					"Engine",
-					"Renderer",
-					"RenderCore",
-					"Projects",
-					"RHI",
-			}
-			);
+				"Core",
+				"Engine",
+				"Renderer",
+				"RenderCore",
+				"Projects",
+				"RHI",
 
-		if (EngineMajorVersion >= 5)
-		{
-			PrivateDependencyModuleNames.Add("RHICore");
-		}
-
-		DynamicallyLoadedModuleNames.AddRange(
-			new string[]
-			{
+				"XeSSCommon",
+				"XeSSUnreal"
 			}
-			);
+		);
 	}
 }

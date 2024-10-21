@@ -70,7 +70,7 @@ FRDGTextureRef AddStreamlineUIHintExtractionPass(
 	FRDGBuilder& GraphBuilder,
 //	const FViewInfo& View,
 	const float InAlphaThreshold,
-	const FTexture2DRHIRef& InBackBuffer
+	const FTextureRHIRef& InBackBuffer
 //	FRDGTextureRef InVelocityTexture
 )
 {

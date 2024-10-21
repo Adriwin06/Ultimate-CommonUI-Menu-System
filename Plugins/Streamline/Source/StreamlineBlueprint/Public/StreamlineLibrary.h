@@ -139,11 +139,32 @@ private:
 	
 	static TStaticArray<FStreamlineFeatureRequirements, static_cast<uint8>(UStreamlineFeature::Count)> Features;
 	
+	static int32 ValidateAndConvertToIndex(UStreamlineFeature Feature);
+
+
 	static bool bStreamlineLibraryInitialized;
 	static bool TryInitStreamlineLibrary();
 };
 
 
+template <typename UE>
+bool ValidateEnumValue(UE Value, const char* CallSite)
+{
+	// UEnums are strongly typed, but then one can also cast a byte to an UEnum ...
+	const UEnum* Enum = StaticEnum<UE>();
+	const bool bIsValid = Enum->IsValidEnumValue(int64(Value)) && (Enum->GetMaxEnumValue() != int64(Value));
+
+#if !UE_BUILD_SHIPPING
+	if (!bIsValid)
+	{
+		FFrame::KismetExecutionMessage(*FString::Printf(
+			TEXT("%s should not be called with an invalid enum value (%d) \"%s\""),
+			ANSI_TO_TCHAR(CallSite), int64(Value), *Enum->GetDisplayNameTextByValue(int64(Value)).ToString()),
+			ELogVerbosity::Error);
+	}
+#endif 
+	return bIsValid;
+}
 
 // TODO maybe move inter SL plugin stuff into a separate header?
 #if WITH_STREAMLINE

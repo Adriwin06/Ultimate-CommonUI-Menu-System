@@ -208,13 +208,13 @@ public:
 		const FDiffuseIndirectInputs& Inputs,
 		const FAmbientOcclusionRayTracingConfig Config) const override;
 
-private:
 	inline bool IsApiSupported() const
 	{
 		return Api != EFFXBackendAPI::Unknown && Api != EFFXBackendAPI::Unsupported;
 	}
 
-	void DeferredCleanup() const;
+private:
+	void DeferredCleanup(uint64 FrameNum) const;
 
 	mutable FPostProcessingInputs PostInputs;
 	FDynamicResolutionStateInfos DynamicResolutionStateInfos;
@@ -227,6 +227,8 @@ private:
 	mutable FRDGTextureRef ReflectionTexture;
 	mutable FTexture2DRHIRef SceneColorPreAlpha;
 	mutable TRefCountPtr<IPooledRenderTarget> SceneColorPreAlphaRT;
+	mutable FTexture2DRHIRef CustomStencil;
+	mutable TRefCountPtr<IPooledRenderTarget> CustomStencilRT;
 	mutable TRefCountPtr<IPooledRenderTarget> MotionVectorRT;
 	mutable TRefCountPtr<IPooledRenderTarget> LumenReflections;
 	mutable FRDGTextureMSAA PreAlpha;

@@ -202,6 +202,9 @@ void FFXFIGlobalShader::BindParameters(FRDGBuilder& GraphBuilder, FFXBackendStat
 			case FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_OUTPUT:
 				Parameters->r_output = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 				break;
+			case FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_INPAINTING_MASK:
+				Parameters->r_inpainting_mask = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
+				break;
 			case FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_INPAINTING_PYRAMID:
 				Parameters->r_inpainting_pyramid = Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.srvTextures[i].resource.internalIndex);
 				break;
@@ -254,6 +257,9 @@ void FFXFIGlobalShader::BindParameters(FRDGBuilder& GraphBuilder, FFXBackendStat
 				break;
 			case FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_COUNTERS:
 				Parameters->rw_counters = GraphBuilder.CreateUAV(FRDGBufferUAVDesc(Context->GetRDGBuffer(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex)));
+				break;
+			case FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_INPAINTING_MASK:
+				Parameters->rw_inpainting_mask = GraphBuilder.CreateUAV(FRDGTextureUAVDesc(Context->GetRDGTexture(GraphBuilder, job->computeJobDescriptor.uavTextures[i].resource.internalIndex), job->computeJobDescriptor.uavTextures[i].mip));
 				break;
 			case FFX_FRAMEINTERPOLATION_RESOURCE_IDENTIFIER_INPAINTING_PYRAMID_MIPMAP_0:
 			{

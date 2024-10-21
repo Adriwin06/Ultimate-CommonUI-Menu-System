@@ -22,13 +22,13 @@
 
 #pragma once
 
-#include "XeSSMacros.h"
+#include "XeSSCommonMacros.h"
 
 #include "CoreMinimal.h"
 #include "RHI.h"
 #include "ShaderParameterMacros.h"
-#include "XeSSUnreal.h"
-#include "xess.h"
+#include "XeSSUnrealD3D12RHI.h"
+#include "xess/xess.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogXeSS, Verbose, All);
 
@@ -37,7 +37,7 @@ class FRHICommandListImmediate;
 class FRHITexture;
 class IConsoleVariable;
 
-struct XESSPLUGIN_API FXeSSInitArguments
+struct FXeSSInitArguments
 {
 	uint32 OutputWidth = 0;
 	uint32 OutputHeight = 0;
@@ -45,7 +45,7 @@ struct XESSPLUGIN_API FXeSSInitArguments
 	uint32 InitFlags = 0;
 };
 
-struct XESSPLUGIN_API FXeSSExecuteArguments
+struct FXeSSExecuteArguments
 {
 	FRHITexture* ColorTexture = nullptr;
 	FRHITexture* VelocityTexture = nullptr;
@@ -60,7 +60,7 @@ struct XESSPLUGIN_API FXeSSExecuteArguments
 	uint32 bCameraCut = 0;
 };
 
-class XESSPLUGIN_API FXeSSRHI
+class XESSCORE_API FXeSSRHI
 {
 	
 public:

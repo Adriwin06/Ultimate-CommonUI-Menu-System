@@ -48,6 +48,8 @@
 #include "Windows/IDXGISwapchainProvider.h"
 #endif
 
+#include "IAntiLag2.h"
+
 #include <mutex>
 
 #define LOCTEXT_NAMESPACE "FFXD3D12Backend"
@@ -544,10 +546,12 @@ public:
 		return GetNativeResource(Texture->GetRHI(), State);
 	}
 
-	FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList) final
+	FfxCommandList GetNativeCommandBuffer(FRHICommandListImmediate& RHICmdList, FRHITexture* Texture) final
 	{
 #if UE_VERSION_AT_LEAST(5, 1, 0)
-		FfxCommandList CmdList = reinterpret_cast<FfxCommandList>((ID3D12CommandList*)GetID3D12DynamicRHI()->RHIGetGraphicsCommandList(0));
+		ID3D12DynamicRHI* DynamicRHI = GetID3D12DynamicRHI();
+		uint32 const DeviceIndex = DynamicRHI->RHIGetResourceDeviceIndex(Texture);
+		FfxCommandList CmdList = reinterpret_cast<FfxCommandList>((ID3D12CommandList*)DynamicRHI->RHIGetGraphicsCommandList(DeviceIndex));
 #else
 		void* CmdList = ((FD3D12CommandContext&)RHICmdList.GetContext()).CommandListHandle.GraphicsCommandList();
 #endif
@@ -682,6 +686,12 @@ public:
 			}
 		}
 
+		IAntiLag2Module* AntiLag2Interface = (IAntiLag2Module*)FModuleManager::Get().GetModule(TEXT("AntiLag2"));
+		if (AntiLag2Interface)
+		{
+			AntiLag2Interface->SetFrameType(PresentParams.isInterpolatedFrame);
+		}
+
 		return FFX_API_RETURN_OK;
 	}
 
@@ -786,6 +796,20 @@ public:
 		std::swap(barriers[0].Transition.StateBefore, barriers[0].Transition.StateAfter);
 		std::swap(barriers[1].Transition.StateBefore, barriers[1].Transition.StateAfter);
 		pCmdList->ResourceBarrier(_countof(barriers), barriers);
+	}
+
+	void Flush(FRHITexture* Tex, FRHICommandListImmediate& RHICmdList) final
+	{
+#if UE_VERSION_OLDER_THAN(5, 1, 0)
+		RHICmdList.SubmitCommandsHint();
+#else
+		RHICmdList.EnqueueLambda([this, Tex](FRHICommandListImmediate& cmd)
+		{
+			ID3D12DynamicRHI* DynamicRHI = GetID3D12DynamicRHI();
+			uint32 const DeviceIndex = DynamicRHI->RHIGetResourceDeviceIndex(Tex);
+			DynamicRHI->RHIFinishExternalComputeWork(DeviceIndex, (ID3D12GraphicsCommandList*)GetNativeCommandBuffer(cmd, Tex));
+		});
+#endif
 	}
 };
 double FFXD3D12Backend::LastTime = FPlatformTime::Seconds();
@@ -1049,7 +1073,12 @@ public:
 		FFXD3D12SwapChain* D3D12SwapChain = nullptr;
 		IDXGISwapChain* RawSwapChain = nullptr;
 		FfxInterface* Interface = nullptr;
-		bool const bOverrideSwapChain = ((CVarFSR3OverrideSwapChainDX12.GetValueOnAnyThread() != 0) || FParse::Param(FCommandLine::Get(), TEXT("fsr3swapchain")));
+		bool bOverrideSwapChain = ((CVarFSR3OverrideSwapChainDX12.GetValueOnAnyThread() != 0) || FParse::Param(FCommandLine::Get(), TEXT("fsr3swapchain")));
+
+		// Don't override the swapchain in the Editor - it causes too many issues
+#if WITH_EDITORONLY_DATA
+		bOverrideSwapChain &= !GIsEditor;
+#endif
 
 		HWND ParentWindow = pDesc->OutputWindow ? ::GetParent(pDesc->OutputWindow) : nullptr;
 		if (bOverrideSwapChain && !ParentWindow)
@@ -1216,8 +1245,15 @@ void FFXD3D12BackendModule::StartupModule()
 	{
 		if (FFXD3D12Backend::sFFXD3D12Backend.LoadDLL())
 		{
+
 			IFFXFrameInterpolationModule* FFXFrameInterpolationModule = FModuleManager::GetModulePtr<IFFXFrameInterpolationModule>(TEXT("FFXFrameInterpolation"));
-			if (FFXFrameInterpolationModule)
+			bool bOverrideSwapChain = FFXFrameInterpolationModule != nullptr;
+
+			// Don't override the swapchain in the Editor - it causes too many issues
+#if WITH_EDITORONLY_DATA
+			bOverrideSwapChain &= !GIsEditor;
+#endif
+			if (bOverrideSwapChain)
 			{
 				IFFXFrameInterpolation* FFXFrameInterpolation = FFXFrameInterpolationModule->GetImpl();
 				check(FFXFrameInterpolation);

@@ -22,26 +22,20 @@
 
 #pragma once
 
-#include "XeSSMacros.h"
+#include "XeSSCommonMacros.h"
 
 #include "CoreMinimal.h"
 
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
 #include "SceneViewExtension.h"
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
+#else
 #include "CustomStaticScreenPercentage.h"
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+#endif
 
-#if XESS_ENGINE_VERSION_GEQ(5, 3)
-#include "TemporalUpscaler.h"		// for ITemporalUpscaler
-struct FTemporalAAHistory;
-typedef UE::Renderer::Private::ITemporalUpscaler::FInputs XPassInputs;
-#else // XESS_ENGINE_VERSION_GEQ(5, 3)
-#include "PostProcess/TemporalAA.h"  // for ITemporalUpscaler
-typedef ITemporalUpscaler::FPassInputs XPassInputs;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
+#include "XeSSUnrealRendererIncludes.h"
 
 class FXeSSRHI;
+struct FTemporalAAHistory;
 
 /** XeSS configuration parameters */
 struct FXeSSPassParameters
@@ -56,7 +50,7 @@ struct FXeSSPassParameters
 	FRDGTexture* SceneDepthTexture = nullptr;
 	FRDGTexture* SceneVelocityTexture = nullptr;
 
-	FXeSSPassParameters(const FViewInfo& View, const XPassInputs& PassInputs);
+	FXeSSPassParameters(const FViewInfo& View, const XeSSUnreal::XPassInputs& PassInputs);
 
 	/** Returns the texture resolution that will be output. */
 	FIntPoint GetOutputExtent() const;
@@ -65,13 +59,11 @@ struct FXeSSPassParameters
 	bool Validate() const;
 };
 
-#if XESS_ENGINE_VERSION_GEQ(5, 3)
-class XESSPLUGIN_API FXeSSUpscaler final : public UE::Renderer::Private::ITemporalUpscaler
-#elif XESS_ENGINE_VERSION_GEQ(5, 1)
-class XESSPLUGIN_API FXeSSUpscaler final : public ITemporalUpscaler
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-class XESSPLUGIN_API FXeSSUpscaler final : public ITemporalUpscaler, public ICustomStaticScreenPercentage
-#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
+class XESSCORE_API FXeSSUpscaler final : public XeSSUnreal::XTemporalUpscaler
+#else
+class XESSCORE_API FXeSSUpscaler final : public XeSSUnreal::XTemporalUpscaler, public ICustomStaticScreenPercentage
+#endif
 {
 public:
 	FXeSSUpscaler(FXeSSRHI* InXeSSRHI);
@@ -90,7 +82,7 @@ public:
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& ViewInfo,
 		const FPassInputs& PassInputs) const final;
-#else // XESS_ENGINE_VERSION_GEQ(5, 0)
+#else
 	virtual void AddPasses(
 		FRDGBuilder& GraphBuilder,
 		const FViewInfo& ViewInfo,
@@ -99,7 +91,7 @@ public:
 		FIntRect* OutSceneColorViewRect,
 		FRDGTextureRef* OutSceneColorHalfResTexture,
 		FIntRect* OutSceneColorHalfResViewRect) const final;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
+#endif
 
 	FRDGTextureRef AddMainXeSSPass(
 		FRDGBuilder& GraphBuilder,
@@ -109,19 +101,18 @@ public:
 		FTemporalAAHistory* OutputHistory) const;
 
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
-	ITemporalUpscaler* Fork_GameThread(const class FSceneViewFamily& ViewFamily) const final;
+	XeSSUnreal::XTemporalUpscaler* Fork_GameThread(const class FSceneViewFamily& ViewFamily) const final;
 	// Called by FXeSSUpscalerViewExtension
 	void SetupViewFamily(FSceneViewFamily& ViewFamily);
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
+#else
 	// Inherited via ICustomStaticScreenPercentage
 	virtual void SetupMainGameViewFamily(FSceneViewFamily& ViewFamily) final;
 
-#if XESS_ENGINE_VERSION_GEQ(4, 27)
+	#if XESS_ENGINE_VERSION_GEQ(4, 27)
 	// For generic cases where view family isn't a game view family. Example: MovieRenderQueue. 
 	virtual void SetupViewFamily(FSceneViewFamily& ViewFamily, TSharedPtr<ICustomStaticScreenPercentageData> InScreenPercentageDataInterface) final;
-#endif // XESS_ENGINE_VERSION_GEQ(4, 27)
-
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+	#endif
+#endif
 
 	virtual float GetMinUpsampleResolutionFraction() const final;
 	virtual float GetMaxUpsampleResolutionFraction() const final;
@@ -133,18 +124,18 @@ public:
 private:
 	// Used by `r.XeSS.Enabled` console variable `OnChanged` callback
 	bool bCurrentXeSSEnabled = false;
-#endif // XESS_ENGINE_VERSION_LSS(5, 1)
+#endif
 
 private:
 	static FXeSSRHI* UpscalerXeSSRHI;
 
 #if XESS_ENGINE_VERSION_GEQ(5, 3)
 	TRefCountPtr<UE::Renderer::Private::ITemporalUpscaler::IHistory> DummyHistory;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 3)
+#endif
 };
 
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
-class XESSPLUGIN_API FXeSSUpscalerViewExtension : public FSceneViewExtensionBase
+class FXeSSUpscalerViewExtension : public FSceneViewExtensionBase
 {
 public:
 	FXeSSUpscalerViewExtension(const FAutoRegister& AutoRegister, FXeSSUpscaler* InXeSSUpscaler) : 
@@ -161,4 +152,4 @@ private:
 	FXeSSUpscaler* XeSSUpscaler = nullptr;
 };
 
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+#endif
