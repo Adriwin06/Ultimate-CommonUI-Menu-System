@@ -22,21 +22,17 @@
 
 #include "XeSSBlueprintLibrary.h"
 
-#if WITH_XESS
-#include "xess/xess.h"
-#include "XeSSModule.h"
+#if USE_XESS
+#include "xess.h"
 #include "XeSSRHI.h"
 #include "XeSSUpscaler.h"
 #include "XeSSUtil.h"
-#endif
+#endif // USE_XESS
 
-// Use this macro only with Blueprint functions that rely on the XeSS module.
-#define XESS_CHECK_BLUEPRINT_FUNCTION_CALL(FunctionName) \
-	checkf(bInitialized, TEXT("%s can't be called before module XeSS / XeSSCore loaded."), TEXT(#FunctionName))
+#define LOCTEXT_NAMESPACE "UXeSSBlueprintLibrary"
 
-bool UXeSSBlueprintLibrary::bInitialized = false;
-bool UXeSSBlueprintLibrary::bIsXeSSSupported = false;
-#if WITH_XESS
+bool UXeSSBlueprintLibrary::bXeSSSupported = false;
+#if USE_XESS
 FXeSSRHI* UXeSSBlueprintLibrary::XeSSRHI = nullptr;
 FXeSSUpscaler* UXeSSBlueprintLibrary::XeSSUpscaler = nullptr;
 // QUALITY EDIT:
@@ -97,23 +93,9 @@ static EXeSSQualityMode ToXeSSQualityMode(int32 CVarInt)
 
 #endif
 
-void UXeSSBlueprintLibrary::Init(FXeSS* XeSS)
-{
-#if WITH_XESS
-	check(XeSS);
-	XeSSRHI = XeSS->GetXeSSRHI();
-	XeSSUpscaler = XeSS->GetXeSSUpscaler();
-	bIsXeSSSupported = XeSS->IsXeSSSupported();
-#endif
-	(void)XeSS;
-	bInitialized = true;
-}
-
 bool UXeSSBlueprintLibrary::IsXeSSSupported()
 {
-	XESS_CHECK_BLUEPRINT_FUNCTION_CALL(IsXeSSSupported);
-
-	return UXeSSBlueprintLibrary::bIsXeSSSupported;
+	return UXeSSBlueprintLibrary::bXeSSSupported;
 }
 
 TArray<EXeSSQualityMode> UXeSSBlueprintLibrary::GetSupportedXeSSQualityModes()
@@ -121,18 +103,21 @@ TArray<EXeSSQualityMode> UXeSSBlueprintLibrary::GetSupportedXeSSQualityModes()
 	TArray<EXeSSQualityMode> SupportedXeSSQualityModes;
 	const UEnum* QualityModeEnum = StaticEnum<EXeSSQualityMode>();
 
-	for (int32 EnumIndex = 0; EnumIndex < QualityModeEnum->NumEnums()-1; ++EnumIndex)
+	for (int32 EnumIndex = 0; EnumIndex < QualityModeEnum->NumEnums(); ++EnumIndex)
 	{
-		SupportedXeSSQualityModes.Add(EXeSSQualityMode(QualityModeEnum->GetValueByIndex(EnumIndex)));
+		const int32 EnumValue = (int32)QualityModeEnum->GetValueByIndex(EnumIndex);
+		if (EnumValue != QualityModeEnum->GetMaxEnumValue())
+		{
+			SupportedXeSSQualityModes.Add(EXeSSQualityMode(EnumValue));
+		}
 	}
+
 	return SupportedXeSSQualityModes;
 }
 
 EXeSSQualityMode UXeSSBlueprintLibrary::GetXeSSQualityMode()
 {
-	XESS_CHECK_BLUEPRINT_FUNCTION_CALL(GetXeSSQualityMode);
-
-#if WITH_XESS
+#if USE_XESS
 	static const auto CVarXeSSQuality = IConsoleManager::Get().FindConsoleVariable(TEXT("r.XeSS.Quality"));
 
 	// If XeSS Upscaler did not initialize correctly
@@ -167,9 +152,7 @@ EXeSSQualityMode UXeSSBlueprintLibrary::GetDefaultXeSSQualityMode(FIntPoint Scre
 
 void UXeSSBlueprintLibrary::SetXeSSQualityMode(EXeSSQualityMode QualityMode)
 {
-	XESS_CHECK_BLUEPRINT_FUNCTION_CALL(SetXeSSQualityMode);
-
-#if WITH_XESS
+#if USE_XESS
 	if (!IsValidEnumValue(QualityMode))
 	{
 		FFrame::KismetExecutionMessage(*FString::Printf(TEXT("SetXeSSQualityMode called with invalid enum value (%d) %s"),
@@ -185,13 +168,13 @@ void UXeSSBlueprintLibrary::SetXeSSQualityMode(EXeSSQualityMode QualityMode)
 	{
 		CVarXeSSEnabled->SetWithCurrentPriority(0);
 
-	#if XESS_ENGINE_VERSION_GEQ(5, 1)
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
 		// Only set if not in editor(no effect by default)
 		if (!GIsEditor) 
 		{
 			CVarScreenPercentage->SetWithCurrentPriority(100.f);
 		}
-	#endif
+#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 
 		return;
 	}
@@ -199,7 +182,7 @@ void UXeSSBlueprintLibrary::SetXeSSQualityMode(EXeSSQualityMode QualityMode)
 	CVarXeSSQuality->SetWithCurrentPriority(XeSSUtil::ToCVarInt(ToXeSSQualitySetting(QualityMode)));
 	CVarXeSSEnabled->SetWithCurrentPriority(1);
 
-	#if XESS_ENGINE_VERSION_GEQ(5, 1)
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
 	// Only set if not in editor(no effect by default)
 	if (!GIsEditor)
 	{
@@ -209,16 +192,14 @@ void UXeSSBlueprintLibrary::SetXeSSQualityMode(EXeSSQualityMode QualityMode)
 			CVarScreenPercentage->SetWithCurrentPriority(ScreenPercentage);
 		}
 	}
-	#endif
+#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 
-#endif
+#endif // USE_XESS
 }
 
 XESSBLUEPRINT_API bool UXeSSBlueprintLibrary::GetXeSSQualityModeInformation(EXeSSQualityMode QualityMode, float& ScreenPercentage)
 {
-	XESS_CHECK_BLUEPRINT_FUNCTION_CALL(GetXeSSQualityModeInformation);
-
-#if WITH_XESS
+#if USE_XESS
 	if (!IsValidEnumValue(QualityMode))
 	{
 		FFrame::KismetExecutionMessage(*FString::Printf(TEXT("GetXeSSQualityModeInformation called with invalid enum value (%d) %s"),
@@ -235,7 +216,9 @@ XESSBLUEPRINT_API bool UXeSSBlueprintLibrary::GetXeSSQualityModeInformation(EXeS
 	}
 	ScreenPercentage = XeSSRHI->GetOptimalResolutionFraction(ToXeSSQualitySetting(QualityMode)) * 100.f;
 	return true;
-#else
+#else // USE_XESS
 	return false;
-#endif
+#endif // USE_XESS
 }
+
+#undef LOCTEXT_NAMESPACE

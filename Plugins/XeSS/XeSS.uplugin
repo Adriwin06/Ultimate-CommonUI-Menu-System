@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.4.8",
+	"VersionName": "1.4.7",
 	"FriendlyName": "Intel® XeSS",
 	"Description": "Intel® Xe Super Sampling (XeSS) technology uses machine learning to deliver more performance with exceptional image quality.",
 	"Category": "Rendering",
@@ -10,26 +10,10 @@
 	"DocsURL": "",
 	"MarketplaceURL": "",
 	"SupportURL": "",
-	"EngineVersion": "5.4.0",
+	"EngineVersion": "5.5.0",
 	"CanContainContent": true,
 	"Installed": true,
 	"Modules": [
-		{
-			"Name": "XeSSCommon",
-			"Type": "Runtime",
-			"LoadingPhase": "EarliestPossible",
-			"PlatformAllowList": [
-				"Win64"
-			]
-		},
-		{
-			"Name": "XeSSUnreal",
-			"Type": "Runtime",
-			"LoadingPhase": "EarliestPossible",
-			"PlatformAllowList": [
-				"Win64"
-			]
-		},
 		{
 			"Name": "XeSSPrePass",
 			"Type": "Runtime",
@@ -39,7 +23,7 @@
 			]
 		},
 		{
-			"Name": "XeSSCore",
+			"Name": "XeSSPlugin",
 			"Type": "Runtime",
 			"LoadingPhase": "PostEngineInit",
 			"PlatformAllowList": [
@@ -49,7 +33,7 @@
 		{
 			"Name": "XeSSBlueprint",
 			"Type": "Runtime",
-			"LoadingPhase": "PostConfigInit"
+			"LoadingPhase": "PostEngineInit"
 		}
 	],
 	"LocalizationTargets": [

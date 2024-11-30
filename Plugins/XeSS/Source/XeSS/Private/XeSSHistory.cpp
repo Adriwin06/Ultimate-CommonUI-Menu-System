@@ -23,4 +23,4 @@ uint64 FXeSSHistory::GetGPUSizeBytes() const
 	// TODO: finish it
 	return 0;
 }
-#endif
+#endif // #if XESS_ENGINE_VERSION_GEQ(5, 3)

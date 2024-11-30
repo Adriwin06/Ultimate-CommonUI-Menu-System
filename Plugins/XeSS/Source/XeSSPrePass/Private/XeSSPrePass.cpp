@@ -22,17 +22,22 @@
 
 #include "XeSSPrePass.h"
 
-#include "XeSSCommonMacros.h"
+#include "XeSSMacros.h"
 
 #include "CoreMinimal.h"
 #include "Interfaces/IPluginManager.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
-#include "RenderGraphUtils.h"
-#include "RHIDefinitions.h"
+#include "Runtime/Launch/Resources/Version.h"
 #include "ScenePrivate.h"
-#include "XeSSUnrealCore.h"
-#include "XeSSUnrealRHIIncludes.h"
+#include "XeSSUnreal.h"
+
+#if XESS_ENGINE_VERSION_GEQ(5, 2)
+#include "DataDrivenShaderPlatformInfo.h"
+#endif // XESS_ENGINE_VERSION_GEQ(5, 2)
+
+#define LOCTEXT_NAMESPACE "FXeSSPrePass"
+
 
 const int32 GXeSSTileSizeX = FComputeShaderUtils::kGolden2DGroupSize;
 const int32 GXeSSTileSizeY = FComputeShaderUtils::kGolden2DGroupSize;
@@ -71,7 +76,7 @@ class FXeSSVelocityFlattenCS : public FGlobalShader
 		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEX"), GXeSSTileSizeX);
 		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEY"), GXeSSTileSizeY);
 	}
-};
+}; // class FXeSSVelocityFlattenCS
 
 IMPLEMENT_GLOBAL_SHADER(FXeSSVelocityFlattenCS, "/Plugin/XeSS/Private/FlattenVelocity.usf", "MainCS", SF_Compute);
 DECLARE_GPU_STAT_NAMED(XeSSVelocityFlatten, TEXT("XeSS Velocity Flatten"));
@@ -158,6 +163,9 @@ void FXeSSPrePass::StartupModule()
 
 void FXeSSPrePass::ShutdownModule()
 {
+
 }
+
+#undef LOCTEXT_NAMESPACE
 
 IMPLEMENT_MODULE(FXeSSPrePass, XeSSPrePass)
