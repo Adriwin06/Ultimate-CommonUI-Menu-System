@@ -225,7 +225,7 @@ public:
 				check(Resource.Texture->IsValid());
 
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
-				NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(CmdList, D3D12RHI->RHIGetResourceDeviceIndex(Resource.Texture));
+				NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH D3D12RHI->RHIGetResourceDeviceIndex(Resource.Texture));
 #else
 				FD3D12TextureBase* DeviceQueryD3D12Texture = GetD3D12TextureFromRHITexture(Resource.Texture);
 				D3D12Device = DeviceQueryD3D12Texture->GetParentDevice();
@@ -372,7 +372,7 @@ public:
 	virtual void* GetCommandBuffer(FRHICommandList& CmdList, FRHITexture* Texture) override final
 	{
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
-		ID3D12GraphicsCommandList* NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(CmdList, D3D12RHI->RHIGetResourceDeviceIndex(Texture));
+		ID3D12GraphicsCommandList* NativeCmdList = D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH D3D12RHI->RHIGetResourceDeviceIndex(Texture));
 #else
 		FD3D12TextureBase* D3D12Texture = GetD3D12TextureFromRHITexture(Texture);
 		FD3D12Device* Device = D3D12Texture->GetParentDevice();
@@ -386,7 +386,7 @@ public:
 	{
 #if ENGINE_PROVIDES_ID3D12DYNAMICRHI
 		const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(Texture);
-		D3D12RHI->RHIFinishExternalComputeWork(CmdList, DeviceIndex, D3D12RHI->RHIGetGraphicsCommandList(CmdList, DeviceIndex));
+		D3D12RHI->RHIFinishExternalComputeWork(RHICMDLIST_ARG_PASSTHROUGH DeviceIndex, D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH DeviceIndex));
 #else
 		FD3D12Device* Device = D3D12RHI->GetAdapter().GetDevice(CmdList.GetGPUMask().ToIndex());
 		Device->GetCommandContext().StateCache.ForceSetComputeRootSignature();

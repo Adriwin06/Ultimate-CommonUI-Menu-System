@@ -735,11 +735,11 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 		const bool bReleaseMemoryOnDelete = CVarNGXDLSSReleaseMemoryOnDelete.GetValueOnRenderThread() != 0;
 
 		//if r.PostProcessing.PropagateAlpha is not enabled no reason incur a 20% pref cost upscaling alpha channel.
-		static auto PropagateAlphaCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.PostProcessing.PropagateAlpha"));
+		static auto PropagateAlphaCVar = IConsoleManager::Get().FindTConsoleVariableDataInt(TEXT("r.PostProcessing.PropagateAlpha"));
 		check(PropagateAlphaCVar);
 
 		const bool bEnableAlphaUpscaling = (CVarNGXEnableAlphaUpscaling.GetValueOnRenderThread()) &&
-										   (PropagateAlphaCVar->GetInt() != 0);
+										   (PropagateAlphaCVar->GetValueOnRenderThread() != 0);
 
 		const float Sharpness = FMath::Clamp(CVarNGXDLSSSharpness.GetValueOnRenderThread(), -1.0f, 1.0f);
 #if !NO_LOGGING

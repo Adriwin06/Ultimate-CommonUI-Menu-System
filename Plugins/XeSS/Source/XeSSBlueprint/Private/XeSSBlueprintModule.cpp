@@ -22,27 +22,35 @@
 
 #include "XeSSBlueprintModule.h"
 
+#include "Misc/CoreDelegates.h"
 #include "Modules/ModuleManager.h"
 #include "XeSSBlueprintLibrary.h"
 
-#if USE_XESS
+#if WITH_XESS
 #include "XeSSModule.h"
-#endif // USE_XESS
+#endif
 
 void FXeSSBlueprint::StartupModule()
 {
-#if USE_XESS
-	FXeSSPlugin* XeSSPlugin = &FModuleManager::LoadModuleChecked<FXeSSPlugin>(TEXT("XeSSPlugin"));
-	check(XeSSPlugin);
-
-	UXeSSBlueprintLibrary::XeSSRHI = XeSSPlugin->GetXeSSRHI();
-	UXeSSBlueprintLibrary::XeSSUpscaler = XeSSPlugin->GetXeSSUpscaler();
-	UXeSSBlueprintLibrary::bXeSSSupported = XeSSPlugin->IsXeSSSupported();
+#if WITH_XESS
+	FCoreDelegates::OnPostEngineInit.AddRaw(this, &FXeSSBlueprint::DelayInit);
 #endif
 }
 
 void FXeSSBlueprint::ShutdownModule()
 {
+#if WITH_XESS
+	FCoreDelegates::OnPostEngineInit.RemoveAll(this);
+#endif
+}
+
+void FXeSSBlueprint::DelayInit()
+{
+	FXeSS* XeSS = nullptr;
+#if WITH_XESS
+	XeSS = &FModuleManager::LoadModuleChecked<FXeSS>(TEXT("XeSSCore"));
+#endif
+	UXeSSBlueprintLibrary::Init(XeSS);
 }
 
 IMPLEMENT_MODULE(FXeSSBlueprint, XeSSBlueprint)

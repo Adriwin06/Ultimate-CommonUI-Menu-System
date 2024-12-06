@@ -231,7 +231,7 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 	InArguments.Validate();
 
 	const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(InArguments.InputColor);
-	ID3D12GraphicsCommandList* D3DGraphicsCommandList = D3D12RHI->RHIGetGraphicsCommandList(CmdList,DeviceIndex);
+	ID3D12GraphicsCommandList* D3DGraphicsCommandList = D3D12RHI->RHIGetGraphicsCommandList(DeviceIndex);
 
 	if (InDLSSState->RequiresFeatureRecreation(InArguments))
 	{
@@ -379,7 +379,7 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 
 	InDLSSState->DLSSFeature->Tick(FrameCounter);
 
-	D3D12RHI->RHIFinishExternalComputeWork(CmdList,DeviceIndex, D3DGraphicsCommandList);
+	D3D12RHI->RHIFinishExternalComputeWork(DeviceIndex, D3DGraphicsCommandList);
 }
 
 /** IModuleInterface implementation */

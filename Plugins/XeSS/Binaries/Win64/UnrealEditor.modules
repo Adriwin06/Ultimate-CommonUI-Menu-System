@@ -1,9 +1,11 @@
 {
-	"BuildId": "37670630",
+	"BuildId": "33043543",
 	"Modules": 
 	{
 		"XeSSBlueprint": "UnrealEditor-XeSSBlueprint.dll",
-		"XeSSPlugin": "UnrealEditor-XeSSPlugin.dll",
-		"XeSSPrePass": "UnrealEditor-XeSSPrePass.dll"
+		"XeSSCommon": "UnrealEditor-XeSSCommon.dll",
+		"XeSSCore": "UnrealEditor-XeSSCore.dll",
+		"XeSSPrePass": "UnrealEditor-XeSSPrePass.dll",
+		"XeSSUnreal": "UnrealEditor-XeSSUnreal.dll"
 	}
 }

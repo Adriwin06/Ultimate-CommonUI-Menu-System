@@ -92,9 +92,9 @@ float2 FlattenAndUpsampleVelocity(uint2 PixelId)
 				VelocityOffset = DepthOffset;
 				PosN.z = DepthsXYZW;
 			}
-		#else // !HAS_INVERTED_Z_BUFFER
+		#else
 			#error Fix me!
-		#endif // !HAS_INVERTED_Z_BUFFER
+		#endif
 	}
 
 	// Camera motion for pixel or nearest pixel (in ScreenPos space).

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "XeSSMacros.h"
+#include "XeSSCommonMacros.h"
 
 #if XESS_ENGINE_VERSION_GEQ(5, 3)
 #include "CoreMinimal.h"
@@ -22,4 +22,4 @@ private:
 	mutable uint32 RefCount = 0;
 	FXeSSUpscaler* XeSSUpscaler = nullptr;
 };
-#endif // #if XESS_ENGINE_VERSION_GEQ(5, 3)
+#endif
