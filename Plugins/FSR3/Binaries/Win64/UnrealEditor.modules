@@ -1,0 +1,16 @@
+{
+	"BuildId": "33043543",
+	"Modules": 
+	{
+		"FFXD3D12": "UnrealEditor-FFXD3D12.dll",
+		"FFXD3D12Backend": "UnrealEditor-FFXD3D12Backend.dll",
+		"FFXFSR3Api": "UnrealEditor-FFXFSR3Api.dll",
+		"FFXFSR3Settings": "UnrealEditor-FFXFSR3Settings.dll",
+		"FFXFSR3TemporalUpscaling": "UnrealEditor-FFXFSR3TemporalUpscaling.dll",
+		"FFXFrameInterpolation": "UnrealEditor-FFXFrameInterpolation.dll",
+		"FFXFrameInterpolationApi": "UnrealEditor-FFXFrameInterpolationApi.dll",
+		"FFXOpticalFlowApi": "UnrealEditor-FFXOpticalFlowApi.dll",
+		"FFXRHIBackend": "UnrealEditor-FFXRHIBackend.dll",
+		"FFXShared": "UnrealEditor-FFXShared.dll"
+	}
+}
