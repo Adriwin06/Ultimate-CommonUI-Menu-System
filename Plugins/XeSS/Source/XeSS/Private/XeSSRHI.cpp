@@ -22,26 +22,26 @@
 
 #include "XeSSRHI.h"
 
-#include "XeSSCommonMacros.h"
+#include "XeSSMacros.h"
 
 #include "Windows/AllowWindowsPlatformTypes.h"
-#include "xess/xess_d3d12.h"
-#include "xess/xess_d3d12_debug.h"
-#include "xess/xess_debug.h"
+#include "xess_d3d12.h"
+#include "xess_d3d12_debug.h"
+#include "xess_debug.h"
 #include "Windows/HideWindowsPlatformTypes.h"
 
 #include "HAL/FileManager.h"
 #include "Interfaces/IPluginManager.h"
 #include "RenderGraphResources.h"
 #include "Misc/Paths.h"
-#include "XeSSUnrealD3D12RHI.h"
-#include "XeSSUnrealD3D12RHIIncludes.h"
-#include "XeSSUnrealRHI.h"
+#include "XeSSUnrealIncludes.h"
 #include "XeSSUtil.h"
 
 extern TAutoConsoleVariable<FString> GCVarXeSSVersion;
-
+// The UE module
 DEFINE_LOG_CATEGORY_STATIC(LogXeSSRHI, Log, All);
+
+#define LOCTEXT_NAMESPACE "FXeSSPlugin"
 
 struct FResolutionFractionSetting
 {
@@ -110,6 +110,9 @@ inline void ForceAfterResourceTransition(ID3D12GraphicsCommandList& D3D12CmdList
 #endif
 };
 
+
+
+
 bool FXeSSRHI::EffectRecreationIsRequired(const FXeSSInitArguments& NewArgs) const {
 	if (InitArgs.OutputWidth != NewArgs.OutputWidth ||
 		InitArgs.OutputHeight != NewArgs.OutputHeight ||
@@ -156,28 +159,28 @@ uint32 FXeSSRHI::GetXeSSInitFlags()
 FXeSSRHI::FXeSSRHI(FDynamicRHI* DynamicRHI)
 	: D3D12RHI(static_cast<XeSSUnreal::XD3D12DynamicRHI*>(DynamicRHI))
 {
-	ID3D12Device* Direct3DDevice = XeSSUnreal::GetDevice(D3D12RHI);
+	// TODO: use device index
+	ID3D12Device* Direct3DDevice = XeSSUnreal::GetDevice(D3D12RHI, 0);
 
 	check(D3D12RHI);
 	check(Direct3DDevice);
 
 	xess_result_t Result = xessD3D12CreateContext(Direct3DDevice, &XeSSContext);
-	if (XESS_RESULT_SUCCESS == Result)
+	if (Result == XESS_RESULT_SUCCESS)
 	{
 		UE_LOG(LogXeSSRHI, Log, TEXT("Intel XeSS effect supported"));
 	}
 	else
 	{
-		UE_LOG(LogXeSSRHI, Log, TEXT("Intel XeSS effect NOT supported, result: %d"), Result);
+		UE_LOG(LogXeSSRHI, Log, TEXT("Intel XeSS effect NOT supported"));
 		return;
 	}
 
 	// Print XeFX library version if it was loaded, XeFX will only be used when running on Intel platforms
 	xess_version_t XeFXLibVersion;
-	Result = xessGetIntelXeFXVersion(XeSSContext, &XeFXLibVersion);
-	if (XESS_RESULT_SUCCESS != Result)
+	if (xessGetIntelXeFXVersion(XeSSContext, &XeFXLibVersion) != XESS_RESULT_SUCCESS)
 	{
-		UE_LOG(LogXeSSRHI, Error, TEXT("Failed to get Intel XeFX version, result: %d"), Result);
+		UE_LOG(LogXeSSRHI, Warning, TEXT("Error when calling XeSS function: xessGetIntelXeFXVersion"));
 		return;
 	}
 
@@ -196,12 +199,7 @@ FXeSSRHI::FXeSSRHI(FDynamicRHI* DynamicRHI)
 	InitResolutionFractions();
 
 	// Pre-build XeSS kernel
-	Result = xessD3D12BuildPipelines(XeSSContext, nullptr, true, GetXeSSInitFlags());
-	if (XESS_RESULT_SUCCESS != Result)
-	{
-		UE_LOG(LogXeSSRHI, Error, TEXT("Failed to build XeSS pipe lines, result: %d"), Result);
-		return;
-	}
+	xessD3D12BuildPipelines(XeSSContext, nullptr, true, GetXeSSInitFlags());
 
 	static const auto CVarXeSSEnabled = IConsoleManager::Get().FindConsoleVariable(TEXT("r.XeSS.Enabled"));
 	static const auto CVarXeSSQuality = IConsoleManager::Get().FindConsoleVariable(TEXT("r.XeSS.Quality"));
@@ -244,6 +242,7 @@ FXeSSRHI::~FXeSSRHI()
 	else
 	{
 		UE_LOG(LogXeSSRHI, Warning, TEXT("Failed to remove XeSS effect"));
+		return;
 	}
 }
 
@@ -268,14 +267,13 @@ void FXeSSRHI::RHIInitializeXeSS(const FXeSSInitArguments& InArguments)
 	// NOTE: it is a MUST, for former adding in starting up module may be cleared by engine or other plugins
 	SetDllDirectory(*FPaths::Combine(IPluginManager::Get().FindPlugin("XeSS")->GetBaseDir(), TEXT("/Binaries/ThirdParty/Win64")));
 
-	xess_result_t Result = xessD3D12Init(XeSSContext, &InitParams);
-	if (XESS_RESULT_SUCCESS != Result)
+	if (XESS_RESULT_SUCCESS != xessD3D12Init(XeSSContext, &InitParams))
 	{
-		UE_LOG(LogXeSSRHI, Error, TEXT("Failed to initialize Intel XeSS, result: %d"), Result);
+		UE_LOG(LogXeSSRHI, Error, TEXT("Failed to initialize Intel XeSS."));
 	}
 }
 
-void FXeSSRHI::RHIExecuteXeSS(const FXeSSExecuteArguments& InArguments)
+void FXeSSRHI::RHIExecuteXeSS(FRHICommandList& CmdList,const FXeSSExecuteArguments& InArguments)
 {
 	if (!bXeSSInitialized)
 	{
@@ -297,19 +295,32 @@ void FXeSSRHI::RHIExecuteXeSS(const FXeSSExecuteArguments& InArguments)
 	ExecuteParams.outputColorBase.y = InArguments.DstViewRect.Min.Y;
 	ExecuteParams.exposureScale = 1.0f;
 
-	ID3D12GraphicsCommandList* D3D12CmdList = XeSSUnreal::RHIGetGraphicsCommandList(D3D12RHI);
+	// Execute
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
+	
+	const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(InArguments.ColorTexture);
+	ID3D12GraphicsCommandList* D3D12CmdList = D3D12RHI->RHIGetGraphicsCommandList(CmdList,DeviceIndex);
+#else // XESS_ENGINE_VERSION_GEQ(5, 1)
+	FD3D12CommandContext& CommandContext = GetD3D12TextureFromRHITexture(InArguments.ColorTexture)->GetParentDevice()->GetCommandContext();
+	ID3D12GraphicsCommandList* D3D12CmdList = CommandContext.CommandListHandle.GraphicsCommandList();
+#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 
 	ForceBeforeResourceTransition(*D3D12CmdList, ExecuteParams);
 
-	xess_result_t Result = xessD3D12Execute(XeSSContext, D3D12CmdList, &ExecuteParams);
-	if (XESS_RESULT_SUCCESS != Result)
+	if (XESS_RESULT_SUCCESS != xessD3D12Execute(XeSSContext, D3D12CmdList, &ExecuteParams))
 	{
-		UE_LOG(LogXeSSRHI, Error, TEXT("Failed to execute XeSS, result: %d"), Result);
+		UE_LOG(LogXeSSRHI, Error, TEXT("Error when executing XeSS."));
 	}
 
 	ForceAfterResourceTransition(*D3D12CmdList, ExecuteParams);
 
-	XeSSUnreal::RHIFinishExternalComputeWork(D3D12RHI, D3D12CmdList);
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
+	D3D12RHI->RHIFinishExternalComputeWork(CmdList,DeviceIndex, D3D12CmdList);
+#else // XESS_ENGINE_VERSION_GEQ(5, 1)
+	// Make sure root signature and heap state is reset
+	CommandContext.StateCache.ForceSetComputeRootSignature();
+	CommandContext.StateCache.GetDescriptorCache()->SetCurrentCommandList(CommandContext.CommandListHandle);
+#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 }
 
 void FXeSSRHI::InitResolutionFractions()
@@ -323,9 +334,9 @@ void FXeSSRHI::InitResolutionFractions()
 		xess_2d_t OptimalInputResolution{};
 		xess_quality_settings_t TempQualitySetting = static_cast<xess_quality_settings_t>(QualitySettingInt);
 		xess_result_t Result = xessGetOptimalInputResolution(XeSSContext, &OutputResolution, TempQualitySetting, &OptimalInputResolution, &MinInputResolution, &MaxInputResolution);
-		if (XESS_RESULT_SUCCESS != Result)
+		if (Result != XESS_RESULT_SUCCESS)
 		{
-			UE_LOG(LogXeSSRHI, Warning, TEXT("Failed to get XeSS optimal input resolution, result: %d"), Result);
+			UE_LOG(LogXeSSRHI, Warning, TEXT("Error when calling xessGetInputResolution."));
 			continue;
 		}
 		FResolutionFractionSetting Setting;
@@ -369,20 +380,26 @@ void FXeSSRHI::TriggerFrameCapture(int FrameCount) const
 		DumpParameters.frame_count = FrameCount;
 		DumpParameters.dump_elements_mask = DumpElementsMask;
 
-		xess_result_t Result = xessStartDump(XeSSContext, &DumpParameters);
-		if (XESS_RESULT_SUCCESS != Result)
+		if (XESS_RESULT_SUCCESS != xessStartDump(XeSSContext, &DumpParameters))
 		{
-			UE_LOG(LogXeSSRHI, Error, TEXT("Failed to start XeSS dump, result: %d"), Result);
+			UE_LOG(LogXeSSRHI, Error, TEXT("Error when dumping XeSS debug data."));
 		}
 	}
 }
 
 void FXeSSRHI::TriggerResourceTransitions(FRHICommandListImmediate& RHICmdList, TRDGBufferAccess<ERHIAccess::UAVCompute> DummyBufferAccess) const
 {
-	XeSSUnreal::XRHIBuffer* DummyBuffer = XeSSUnreal::GetRHIBuffer(DummyBufferAccess);
+#if ENGINE_MAJOR_VERSION >= 5
+	FRHIBuffer* DummyBuffer = DummyBufferAccess->GetRHI();
+	// Using the dummy buffer to trigger a resource transition
+	RHICmdList.LockBuffer(DummyBuffer, 0, sizeof(float), EResourceLockMode::RLM_WriteOnly);
+	RHICmdList.UnlockBuffer(DummyBuffer);
+#else
+	FRHIStructuredBuffer* DummyBuffer = DummyBufferAccess->GetRHIStructuredBuffer();
 	// Using the dummy structured buffer to trigger a resource transition
-	XeSSUnreal::LockRHIBuffer(RHICmdList, DummyBuffer, 0, sizeof(float), EResourceLockMode::RLM_WriteOnly);
-	XeSSUnreal::UnlockRHIBuffer(RHICmdList, DummyBuffer);
+	RHICmdList.LockStructuredBuffer(DummyBuffer, 0, sizeof(float), EResourceLockMode::RLM_WriteOnly);
+	RHICmdList.UnlockStructuredBuffer(DummyBuffer);
+#endif // ENGINE_MAJOR_VERSION >= 5
 }
 
 void FXeSSRHI::HandleXeSSEnabledSet(IConsoleVariable* Variable)
@@ -408,4 +425,6 @@ void FXeSSRHI::HandleXeSSQualitySet(IConsoleVariable* Variable)
 		)
 	);
 }
+
+#undef LOCTEXT_NAMESPACE
 

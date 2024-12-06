@@ -22,13 +22,13 @@
 
 #pragma once
 
-#include "XeSSCommonMacros.h"
+#include "XeSSMacros.h"
 
 #include "CoreMinimal.h"
 #include "RHI.h"
 #include "ShaderParameterMacros.h"
-#include "XeSSUnrealD3D12RHI.h"
-#include "xess/xess.h"
+#include "XeSSUnreal.h"
+#include "xess.h"
 
 DECLARE_LOG_CATEGORY_EXTERN(LogXeSS, Verbose, All);
 
@@ -37,7 +37,7 @@ class FRHICommandListImmediate;
 class FRHITexture;
 class IConsoleVariable;
 
-struct FXeSSInitArguments
+struct XESSPLUGIN_API FXeSSInitArguments
 {
 	uint32 OutputWidth = 0;
 	uint32 OutputHeight = 0;
@@ -45,7 +45,7 @@ struct FXeSSInitArguments
 	uint32 InitFlags = 0;
 };
 
-struct FXeSSExecuteArguments
+struct XESSPLUGIN_API FXeSSExecuteArguments
 {
 	FRHITexture* ColorTexture = nullptr;
 	FRHITexture* VelocityTexture = nullptr;
@@ -60,7 +60,7 @@ struct FXeSSExecuteArguments
 	uint32 bCameraCut = 0;
 };
 
-class XESSCORE_API FXeSSRHI
+class XESSPLUGIN_API FXeSSRHI
 {
 	
 public:
@@ -69,7 +69,7 @@ public:
 
 	void RHIInitializeXeSS(const FXeSSInitArguments& InArguments);
 	bool EffectRecreationIsRequired(const FXeSSInitArguments& NewArgs) const;
-	void RHIExecuteXeSS(const FXeSSExecuteArguments& InArguments);
+	void RHIExecuteXeSS(FRHICommandList& CmdList,const FXeSSExecuteArguments& InArguments);
 	float GetMinSupportedResolutionFraction();
 	float GetMaxSupportedResolutionFraction();
 	float GetOptimalResolutionFraction();

@@ -1,8 +1,0 @@
-{
-    "RasterShadowRenderModule": {
-
-        "RenderModuleOptions": {
-            "NumCascades": 4
-        }
-    }
-}

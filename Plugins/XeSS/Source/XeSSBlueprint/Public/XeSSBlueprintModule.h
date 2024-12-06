@@ -27,7 +27,7 @@
 class FXeSSBlueprint : public IModuleInterface
 {
 public:
-	void StartupModule() override;
-	void ShutdownModule() override;
-	void DelayInit();
+	/** IModuleInterface implementation */
+	virtual void StartupModule() override;
+	virtual void ShutdownModule() override;
 };

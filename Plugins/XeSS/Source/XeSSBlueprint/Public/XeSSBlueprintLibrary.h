@@ -28,7 +28,6 @@
 
 #include "XeSSBlueprintLibrary.generated.h"
 
-class FXeSS;
 class FXeSSRHI;
 class FXeSSUpscaler;
 
@@ -49,11 +48,10 @@ enum class EXeSSQualityMode : uint8
 UCLASS(Blueprintable, BlueprintType, meta = (DisplayName = "XeSS Blueprint Library"))
 class  UXeSSBlueprintLibrary : public UBlueprintFunctionLibrary
 {
+	friend class FXeSSBlueprint;
 	GENERATED_BODY()
 
 public:
-	static void Init(FXeSS* XeSS);
-
 	/** Checks if Intel XeSS is supported on the current GPU */
 	UFUNCTION(BlueprintPure, Category = "XeSS", meta = (DisplayName = "Is Intel(R) XeSS Supported"))
 	static XESSBLUEPRINT_API bool IsXeSSSupported();
@@ -79,10 +77,9 @@ public:
 	static XESSBLUEPRINT_API bool GetXeSSQualityModeInformation(EXeSSQualityMode QualityMode, float& ScreenPercentage);
 
 private:
-	static bool bInitialized;
-	static bool bIsXeSSSupported;
+	static bool bXeSSSupported;
 
-#if WITH_XESS
+#if USE_XESS
 	static FXeSSRHI* XeSSRHI;
 	static FXeSSUpscaler* XeSSUpscaler;
 #endif
