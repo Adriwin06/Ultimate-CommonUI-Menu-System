@@ -22,27 +22,29 @@
 
 #include "XeSSBlueprintModule.h"
 
-#include "Modules/ModuleManager.h"
 #include "XeSSBlueprintLibrary.h"
 
-#if USE_XESS
+#if WITH_XESS
 #include "XeSSModule.h"
-#endif // USE_XESS
+#endif
 
-void FXeSSBlueprint::StartupModule()
+FName FXeSSBlueprintModule::GetCoreModuleName() const
 {
-#if USE_XESS
-	FXeSSPlugin* XeSSPlugin = &FModuleManager::LoadModuleChecked<FXeSSPlugin>(TEXT("XeSSPlugin"));
-	check(XeSSPlugin);
+	return TEXT("XeSSCore");
+}
 
-	UXeSSBlueprintLibrary::XeSSRHI = XeSSPlugin->GetXeSSRHI();
-	UXeSSBlueprintLibrary::XeSSUpscaler = XeSSPlugin->GetXeSSUpscaler();
-	UXeSSBlueprintLibrary::bXeSSSupported = XeSSPlugin->IsXeSSSupported();
+void FXeSSBlueprintModule::OnCoreModuleLoaded(IModuleInterface* CoreModule)
+{
+#if WITH_XESS
+	UXeSSBlueprintLibrary::Init(static_cast<FXeSSModule*>(CoreModule));
 #endif
 }
 
-void FXeSSBlueprint::ShutdownModule()
+void FXeSSBlueprintModule::OnCoreModuleUnloaded()
 {
+#if WITH_XESS
+	UXeSSBlueprintLibrary::Deinit();
+#endif
 }
 
-IMPLEMENT_MODULE(FXeSSBlueprint, XeSSBlueprint)
+IMPLEMENT_MODULE(FXeSSBlueprintModule, XeSSBlueprint)

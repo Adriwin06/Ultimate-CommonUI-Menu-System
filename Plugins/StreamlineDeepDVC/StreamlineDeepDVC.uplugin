@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
-	"Version": 110,
-	"VersionName": "1.3.3-SL2.4.15",
+	"Version": 117,
+	"VersionName": "4.0.2-SL2.7.30",
 	"FriendlyName": "NVIDIA RTX Dynamic Vibrance",
-	"Description": "NVIDIA RTX Dynamic Vibrance (DeepDVC, Streamline)",
+	"Description": "NVIDIA RTX Dynamic Vibrance enhances visual clarity by dynamically tuning color saturation and contrast.",
 	"Category": "Rendering",
 	"CreatedBy": "NVIDIA",
 	"CreatedByURL": "https://developer.nvidia.com/rtx/streamline",
@@ -22,7 +22,7 @@
 	],
 	"Plugins": [
 		{
-			"Name": "Streamline",
+			"Name": "StreamlineCore",
 			"Enabled": true
 		}
 	]

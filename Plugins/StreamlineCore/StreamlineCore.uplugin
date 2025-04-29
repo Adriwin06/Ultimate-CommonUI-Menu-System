@@ -1,0 +1,63 @@
+{
+	"FileVersion": 3,
+	"Version": 117,
+	"VersionName": "4.0.2-SL2.7.30",
+	"FriendlyName": "NVIDIA Streamline Core (hidden, implementation detail)",
+	"Description": "Please use the specific NVIDIA Streamline feature plugins for DLSS-FG etc",
+	"Category": "Rendering",
+	"CreatedBy": "NVIDIA",
+	"CreatedByURL": "https://developer.nvidia.com/rtx/streamline",
+	"DocsURL": "",
+	"MarketplaceURL": "https://www.unrealengine.com/marketplace/en-US/product/nvidia-dlss",
+	"SupportURL": "mailto:DLSS-Support@nvidia.com",
+	"EngineVersion": "5.5.0",
+	"CanContainContent": false,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "StreamlineShaders",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "StreamlineCore",
+			"Type": "Runtime",
+			"LoadingPhase": "PostEngineInit",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "StreamlineBlueprint",
+			"Type": "Runtime",
+			"LoadingPhase": "PostEngineInit"
+		},
+		{
+			"Name": "StreamlineRHI",
+			"Type": "Runtime",
+			"LoadingPhase": "PostSplashScreen",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "StreamlineD3D11RHI",
+			"Type": "Runtime",
+			"LoadingPhase": "None",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		},
+		{
+			"Name": "StreamlineD3D12RHI",
+			"Type": "Runtime",
+			"LoadingPhase": "None",
+			"PlatformAllowList": [
+				"Win64"
+			]
+		}
+	]
+}

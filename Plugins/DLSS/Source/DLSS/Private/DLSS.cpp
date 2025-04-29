@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -10,6 +10,7 @@
 */
 #include "DLSS.h"
 #include "Misc/EngineVersion.h"
+#include "Misc/MessageDialog.h"
 #include "CoreMinimal.h"
 #include "DLSSUpscalerPrivate.h"
 
@@ -119,14 +120,9 @@ public:
 			const FSceneView* View = InViewFamily.Views[ViewIndex];
 			if (View->bIsGameView || CVarNGXAutomationNonGameViews.GetValueOnRenderThread())
 			{
-				const FString AiAgentMarker = FString::Printf(TEXT("{\"camera\":{\"position\":{\"x\": %f, \"y\": %f, \"z\": %f},\"rotation\":{\"pitch\": %f, \"roll\": %f, \"yaw\": %f}}}"),
+				SCOPED_DRAW_EVENTF(GraphBuilder.RHICmdList, r_NGX_Automation_Enable, TEXT("{\"camera\":{\"position\":{\"x\": %f, \"y\": %f, \"z\": %f},\"rotation\":{\"pitch\": %f, \"roll\": %f, \"yaw\": %f}}}"),
 					View->ViewLocation.X, View->ViewLocation.Y, View->ViewLocation.Z,
 					View->ViewRotation.Pitch, View->ViewRotation.Roll, View->ViewRotation.Yaw);
-
-				static FColor ColorMarker = FColor::FromHex("0xA1A5E87");
-				FRHICommandListImmediate& RHICmdList = GraphBuilder.RHICmdList;
-				RHICmdList.PushEvent(*AiAgentMarker, ColorMarker);
-				RHICmdList.PopEvent();
 			}
 		}
 	}
@@ -516,6 +512,87 @@ FDLSSUpscaler* FDLSSModule::GetDLSSUpscaler() const
 TSharedPtr< ISceneViewExtension, ESPMode::ThreadSafe> FDLSSModule::GetDLSSUpscalerViewExtension() const
 {
 	return StaticCastSharedPtr<ISceneViewExtension>(DLSSUpscalerViewExtension);
+}
+
+bool FDLSSModule::GetIsRRSupportedByRHI() const
+{
+	if(NGXRHIExtensions)
+		return NGXRHIExtensions.Get()->IsRRSupportedByRHI();
+
+	return false;
+}
+
+//Deprecated presets
+
+//Add deprecated RR presets here
+static const TArray<EDLSSRRPreset> DeprecatedRRPresets = {
+	EDLSSRRPreset::A,
+	EDLSSRRPreset::B,
+	EDLSSRRPreset::C 
+};
+
+//Add deprecated SR presets here
+static const TArray<EDLSSPreset> DeprecatedSRPresets = {
+
+};
+
+static bool CheckIfPresetNeedsUpdate(EDLSSRRPreset DLSSRRPreset)
+{
+	return DeprecatedRRPresets.Contains(DLSSRRPreset);
+}
+
+static bool CheckIfPresetNeedsUpdate(EDLSSPreset DLSSPreset)
+{
+	return DeprecatedSRPresets.Contains(DLSSPreset);
+}
+
+#define CHECK_AND_UPDATE_DEPRECATED_PRESET(Preset,DefaultPreset)\
+if(CheckIfPresetNeedsUpdate(Preset))\
+{\
+	Preset = DefaultPreset;\
+	UserSettings->Preset = DefaultPreset;\
+	UE_LOG(LogDLSS,Warning,TEXT("The Preset %s was set to a deprecated preset and was migrated to %s"),TEXT(#Preset),TEXT(#DefaultPreset));\
+	bMakeSureDevsDontMissThis = true;\
+}\
+
+void UDLSSSettings::PostInitProperties()
+{
+	Super::PostInitProperties();
+
+#if WITH_EDITOR
+	bool bMakeSureDevsDontMissThis = false;
+	UDLSSSettings* UserSettings = GetMutableDefault<UDLSSSettings>();
+
+	//Check if any SR presets were deprecated.
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLAAPreset, EDLSSPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSUltraQualityPreset, EDLSSPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSQualityPreset, EDLSSPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSBalancedPreset, EDLSSPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSPerformancePreset, EDLSSPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSUltraPerformancePreset, EDLSSPreset::Default)
+
+	//Check if any RR presets were deprecated.
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLAARRPreset, EDLSSRRPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSRRUltraQualityPreset, EDLSSRRPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSRRQualityPreset, EDLSSRRPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSRRBalancedPreset, EDLSSRRPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSRRPerformancePreset, EDLSSRRPreset::Default)
+	CHECK_AND_UPDATE_DEPRECATED_PRESET(DLSSRRUltraPerformancePreset, EDLSSRRPreset::Default)
+
+	if (bMakeSureDevsDontMissThis)
+	{
+		const FText DialogTitle(LOCTEXT("DLSSRRPresetUpgradeTitle", "Warning -- DLSS-RR Presets were migrated"));
+		const FText WarningMessage(LOCTEXT("DLSSRRPresetUpgradeMsg", "DLSS-RR Presets were migrated from deprecated presets please check the log and adjust accordingly.\n"\
+																	 "NOTE: The saved config might be in ProjectDir/Saved/Config and not in ProjectDir/Config"));
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
+		FMessageDialog::Open(EAppMsgCategory::Warning,EAppMsgType::Ok, DialogTitle, WarningMessage);
+#else
+		FMessageDialog::Open(EAppMsgType::Ok, DialogTitle, &WarningMessage);
+#endif
+		UserSettings->SaveConfig();
+		SaveConfig();
+	}
+#endif
 }
 
 #undef LOCTEXT_NAMESPACE

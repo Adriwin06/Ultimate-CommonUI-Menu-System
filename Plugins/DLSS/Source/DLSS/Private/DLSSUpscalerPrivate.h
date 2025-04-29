@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -49,6 +49,7 @@ struct FDLSSPassParameters
 	FRDGTexture* SpecularAlbedo = nullptr;
 	FRDGTexture* Normal = nullptr;
 	FRDGTexture* Roughness = nullptr;
+	FRDGTexture* ReflectionHitDistance = nullptr;
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
 	FRDGTexture* EyeAdaptation = nullptr;

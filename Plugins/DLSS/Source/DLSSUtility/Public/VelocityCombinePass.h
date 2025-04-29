@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -14,6 +14,7 @@
 #include "CoreMinimal.h"
 #include "RendererInterface.h"
 #include "Runtime/Launch/Resources/Version.h"
+#include "SceneTexturesConfig.h"
 
 
 extern DLSSUTILITY_API FRDGTextureRef AddVelocityCombinePass(
@@ -25,6 +26,7 @@ extern DLSSUTILITY_API FRDGTextureRef AddVelocityCombinePass(
 #endif
 	FRDGTextureRef InSceneDepthTexture,
 	FRDGTextureRef InVelocityTexture,
+	FRDGTextureRef AlternateMotionVectorTexture,
 	FIntRect InputViewRect,
 	FIntRect DLSSOutputViewRect,
 	FVector2f TemporalJitterPixels,

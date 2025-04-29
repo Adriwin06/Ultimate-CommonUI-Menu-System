@@ -2,8 +2,20 @@
 	"BuildId": "37670630",
 	"Modules": 
 	{
+		"XeFGBlueprint": "UnrealEditor-XeFGBlueprint.dll",
+		"XeFGCore": "UnrealEditor-XeFGCore.dll",
+		"XeFGRHI": "UnrealEditor-XeFGRHI.dll",
+		"XeLLBlueprint": "UnrealEditor-XeLLBlueprint.dll",
+		"XeLLCore": "UnrealEditor-XeLLCore.dll",
 		"XeSSBlueprint": "UnrealEditor-XeSSBlueprint.dll",
-		"XeSSPlugin": "UnrealEditor-XeSSPlugin.dll",
-		"XeSSPrePass": "UnrealEditor-XeSSPrePass.dll"
+		"XeSSCommon": "UnrealEditor-XeSSCommon.dll",
+		"XeSSCore": "UnrealEditor-XeSSCore.dll",
+		"XeSSD3D11RHI": "UnrealEditor-XeSSD3D11RHI.dll",
+		"XeSSD3D12RHI": "UnrealEditor-XeSSD3D12RHI.dll",
+		"XeSSPrePass": "UnrealEditor-XeSSPrePass.dll",
+		"XeSSSDK": "UnrealEditor-XeSSSDK.dll",
+		"XeSSUnreal": "UnrealEditor-XeSSUnreal.dll",
+		"XeSSVulkanRHI": "UnrealEditor-XeSSVulkanRHI.dll",
+		"XeSSVulkanRHISetup": "UnrealEditor-XeSSVulkanRHISetup.dll"
 	}
 }

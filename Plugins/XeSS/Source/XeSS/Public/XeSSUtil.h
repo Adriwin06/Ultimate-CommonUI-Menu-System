@@ -24,14 +24,13 @@
 
 #include "CoreMinimal.h"
 #include "Engine/Engine.h"
-#include "xess.h"
+#include "xess/xess.h"
 
-namespace XeSSUtil 
+namespace XeSSUtil
 {
 	constexpr int32 ON_SCREEN_MESSAGE_KEY_DEFAULT = -1;
-	constexpr int32 ON_SCREEN_MESSAGE_KEY_NOT_SUPPORT_EDITOR = 0;
-	constexpr int32 ON_SCREEN_MESSAGE_KEY_INCORRECT_SCREEN_PERCENTAGE = 1;
-	constexpr int32 ON_SCREEN_MESSAGE_KEY_NOT_SUPPORT_RHI = 2;
+	constexpr int32 ON_SCREEN_MESSAGE_KEY_INCORRECT_SCREEN_PERCENTAGE = 0;
+	constexpr int32 ON_SCREEN_MESSAGE_KEY_UNSUPPORTED_RHI = 1;
 
 	// QUALITY EDIT:
 	constexpr int32 XESS_QUALITY_SETTING_MIN = XESS_QUALITY_SETTING_ULTRA_PERFORMANCE;
@@ -68,12 +67,12 @@ namespace XeSSUtil
 
 	inline void AddErrorMessageToScreen(const FString& ErrorMessage, int32 Key = ON_SCREEN_MESSAGE_KEY_DEFAULT)
 	{
-		if (GEngine) 
+		if (GEngine)
 		{
 			GEngine->AddOnScreenDebugMessage(Key, 3600, FColor::Red, ErrorMessage);
 		}
 	}
-	
+
 	inline void RemoveMessageFromScreen(int32 Key)
 	{
 		if (GEngine)

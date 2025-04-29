@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 21,
-	"VersionName": "3.7.3",
+	"Version": 23,
+	"VersionName": "4.0.2",
 	"FriendlyName": "Movie Render Queue DLSS/DLAA Support",
 	"Description": "Plugin that adds DLSS/DLAA support to Movie Render Queue.",
 	"Category": "Rendering",

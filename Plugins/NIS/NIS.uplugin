@@ -1,9 +1,9 @@
 {
 	"FileVersion": 3,
-	"Version": 4,
-	"VersionName": "1.2.1",
-	"FriendlyName": "NVIDIA NIS",
-	"Description": "NVIDIA Image Scaling",
+	"Version": 6,
+	"VersionName": "4.0.2",
+	"FriendlyName": "NVIDIA Image Scaling (NIS)",
+	"Description": "NVIDIA Image Scaling boosts frame rates using GPU scaling and sharpening.",
 	"Category": "Rendering",
 	"CreatedBy": "NVIDIA",
 	"CreatedByURL": "https://developer.nvidia.com/image-scaling",

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -44,7 +44,7 @@ static TAutoConsoleVariable<int32> CVarNGXDLSSAutomationTesting(
 static TAutoConsoleVariable<int32> CVarNGXDLSSPresetSetting(
 	TEXT("r.NGX.DLSS.Preset"),
 	0,
-	TEXT("DLSS-SR/DLSS-RR/DLAA preset setting. Allows selecting a different DL model than the default\n")
+	TEXT("DLSS-SR/DLAA preset setting. Allows selecting a different DL model than the default\n")
 	TEXT("  0: Use default preset or ini value\n")
 	TEXT("  1: Force preset A\n")
 	TEXT("  2: Force preset B\n")
@@ -52,7 +52,36 @@ static TAutoConsoleVariable<int32> CVarNGXDLSSPresetSetting(
 	TEXT("  4: Force preset D\n")
 	TEXT("  5: Force preset E\n")
 	TEXT("  6: Force preset F\n")
-	TEXT("  7: Force preset G"),
+	TEXT("  7: Force preset G\n")
+	TEXT("  8,9: Unsupported preset\n")
+	TEXT(" 10: Force preset J\n")
+	TEXT(" 11: Force preset K\n")
+	TEXT(" 12: Force preset L\n")
+	TEXT(" 13: Force preset M\n")
+	TEXT(" 14: Force preset N\n")
+	TEXT(" 15: Force preset O"),
+	ECVF_RenderThreadSafe);
+
+static TAutoConsoleVariable<int32> CVarNGXDLSSRRPresetSetting(
+	TEXT("r.NGX.DLSSRR.Preset"),
+	0,
+	TEXT("DLSS-RR/DLAA preset setting. Allows selecting a different DL model than the default\n")
+	TEXT("  0: Use default preset or ini value\n")
+	TEXT("  1: Force preset A\n")
+	TEXT("  2: Force preset B\n")
+	TEXT("  3: Force preset C\n")
+	TEXT("  4: Force preset D\n")
+	TEXT("  5: Force preset E\n")
+	TEXT("  6: Force preset F\n")
+	TEXT("  7: Force preset G\n")
+	TEXT("  8: Force preset H\n")
+	TEXT("  9: Force preset I\n")
+	TEXT(" 10: Force preset J\n")
+	TEXT(" 11: Force preset K\n")
+	TEXT(" 12: Force preset L\n")
+	TEXT(" 13: Force preset M\n")
+	TEXT(" 14: Force preset N\n")
+	TEXT(" 15: Force preset O"), 
 	ECVF_RenderThreadSafe);
 
 
@@ -126,19 +155,26 @@ static const float kDLSSResolutionFractionError = 0.01f;
 
 BEGIN_SHADER_PARAMETER_STRUCT(FDLSSShaderParameters, )
 
-// Input images
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorInput)
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthInput)
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, EyeAdaptation)
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneVelocityInput)
+	// Input images
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneColorInput)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneDepthInput)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, EyeAdaptation)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SceneVelocityInput)
 
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DiffuseAlbedo)
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SpecularAlbedo)
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, Normal)
-SHADER_PARAMETER_RDG_TEXTURE(Texture2D, Roughness)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, DiffuseAlbedo)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, SpecularAlbedo)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, Normal)
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, Roughness)
 
-// Output images
-RDG_TEXTURE_ACCESS(SceneColorOutput, ERHIAccess::UAVCompute)
+#if SUPPORT_GUIDE_GBUFFER
+	SHADER_PARAMETER_RDG_TEXTURE(Texture2D, ReflectionHitDistance)
+
+	SHADER_PARAMETER(FMatrix44f, ViewMatrix)
+	SHADER_PARAMETER(FMatrix44f, ProjectionMatrix)
+#endif
+
+	// Output images
+	RDG_TEXTURE_ACCESS(SceneColorOutput, ERHIAccess::UAVCompute)
 
 END_SHADER_PARAMETER_STRUCT()
 
@@ -184,12 +220,22 @@ bool FDLSSPassParameters::Validate() const
 
 static EDLSSPreset GetDLSSPresetFromCVarValue(int32 InCVarValue)
 {
-	if (InCVarValue >= 0 && InCVarValue <= static_cast<int32>(EDLSSPreset::F))
+	if (InCVarValue >= 0 && InCVarValue < static_cast<int32>(EDLSSPreset::MAX))
 	{
 		return static_cast<EDLSSPreset>(InCVarValue);
 	}
 	UE_LOG(LogDLSS, Warning, TEXT("Invalid r.NGX.DLSS.DLSSPreset value %d"), InCVarValue);
 	return EDLSSPreset::Default;
+}
+
+static EDLSSRRPreset GetDLSSRRPresetFromCVarValue(int32 InCVarValue)
+{
+	if (InCVarValue >= 0 && InCVarValue < static_cast<int32>(EDLSSRRPreset::MAX))
+	{
+		return static_cast<EDLSSRRPreset>(InCVarValue);
+	}
+	UE_LOG(LogDLSS, Warning, TEXT("Invalid r.NGX.DLSS.DLSSPreset value %d"), InCVarValue);
+	return EDLSSRRPreset::Default;
 }
 
 static NVSDK_NGX_DLSS_Hint_Render_Preset ToNGXDLSSPreset(EDLSSPreset DLSSPreset)
@@ -221,6 +267,86 @@ static NVSDK_NGX_DLSS_Hint_Render_Preset ToNGXDLSSPreset(EDLSSPreset DLSSPreset)
 		
 		case EDLSSPreset::G:
 			return NVSDK_NGX_DLSS_Hint_Render_Preset_G;
+
+		case EDLSSPreset::H:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_H_Reserved;
+
+		case EDLSSPreset::I:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_I_Reserved;
+		
+		case EDLSSPreset::J:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_J;
+
+		case EDLSSPreset::K:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_K;
+
+		case EDLSSPreset::L:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_L;
+
+		case EDLSSPreset::M:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_M;
+
+		case EDLSSPreset::N:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_N;
+
+		case EDLSSPreset::O:
+			return NVSDK_NGX_DLSS_Hint_Render_Preset_O;
+	}
+}
+
+static NVSDK_NGX_RayReconstruction_Hint_Render_Preset ToNGXDLSSRRPreset(EDLSSRRPreset DLSSRRPreset)
+{
+	switch (DLSSRRPreset)
+	{
+	default:
+		checkf(false, TEXT("ToNGXDLSSRRPreset should not be called with an out of range EDLSSRRPreset from the higher level code"));
+	case EDLSSRRPreset::Default:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_Default;
+
+	case EDLSSRRPreset::A:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_A;
+
+	case EDLSSRRPreset::B:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_B;
+
+	case EDLSSRRPreset::C:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_C;
+
+	case EDLSSRRPreset::D:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_D;
+
+	case EDLSSRRPreset::E:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E;
+
+	case EDLSSRRPreset::F:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_F;
+
+	case EDLSSRRPreset::G:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_G;
+
+	case EDLSSRRPreset::H:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_H;
+
+	case EDLSSRRPreset::I:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_I;
+
+	case EDLSSRRPreset::J:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_J;
+
+	case EDLSSRRPreset::K:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_K;
+
+	case EDLSSRRPreset::L:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_L;
+
+	case EDLSSRRPreset::M:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_M;
+
+	case EDLSSRRPreset::N:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_N;
+
+	case EDLSSRRPreset::O:
+		return NVSDK_NGX_RayReconstruction_Hint_Render_Preset_O;
 	}
 }
 
@@ -265,6 +391,50 @@ static NVSDK_NGX_DLSS_Hint_Render_Preset GetNGXDLSSPresetFromQualityMode(EDLSSQu
 	}
 	return ToNGXDLSSPreset(DLSSPreset);
 }
+
+static NVSDK_NGX_RayReconstruction_Hint_Render_Preset GetNGXDLSSRRPresetFromQualityMode(EDLSSQualityMode QualityMode)
+{
+
+	EDLSSRRPreset DLSSRRPreset = EDLSSRRPreset::Default;
+	switch (QualityMode)
+	{
+	case EDLSSQualityMode::UltraPerformance:
+		DLSSRRPreset = GetDefault<UDLSSSettings>()->DLSSRRUltraPerformancePreset;
+		break;
+
+	case EDLSSQualityMode::Performance:
+		DLSSRRPreset = GetDefault<UDLSSSettings>()->DLSSRRPerformancePreset;
+		break;
+
+	case EDLSSQualityMode::Balanced:
+		DLSSRRPreset = GetDefault<UDLSSSettings>()->DLSSRRBalancedPreset;
+		break;
+
+	case EDLSSQualityMode::Quality:
+		DLSSRRPreset = GetDefault<UDLSSSettings>()->DLSSRRQualityPreset;
+		break;
+
+	case EDLSSQualityMode::UltraQuality:
+		DLSSRRPreset = GetDefault<UDLSSSettings>()->DLSSRRUltraQualityPreset;
+		break;
+
+	case EDLSSQualityMode::DLAA:
+		DLSSRRPreset = GetDefault<UDLSSSettings>()->DLAARRPreset;
+		break;
+
+	default:
+		checkf(false, TEXT("GetNGXDLSSPresetFromQualityMode called with an out of range EDLSSQualityMode"));
+		break;
+	}
+	int32 DLSSPresetCVarVal = CVarNGXDLSSRRPresetSetting.GetValueOnAnyThread();
+	if (DLSSPresetCVarVal != 0)
+	{
+		DLSSRRPreset = GetDLSSRRPresetFromCVarValue(DLSSPresetCVarVal);
+	}
+	return ToNGXDLSSRRPreset(DLSSRRPreset);
+}
+
+
 
 static NVSDK_NGX_PerfQuality_Value ToNGXQuality(EDLSSQualityMode Quality)
 {
@@ -563,10 +733,17 @@ ITemporalUpscaler::FOutputs FDLSSSceneViewFamilyUpscaler::AddPasses(
 			bDilateMotionVectors = false;
 		}
 
+#if SUPPORT_GUIDE_GBUFFER
+		FRDGTextureRef AlternateMotionVectorTexture = PassInputs.GuideBuffers.AlternateMotionVector.Texture;
+#else
+		FRDGTextureRef AlternateMotionVectorTexture = nullptr;
+#endif
+
 		FRDGTextureRef CombinedVelocityTexture = AddVelocityCombinePass(
 			GraphBuilder, View,
 			DLSSParameters.SceneDepthInput,
 			InputVelocity,
+			AlternateMotionVectorTexture,
 			InputViewRect,
 			DLSSParameters.OutputViewRect,
 			DLSSParameters.TemporalJitterPixels,
@@ -577,7 +754,14 @@ ITemporalUpscaler::FOutputs FDLSSSceneViewFamilyUpscaler::AddPasses(
 
 		if (DLSSParameters.DenoiserMode == ENGXDLSSDenoiserMode::DLSSRR)
 		{
-			FGBufferResolveOutputs ResolvedGBuffer = AddGBufferResolvePass(GraphBuilder, View, InputViewRect, true);
+			FGBufferResolveOutputs ResolvedGBuffer = AddGBufferResolvePass(
+				GraphBuilder, 
+				View, 
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3
+				PassInputs, 
+#endif
+				InputViewRect, 
+				true);
 
 			DLSSParameters.SceneVelocityInput = CombinedVelocityTexture;
 
@@ -587,6 +771,9 @@ ITemporalUpscaler::FOutputs FDLSSSceneViewFamilyUpscaler::AddPasses(
 			DLSSParameters.Normal = ResolvedGBuffer.Normals;
 			DLSSParameters.Roughness = ResolvedGBuffer.Roughness;
 			DLSSParameters.SceneDepthInput = ResolvedGBuffer.LinearDepth;
+#if SUPPORT_GUIDE_GBUFFER
+			DLSSParameters.ReflectionHitDistance = ResolvedGBuffer.ReflectionHitDistance;
+#endif
 		}
 
 		const FDLSSOutputs DLSSOutputs = AddDLSSPass(
@@ -722,6 +909,13 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 
 			PassParameters->Normal = Inputs.Normal;
 			PassParameters->Roughness = Inputs.Roughness;
+
+#if SUPPORT_GUIDE_GBUFFER
+			PassParameters->ReflectionHitDistance = Inputs.ReflectionHitDistance;
+
+			PassParameters->ViewMatrix = (FMatrix44f)View.ViewMatrices.GetViewMatrix();
+			PassParameters->ProjectionMatrix = (FMatrix44f)View.ViewMatrices.GetProjectionNoAAMatrix();
+#endif
 		}
 
 		// Outputs 
@@ -734,12 +928,10 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 		const bool bUseAutoExposure = CVarNGXDLSSAutoExposure.GetValueOnRenderThread() != 0;
 		const bool bReleaseMemoryOnDelete = CVarNGXDLSSReleaseMemoryOnDelete.GetValueOnRenderThread() != 0;
 
-		//if r.PostProcessing.PropagateAlpha is not enabled no reason incur a 20% pref cost upscaling alpha channel.
+		//if r.PostProcessing.PropagateAlpha is not enabled no reason incur a 20% perf cost upscaling alpha channel.
 		static auto PropagateAlphaCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("r.PostProcessing.PropagateAlpha"));
-		check(PropagateAlphaCVar);
 
-		const bool bEnableAlphaUpscaling = (CVarNGXEnableAlphaUpscaling.GetValueOnRenderThread()) &&
-										   (PropagateAlphaCVar->GetInt() != 0);
+		const bool bEnableAlphaUpscaling = PropagateAlphaCVar && (PropagateAlphaCVar->GetInt() != 0) && (CVarNGXEnableAlphaUpscaling.GetValueOnRenderThread());
 
 		const float Sharpness = FMath::Clamp(CVarNGXDLSSSharpness.GetValueOnRenderThread(), -1.0f, 1.0f);
 #if !NO_LOGGING
@@ -752,6 +944,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 #endif
 		NGXRHI* LocalNGXRHIExtensions = Upscaler->NGXRHIExtensions;
 		const int32 NGXDLSSPreset = GetNGXDLSSPresetFromQualityMode(DLSSQualityMode);
+		const int32 NGXDLSSRRPreset = GetNGXDLSSRRPresetFromQualityMode(DLSSQualityMode);
 		const int32 NGXPerfQuality = ToNGXQuality(DLSSQualityMode);
 
 		auto NGXDenoiserModeString = [](ENGXDLSSDenoiserMode NGXDenoiserMode)
@@ -773,7 +966,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 			PassParameters,
 			ERDGPassFlags::Compute | ERDGPassFlags::Raster | ERDGPassFlags::SkipRenderPass,
 			// FRHICommandListImmediate forces it to run on render thread, FRHICommandList doesn't
-			[LocalNGXRHIExtensions, PassParameters, Inputs, bCameraCut, DeltaWorldTimeMS, Sharpness, NGXDLSSPreset, NGXPerfQuality, DLSSState, bUseAutoExposure, bEnableAlphaUpscaling, bReleaseMemoryOnDelete](FRHICommandListImmediate& RHICmdList)
+			[LocalNGXRHIExtensions, PassParameters, Inputs, bCameraCut, DeltaWorldTimeMS, Sharpness, NGXDLSSPreset, NGXDLSSRRPreset, NGXPerfQuality, DLSSState, bUseAutoExposure, bEnableAlphaUpscaling, bReleaseMemoryOnDelete](FRHICommandListImmediate& RHICmdList)
 		{
 			FRHIDLSSArguments DLSSArguments;
 			FMemory::Memzero(&DLSSArguments, sizeof(DLSSArguments));
@@ -793,6 +986,7 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 			DLSSArguments.bReleaseMemoryOnDelete = bReleaseMemoryOnDelete;
 
 			DLSSArguments.DLSSPreset = NGXDLSSPreset;
+			DLSSArguments.DLSSRRPreset = NGXDLSSRRPreset;
 			DLSSArguments.PerfQuality = NGXPerfQuality;
 
 			check(PassParameters->SceneColorInput);
@@ -835,6 +1029,18 @@ FDLSSOutputs FDLSSSceneViewFamilyUpscaler::AddDLSSPass(
 				check(PassParameters->Roughness)
 				PassParameters->Roughness->MarkResourceAsUsed();
 				DLSSArguments.InputRoughness = PassParameters->Roughness->GetRHI();
+
+#if SUPPORT_GUIDE_GBUFFER
+				if (PassParameters->ReflectionHitDistance)
+				{
+					PassParameters->ReflectionHitDistance->MarkResourceAsUsed();
+					DLSSArguments.InputReflectionHitDistance = PassParameters->ReflectionHitDistance->GetRHI();
+
+					FMemory::Memcpy( DLSSArguments.ViewMatrix, PassParameters->ViewMatrix.M, sizeof(float) * 16);
+					FMemory::Memcpy(DLSSArguments.ProjectionMatrix, PassParameters->ProjectionMatrix.M, sizeof(float) * 16);
+					//DLSSArguments.ProjectionMatrix = PassParameters->ProjectionMatrix;
+				}
+#endif
 			}
 
 			// output images

@@ -22,21 +22,15 @@
 
 #include "XeSSSettings.h"
 
-#include "XeSSMacros.h"
+#include "XeSSCommonMacros.h"
 
 #include "HAL/IConsoleManager.h"
+#include "XeSSUnrealCore.h"
 
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-#include "Misc/ConfigUtilities.h"
-#else
-#include "Misc/ConfigCacheIni.h"
-#endif
-
-#define LOCTEXT_NAMESPACE "FXeSSPlugin"
+#define LOCTEXT_NAMESPACE "XeSS"
 
 UXeSSSettings::UXeSSSettings()
-	: bEnableXeSSInEditorViewports(true),
-	DebugDataDumpPath(".")
+	: bEnableXeSSInEditorViewports(true)
 {}
 
 void UXeSSSettings::PostInitProperties()
@@ -46,12 +40,7 @@ void UXeSSSettings::PostInitProperties()
 #if WITH_EDITOR
 	// Apply settings from ini file, this will update the console variables and project settings
 	// Using ECVF_SetByGameSetting to be able to update CVar later, once setting is changed in project menu
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-	UE::ConfigUtilities::ApplyCVarSettingsFromIni(TEXT("/Script/XeSSPlugin.XeSSSettings"), *GEngineIni, ECVF_SetByGameSetting);
-#else
-	ApplyCVarSettingsFromIni(TEXT("/Script/XeSSPlugin.XeSSSettings"), *GEngineIni, ECVF_SetByGameSetting);
-#endif // 
-
+	XeSSUnreal::ApplyCVarSettingsFromIni(TEXT("/Script/XeSSPlugin.XeSSSettings"), *GEngineIni, ECVF_SetByGameSetting);
 	if (IsTemplate())
 	{
 		ImportConsoleVariableValues();
@@ -61,7 +50,7 @@ void UXeSSSettings::PostInitProperties()
 
 FName UXeSSSettings::GetContainerName() const
 {
-	return FName("Project"); 
+	return FName("Project");
 }
 FName UXeSSSettings::GetCategoryName() const
 {

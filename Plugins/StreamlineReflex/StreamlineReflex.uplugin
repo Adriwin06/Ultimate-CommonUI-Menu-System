@@ -1,0 +1,29 @@
+{
+	"FileVersion": 3,
+	"Version": 117,
+	"VersionName": "4.0.2-SL2.7.30",
+	"FriendlyName": "NVIDIA Reflex Low Latency",
+	"Description": "NVIDIA Reflex Low Latency reduces PC latency and increases responsiveness.",
+	"Category": "Rendering",
+	"CreatedBy": "NVIDIA",
+	"CreatedByURL": "https://developer.nvidia.com/rtx/streamline",
+	"DocsURL": "",
+	"MarketplaceURL": "https://www.unrealengine.com/marketplace/en-US/product/nvidia-dlss",
+	"SupportURL": "mailto:DLSS-Support@nvidia.com",
+	"EngineVersion": "5.5.0",
+	"CanContainContent": false,
+	"Installed": true,
+	"Modules": [
+		{
+			"Name": "StreamlineReflexBlueprint",
+			"Type": "Runtime",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "StreamlineCore",
+			"Enabled": true
+		}
+	]
+}

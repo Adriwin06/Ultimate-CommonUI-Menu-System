@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright 2021 Intel Corporation
+ * Copyright 2024 Intel Corporation
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files(the "Software"), to deal
@@ -22,22 +22,26 @@
 
 #pragma once
 
-#include "Modules/ModuleInterface.h"
-#include "RenderGraphDefinitions.h"
+#include "CoreMinimal.h"
+#include "XeSSUnrealRHI.h"
 
 class FRDGBuilder;
+class FRDGTexture;
 class FViewInfo;
 
-extern XESSPREPASS_API FRDGTextureRef AddVelocityFlatteningXeSSPass(
+extern XESSPREPASS_API FRDGTexture* AddXeFGSampleVelocityPass(
 	FRDGBuilder& GraphBuilder,
-	FRDGTextureRef InSceneDepthTexture,
-	FRDGTextureRef InVelocityTexture,
+	FRDGTexture* InSceneDepthTexture,
+	FRDGTexture* InVelocityTexture,
 	const FViewInfo& View);
 
-class FXeSSPrePass : public IModuleInterface
-{
-public:
-	/** IModuleInterface implementation */
-	virtual void StartupModule() override;
-	virtual void ShutdownModule() override;
-};
+extern XESSPREPASS_API FRDGTexture* AddXeSSFlattenVelocityPass(
+	FRDGBuilder& GraphBuilder,
+	FRDGTexture* InSceneDepthTexture,
+	FRDGTexture* InVelocityTexture,
+	const FViewInfo& View);
+
+extern XESSPREPASS_API FRDGTexture* AddXeFGExtractUIPass(
+	FRDGBuilder& GraphBuilder,
+	float InAlphaThreshold,
+	const XeSSUnreal::XTextureRHIRef& InBackBuffer);

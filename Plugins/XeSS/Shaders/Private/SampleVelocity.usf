@@ -1,0 +1,71 @@
+// Copyright Epic Games, Inc. All Rights Reserved.
+
+#include "/Engine/Private/Common.ush"
+
+//------------------------------------------------------- PARAMETERS
+Texture2D SceneDepthTexture;
+Texture2D GBufferVelocityTexture;
+
+float2 InputViewMin;
+float4 InputViewSize;
+// Temporal jitter at the pixel scale.
+float2 TemporalJitterPixels;
+
+RWTexture2D<float2> OutVelocityTex;
+
+//------------------------------------------------------- HELPER FUNCTIONS
+
+float LoadSceneDepthTexture(int2 PixelPos, int2 Offset)
+{
+	return SceneDepthTexture.Load(int3(PixelPos + Offset, 0)).r;
+}
+
+//------------------------------------------------------- MAIN VELOCITY PROCESSING FUNCTION
+
+float2 SampleVelocity(uint2 PixelId)
+{
+	float2 ViewportUV = (float2(PixelId) + 0.5f) * InputViewSize.zw;
+	float2 PPCo = (float2(PixelId) + 0.5f) + TemporalJitterPixels;
+	float2 PPCk = floor(PPCo) + 0.5;
+
+	// FIND MOTION OF PIXEL AND NEAREST IN NEIGHBORHOOD
+	// ------------------------------------------------
+	float3 PosN; // Position of this pixel, possibly later nearest pixel in neighborhood.
+	PosN.xy = float2(2 * ViewportUV.x - 1, 1 - 2 * ViewportUV.y);
+
+	// Apply offset to the input depth pixel coordinate.
+	int2 DepthCoord = int2(InputViewMin) + int2(PPCk);
+	PosN.z = LoadSceneDepthTexture(DepthCoord, int2(0,0));
+
+	// Camera motion for pixel or nearest pixel (in ScreenPos space).
+	float2 BackN;
+	float4 EncodedVelocity;
+
+	{
+		float4 ThisClip = float4( PosN.xy, PosN.z, 1 );
+		float4 PrevClip = mul( ThisClip, View.ClipToPrevClip );
+		float2 PrevScreen = PrevClip.xy / PrevClip.w;
+		BackN = PosN.xy - PrevScreen;
+
+		float2 VelocityShift = int2(PPCk) + int2(InputViewMin);
+		EncodedVelocity = GBufferVelocityTexture.Load(int3(VelocityShift, 0));
+		bool DynamicN = EncodedVelocity.x > 0.0;
+		if (DynamicN)
+		{
+			BackN = DecodeVelocityFromTexture(EncodedVelocity).xy;
+		}
+	}
+
+	float2 VelocityColor = -BackN * InputViewSize.xy * float2(0.5, -0.5);
+	return VelocityColor;
+}
+
+//------------------------------------------------------- ENTRY POINT
+
+[numthreads(THREADGROUP_SIZEX, THREADGROUP_SIZEY, 1)]
+void MainCS(
+	uint2 DispatchThreadId : SV_DispatchThreadID)
+{
+	float2 OutputVelocity = SampleVelocity(DispatchThreadId);
+	OutVelocityTex[DispatchThreadId] = OutputVelocity;
+}

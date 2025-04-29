@@ -40,9 +40,17 @@ typedef enum NVSDK_NGX_RayReconstruction_Hint_Render_Preset
     NVSDK_NGX_RayReconstruction_Hint_Render_Preset_B,
     NVSDK_NGX_RayReconstruction_Hint_Render_Preset_C,
     NVSDK_NGX_RayReconstruction_Hint_Render_Preset_D,
-    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E,
-    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_F,
-    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_G,
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_F,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_G,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_H,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_I,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_J,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_K,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_L,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_M,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_N,           // do not use, reverts to default behavior
+    NVSDK_NGX_RayReconstruction_Hint_Render_Preset_O,           // do not use, reverts to default behavior
 } NVSDK_NGX_RayReconstruction_Hint_Render_Preset;
 
 #define NVSDK_NGX_Parameter_DLSS_Denoise_Mode "DLSS.Denoise.Mode"
@@ -66,22 +74,64 @@ typedef enum NVSDK_NGX_RayReconstruction_Hint_Render_Preset
 #define NVSDK_NGX_Parameter_Use_HW_Depth "DLSS.Use.HW.Depth"
 #define NVSDK_NGX_Parameter_DLSSD_ReflectedAlbedo "DLSSD.ReflectedAlbedo"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeParticles "DLSSD.ColorBeforeParticles"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterParticles "DLSSD.ColorAfterParticles"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeTransparency "DLSSD.ColorBeforeTransparency"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterTransparency "DLSSD.ColorAfterTransparency"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeFog "DLSSD.ColorBeforeFog"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterFog "DLSSD.ColorAfterFog"
+#define NVSDK_NGX_Parameter_DLSSD_ScreenSpaceSubsurfaceScatteringGuide "DLSSD.ScreenSpaceSubsurfaceScatteringGuide"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeScreenSpaceSubsurfaceScattering "DLSSD.ColorBeforeScreenSpaceSubsurfaceScattering"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterScreenSpaceSubsurfaceScattering "DLSSD.ColorAfterScreenSpaceSubsurfaceScattering"
+#define NVSDK_NGX_Parameter_DLSSD_ScreenSpaceRefractionGuide "DLSSD.ScreenSpaceRefractionGuide"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeScreenSpaceRefraction "DLSSD.ColorBeforeScreenSpaceRefraction"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterScreenSpaceRefraction "DLSSD.ColorAfterScreenSpaceRefraction"
+#define NVSDK_NGX_Parameter_DLSSD_DepthOfFieldGuide "DLSSD.DepthOfFieldGuide"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeDepthOfField "DLSSD.ColorBeforeDepthOfField"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterDepthOfField "DLSSD.ColorAfterDepthOfField"
 #define NVSDK_NGX_Parameter_DLSSD_DiffuseHitDistance "DLSSD.DiffuseHitDistance"
 #define NVSDK_NGX_Parameter_DLSSD_SpecularHitDistance "DLSSD.SpecularHitDistance"
 #define NVSDK_NGX_Parameter_DLSSD_DiffuseRayDirection "DLSSD.DiffuseRayDirection"
 #define NVSDK_NGX_Parameter_DLSSD_SpecularRayDirection "DLSSD.SpecularRayDirection"
 #define NVSDK_NGX_Parameter_DLSSD_DiffuseRayDirectionHitDistance "DLSSD.DiffuseRayDirectionHitDistance"
 #define NVSDK_NGX_Parameter_DLSSD_SpecularRayDirectionHitDistance "DLSSD.SpecularRayDirectionHitDistance"
+#define NVSDK_NGX_Parameter_DLSSD_Alpha "DLSSD.Alpha"
+#define NVSDK_NGX_Parameter_DLSSD_OutputAlpha "DLSSD.OutputAlpha"
+#define NVSDK_NGX_Parameter_DLSSD_Alpha_Subrect_Base_X "DLSSD.Alpha.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_Alpha_Subrect_Base_Y "DLSSD.Alpha.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_OutputAlpha_Subrect_Base_X "DLSSD.OutputAlpha.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_OutputAlpha_Subrect_Base_Y "DLSSD.OutputAlpha.Subrect.Base.Y"
 #define NVSDK_NGX_Parameter_DLSSD_ReflectedAlbedo_Subrect_Base_X "DLSSD.ReflectedAlbedo.Subrect.Base.X"
 #define NVSDK_NGX_Parameter_DLSSD_ReflectedAlbedo_Subrect_Base_Y "DLSSD.ReflectedAlbedo.Subrect.Base.Y"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeParticles_Subrect_Base_X "DLSSD.ColorBeforeParticles.Subrect.Base.X"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeParticles_Subrect_Base_Y "DLSSD.ColorBeforeParticles.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterParticles_Subrect_Base_X "DLSSD.ColorAfterParticles.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterParticles_Subrect_Base_Y "DLSSD.ColorAfterParticles.Subrect.Base.Y"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeTransparency_Subrect_Base_X "DLSSD.ColorBeforeTransparency.Subrect.Base.X"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeTransparency_Subrect_Base_Y "DLSSD.ColorBeforeTransparency.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterTransparency_Subrect_Base_X "DLSSD.ColorAfterTransparency.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterTransparency_Subrect_Base_Y "DLSSD.ColorAfterTransparency.Subrect.Base.Y"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeFog_Subrect_Base_X "DLSSD.ColorBeforeFog.Subrect.Base.X"
 #define NVSDK_NGX_Parameter_DLSSD_ColorBeforeFog_Subrect_Base_Y "DLSSD.ColorBeforeFog.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterFog_Subrect_Base_X "DLSSD.ColorAfterFog.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterFog_Subrect_Base_Y "DLSSD.ColorAfterFog.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ScreenSpaceSubsurfaceScatteringGuide_Subrect_Base_X "DLSSD.ScreenSpaceSubsurfaceScatteringGuide.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ScreenSpaceSubsurfaceScatteringGuide_Subrect_Base_Y "DLSSD.ScreenSpaceSubsurfaceScatteringGuide.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeScreenSpaceSubsurfaceScattering_Subrect_Base_X "DLSSD.ColorBeforeScreenSpaceSubsurfaceScattering.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeScreenSpaceSubsurfaceScattering_Subrect_Base_Y "DLSSD.ColorBeforeScreenSpaceSubsurfaceScattering.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterScreenSpaceSubsurfaceScattering_Subrect_Base_X "DLSSD.ColorAfterScreenSpaceSubsurfaceScattering.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterScreenSpaceSubsurfaceScattering_Subrect_Base_Y "DLSSD.ColorAfterScreenSpaceSubsurfaceScattering.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ScreenSpaceRefractionGuide_Subrect_Base_X "DLSSD.ScreenSpaceRefractionGuide.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ScreenSpaceRefractionGuide_Subrect_Base_Y "DLSSD.ScreenSpaceRefractionGuide.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeScreenSpaceRefraction_Subrect_Base_X "DLSSD.ColorBeforeScreenSpaceRefraction.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeScreenSpaceRefraction_Subrect_Base_Y "DLSSD.ColorBeforeScreenSpaceRefraction.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterScreenSpaceRefraction_Subrect_Base_X "DLSSD.ColorAfterScreenSpaceRefraction.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterScreenSpaceRefraction_Subrect_Base_Y "DLSSD.ColorAfterScreenSpaceRefraction.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_DepthOfFieldGuide_Subrect_Base_X "DLSSD.DepthOfFieldGuide.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_DepthOfFieldGuide_Subrect_Base_Y "DLSSD.DepthOfFieldGuide.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeDepthOfField_Subrect_Base_X "DLSSD.ColorBeforeDepthOfField.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorBeforeDepthOfField_Subrect_Base_Y "DLSSD.ColorBeforeDepthOfField.Subrect.Base.Y"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterDepthOfField_Subrect_Base_X "DLSSD.ColorAfterDepthOfField.Subrect.Base.X"
+#define NVSDK_NGX_Parameter_DLSSD_ColorAfterDepthOfField_Subrect_Base_Y "DLSSD.ColorAfterDepthOfField.Subrect.Base.Y"
 #define NVSDK_NGX_Parameter_DLSSD_DiffuseHitDistance_Subrect_Base_X "DLSSD.DiffuseHitDistance.Subrect.Base.X"
 #define NVSDK_NGX_Parameter_DLSSD_DiffuseHitDistance_Subrect_Base_Y "DLSSD.DiffuseHitDistance.Subrect.Base.Y"
 #define NVSDK_NGX_Parameter_DLSSD_SpecularHitDistance_Subrect_Base_X "DLSSD.SpecularHitDistance.Subrect.Base.X"

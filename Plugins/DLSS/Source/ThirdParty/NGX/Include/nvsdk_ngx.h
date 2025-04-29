@@ -374,7 +374,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_CONV NVSDK_NGX_CUDA_GetScratchBufferSize(NV
 //      - With node mask including the device provided in NVSDK_NGX_D3D12_Init
 //      - Execute on non-copy command queue.
 // InDevCtx: [d3d11 only]
-//      Device context to use to execute GPU commands
+//      Device context to use to execute GPU commands. Must be an immediate context.
+//      Passing a deferred context is not supported and will cause the API to return an error.
 //
 // InFeatureID:
 //      AI feature to initialize
@@ -453,7 +454,8 @@ NVSDK_NGX_API NVSDK_NGX_Result NVSDK_CONV NVSDK_NGX_D3D12_GetFeatureRequirements
 //      - With node mask including the device provided in NVSDK_NGX_D3D12_Init
 //      - Execute on non-copy command queue.
 // InDevCtx: [d3d11 only]
-//      Device context to use to execute GPU commands
+//      Device context to use to execute GPU commands. Must be an immediate context.
+//      Passing a deferred context is not supported and will cause the API to return an error.
 //
 // InFeatureHandle:
 //      Handle representing feature to be evaluated

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -19,6 +19,7 @@
 #include "ShaderCompilerCore.h"
 #include "PostProcess/PostProcessTonemap.h"
 #include "Runtime/Launch/Resources/Version.h"
+#include "Misc/EngineVersionComparison.h"
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 2
 #include "DataDrivenShaderPlatformInfo.h"
 #endif
@@ -263,11 +264,15 @@ IMPLEMENT_GLOBAL_SHADER(FNISUpscaleCS, "/Plugin/NIS/Private/NISUpscaler.usf", "m
 
 struct FNISCoefficients : public FRenderResource
 {
-	FTexture2DRHIRef ScalerRHI = nullptr;
-	FTexture2DRHIRef UsmRHI = nullptr;
+#if UE_VERSION_OLDER_THAN(5,1,0)
+	using FTextureRHI2DRef = FTextureRHIRef;
+#endif
 
-	FTexture2DRHIRef ScalerHalfPrecisionRHI = nullptr;
-	FTexture2DRHIRef UsmHalfPrecisionRHI = nullptr;
+	FTextureRHIRef ScalerRHI = nullptr;
+	FTextureRHIRef UsmRHI = nullptr;
+
+	FTextureRHIRef ScalerHalfPrecisionRHI = nullptr;
+	FTextureRHIRef UsmHalfPrecisionRHI = nullptr;
 
 
 	class FNISCoefficientsResourceBulkData : public FResourceBulkDataInterface

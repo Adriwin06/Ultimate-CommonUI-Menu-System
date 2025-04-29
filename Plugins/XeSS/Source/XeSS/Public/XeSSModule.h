@@ -22,23 +22,21 @@
 
 #pragma once
 
-#include "XeSSMacros.h"
-
 #include "CoreMinimal.h"
 #include "Modules/ModuleInterface.h"
 
 class FXeSSRHI;
 class FXeSSUpscaler;
 
-class FXeSSPlugin : public IModuleInterface
+class FXeSSModule : public IModuleInterface
 {
 public:
-	FXeSSPlugin() {};
-	/** IModuleInterface implementation */
-	virtual void StartupModule() override;
-	virtual void ShutdownModule() override;
+	void StartupModule() override;
+	void ShutdownModule() override;
 
-	virtual FXeSSRHI* GetXeSSRHI() const;
-	virtual FXeSSUpscaler* GetXeSSUpscaler() const;
-	virtual bool IsXeSSSupported() const;
+	void OnPostEngineInit();
+
+	XESSCORE_API FXeSSRHI* GetXeSSRHI() const;
+	XESSCORE_API FXeSSUpscaler* GetXeSSUpscaler() const;
+	XESSCORE_API bool IsXeSSSupported() const;
 };

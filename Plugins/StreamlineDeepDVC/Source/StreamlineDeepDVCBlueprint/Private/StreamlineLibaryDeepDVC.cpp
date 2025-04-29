@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2022 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2022 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -47,7 +47,7 @@ if (!TryInitDeepDVCLibrary()) \
 
 #endif
 
-UStreamlineFeatureSupport UStreamlineLibraryDeepDVC::DeepDVCSupport = UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+EStreamlineFeatureSupport UStreamlineLibraryDeepDVC::DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 #if WITH_STREAMLINE
 
 bool UStreamlineLibraryDeepDVC::bDeepDVCLibraryInitialized = false;
@@ -76,15 +76,15 @@ void UStreamlineLibraryDeepDVC::GetDeepDVCOnScreenMessages(TMultiMap<FCoreDelega
 
 #endif
 
-bool UStreamlineLibraryDeepDVC::IsDeepDVCModeSupported(UStreamlineDeepDVCMode DeepDVCMode)
+bool UStreamlineLibraryDeepDVC::IsDeepDVCModeSupported(EStreamlineDeepDVCMode DeepDVCMode)
 {
 	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(false)
 
-		const UEnum* Enum = StaticEnum<UStreamlineDeepDVCMode>();
+		const UEnum* Enum = StaticEnum<EStreamlineDeepDVCMode>();
 
 	if (ValidateEnumValue(DeepDVCMode, __FUNCTION__))
 	{
-		if (DeepDVCMode == UStreamlineDeepDVCMode::Off)
+		if (DeepDVCMode == EStreamlineDeepDVCMode::Off)
 		{
 			return true;
 		}
@@ -102,23 +102,20 @@ bool UStreamlineLibraryDeepDVC::IsDeepDVCModeSupported(UStreamlineDeepDVCMode De
 
 
 
-TArray<UStreamlineDeepDVCMode> UStreamlineLibraryDeepDVC::GetSupportedDeepDVCModes()
+TArray<EStreamlineDeepDVCMode> UStreamlineLibraryDeepDVC::GetSupportedDeepDVCModes()
 {
-	TArray<UStreamlineDeepDVCMode> SupportedQualityModes;
+	TArray<EStreamlineDeepDVCMode> SupportedQualityModes;
 
 	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(SupportedQualityModes);
 	{
-		const UEnum* Enum = StaticEnum<UStreamlineDeepDVCMode>();
-		for (int32 EnumIndex = 0; EnumIndex < Enum->NumEnums(); ++EnumIndex)
+		const UEnum* Enum = StaticEnum<EStreamlineDeepDVCMode>();
+		for (int32 EnumIndex = 0; EnumIndex < Enum->NumEnums() - 1 /* avoid _MAX */; ++EnumIndex)
 		{
 			const int64 EnumValue = Enum->GetValueByIndex(EnumIndex);
-			if (EnumValue != Enum->GetMaxEnumValue())
+			const EStreamlineDeepDVCMode QualityMode = EStreamlineDeepDVCMode(EnumValue);
+			if (IsDeepDVCModeSupported(QualityMode))
 			{
-				const UStreamlineDeepDVCMode QualityMode = UStreamlineDeepDVCMode(EnumValue);
-				if (IsDeepDVCModeSupported(QualityMode))
-				{
-					SupportedQualityModes.Add(QualityMode);
-				}
+				SupportedQualityModes.Add(QualityMode);
 			}
 		}
 	}
@@ -130,27 +127,27 @@ bool UStreamlineLibraryDeepDVC::IsDeepDVCSupported()
 	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(false);
 
 #if WITH_STREAMLINE
-	return QueryDeepDVCSupport() == UStreamlineFeatureSupport::Supported;
+	return QueryDeepDVCSupport() == EStreamlineFeatureSupport::Supported;
 #else
 	return false;
 #endif
 }
 
-UStreamlineFeatureSupport UStreamlineLibraryDeepDVC::QueryDeepDVCSupport()
+EStreamlineFeatureSupport UStreamlineLibraryDeepDVC::QueryDeepDVCSupport()
 {
-	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(UStreamlineFeatureSupport::NotSupported);
+	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(EStreamlineFeatureSupport::NotSupported);
 
 	return DeepDVCSupport;
 }
 
 #if WITH_STREAMLINE
-static int32 DeepDVCModeIntCvarFromEnum(UStreamlineDeepDVCMode DeepDVCMode)
+static int32 DeepDVCModeIntCvarFromEnum(EStreamlineDeepDVCMode DeepDVCMode)
 {
 	switch (DeepDVCMode)
 	{
-	case UStreamlineDeepDVCMode::Off:
+	case EStreamlineDeepDVCMode::Off:
 		return 0;
-	case UStreamlineDeepDVCMode::On:
+	case EStreamlineDeepDVCMode::On:
 		return 1;
 	default:
 		checkf(false, TEXT("dear DeepDVC plugin developer, please support new enum type!"));
@@ -158,28 +155,28 @@ static int32 DeepDVCModeIntCvarFromEnum(UStreamlineDeepDVCMode DeepDVCMode)
 	}
 }
 
-static UStreamlineDeepDVCMode DeepDVCModeEnumFromIntCvar(int32 DeepDVCMode)
+static EStreamlineDeepDVCMode DeepDVCModeEnumFromIntCvar(int32 DeepDVCMode)
 {
 	switch (DeepDVCMode)
 	{
 	case 0:
-		return UStreamlineDeepDVCMode::Off;
+		return EStreamlineDeepDVCMode::Off;
 	case 1:
-		return UStreamlineDeepDVCMode::On;
+		return EStreamlineDeepDVCMode::On;
 	default:
 		UE_LOG(LogStreamlineDeepDVCBlueprint, Error, TEXT("Invalid r.Streamline.DeepDVC.Enable value %d"), DeepDVCMode);
-		return UStreamlineDeepDVCMode::Off;
+		return EStreamlineDeepDVCMode::Off;
 	}
 }
 #endif	// WITH_STREAMLINE
 
-void UStreamlineLibraryDeepDVC::SetDeepDVCMode(UStreamlineDeepDVCMode DeepDVCMode)
+void UStreamlineLibraryDeepDVC::SetDeepDVCMode(EStreamlineDeepDVCMode DeepDVCMode)
 {
 	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(void());
 
 #if WITH_STREAMLINE
 
-	const UEnum* Enum = StaticEnum<UStreamlineDeepDVCMode>();
+	const UEnum* Enum = StaticEnum<EStreamlineDeepDVCMode>();
 
 	if (ValidateEnumValue(DeepDVCMode, __FUNCTION__))
 	{
@@ -189,7 +186,7 @@ void UStreamlineLibraryDeepDVC::SetDeepDVCMode(UStreamlineDeepDVCMode DeepDVCMod
 			CVarDeepDVCEnable->SetWithCurrentPriority(DeepDVCModeIntCvarFromEnum(DeepDVCMode));
 		}
 		
-		if (DeepDVCMode != UStreamlineDeepDVCMode::Off)
+		if (DeepDVCMode != EStreamlineDeepDVCMode::Off)
 		{
 #if !UE_BUILD_SHIPPING
 			check(IsInGameThread());
@@ -202,9 +199,9 @@ void UStreamlineLibraryDeepDVC::SetDeepDVCMode(UStreamlineDeepDVCMode DeepDVCMod
 #endif	// WITH_STREAMLINE
 }
 
-UStreamlineDeepDVCMode UStreamlineLibraryDeepDVC::GetDeepDVCMode()
+EStreamlineDeepDVCMode UStreamlineLibraryDeepDVC::GetDeepDVCMode()
 {
-	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(UStreamlineDeepDVCMode::Off);
+	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(EStreamlineDeepDVCMode::Off);
 
 #if WITH_STREAMLINE
 	static const auto CVarDeepDVCEnable = IConsoleManager::Get().FindConsoleVariable(TEXT("r.Streamline.DeepDVC.Enable"));
@@ -213,19 +210,19 @@ UStreamlineDeepDVCMode UStreamlineLibraryDeepDVC::GetDeepDVCMode()
 		return DeepDVCModeEnumFromIntCvar(CVarDeepDVCEnable->GetInt());
 	}
 #endif
-	return UStreamlineDeepDVCMode::Off;
+	return EStreamlineDeepDVCMode::Off;
 }
 
-UStreamlineDeepDVCMode UStreamlineLibraryDeepDVC::GetDefaultDeepDVCMode()
+EStreamlineDeepDVCMode UStreamlineLibraryDeepDVC::GetDefaultDeepDVCMode()
 {
-	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(UStreamlineDeepDVCMode::Off);
+	TRY_INIT_STREAMLINE_DEEPDVC_LIBRARY_AND_RETURN(EStreamlineDeepDVCMode::Off);
 	if (UStreamlineLibraryDeepDVC::IsDeepDVCSupported())
 	{
-		return UStreamlineDeepDVCMode::Off;
+		return EStreamlineDeepDVCMode::Off;
 	}
 	else
 	{
-		return UStreamlineDeepDVCMode::Off;
+		return EStreamlineDeepDVCMode::Off;
 	}
 }
 
@@ -322,18 +319,18 @@ bool UStreamlineLibraryDeepDVC::TryInitDeepDVCLibrary()
 		}
 		else
 		{
-			DeepDVCSupport = UStreamlineFeatureSupport::NotSupportedByRHI;
+			DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
 		}
 	}
 	else
 	{
 		if (GetPlatformStreamlineSupport() == EStreamlineSupport::NotSupportedIncompatibleRHI)
 		{
-			DeepDVCSupport = UStreamlineFeatureSupport::NotSupportedByRHI;
+			DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByRHI;
 		}
 		else
 		{
-			DeepDVCSupport = UStreamlineFeatureSupport::NotSupported;
+			DeepDVCSupport = EStreamlineFeatureSupport::NotSupported;
 		}
 	}
 
@@ -349,10 +346,10 @@ void UStreamlineLibraryDeepDVC::Startup()
 #if WITH_STREAMLINE
 	// This initialization will likely not succeed unless this module has been moved to PostEngineInit, and that's ok
 	UStreamlineLibraryDeepDVC::TryInitDeepDVCLibrary();
-	UStreamlineLibrary::RegisterFeatureSupport(UStreamlineFeature::DeepDVC, UStreamlineLibraryDeepDVC::QueryDeepDVCSupport());
+	UStreamlineLibrary::RegisterFeatureSupport(EStreamlineFeature::DeepDVC, UStreamlineLibraryDeepDVC::QueryDeepDVCSupport());
 #else
 	UE_LOG(LogStreamlineDeepDVCBlueprint, Log, TEXT("Streamline is not supported on this platform at build time. The Streamline Blueprint library however is supported and stubbed out to ignore any calls to enable DeepDVC and will always return UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime, regardless of the underlying hardware. This can be used to e.g. to turn off related UI elements."));
-	UStreamlineLibraryDeepDVC::DeepDVCSupport = UStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
+	UStreamlineLibraryDeepDVC::DeepDVCSupport = EStreamlineFeatureSupport::NotSupportedByPlatformAtBuildTime;
 #endif
 }
 void UStreamlineLibraryDeepDVC::Shutdown()

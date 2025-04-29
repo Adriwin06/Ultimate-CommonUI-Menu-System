@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -38,12 +38,11 @@ SCREEN_PASS_TEXTURE_VIEWPORT(Velocity)
 Texture2D DepthTexture;
 SamplerState DepthTextureSampler;
 
+Texture2D<float2> AlternateMotionVectorsTexture;
+
 RWTexture2D<float2>	OutVelocityCombinedTexture;
 SCREEN_PASS_TEXTURE_VIEWPORT(CombinedVelocity)
 
-
-
-	
 [numthreads(THREADGROUP_SIZEX, THREADGROUP_SIZEY, 1)]
 void VelocityCombineMain(
 	uint2 GroupId : SV_GroupID,
@@ -51,36 +50,31 @@ void VelocityCombineMain(
 	uint2 GroupThreadId : SV_GroupThreadID,
 	uint GroupIndex : SV_GroupIndex)
 {
-	uint2 PixelPos = min(DispatchThreadId + Velocity_ViewportMin, Velocity_ViewportMax - 1);
-	
-	// CombinedVelocity_ViewportMin is expected to be 0, but in case it is not
-	uint2 OutputPixelPos = CombinedVelocity_ViewportMin + DispatchThreadId;
-	const bool bInsideViewport = all(PixelPos.xy < Velocity_ViewportMax);
+	const bool bInsideViewport = all(DispatchThreadId.xy < CombinedVelocity_ViewportSize);
 	
 	BRANCH
 	if (!bInsideViewport)
+	{
 		return;
+	}
+
+	// CombinedVelocity_ViewportMin is expected to be 0, but in case it is not
+	uint2 OutputPixelPos = CombinedVelocity_ViewportMin + DispatchThreadId;
 
 #if DILATE_MOTION_VECTORS // TODO: 2x2.
 
 	// Screen position of minimum depth.
 	float2 VelocityOffset = float2(0.0, 0.0);
 
-	float2 NearestBufferUV = (PixelPos + 0.5f) * Velocity_ViewportSizeInverse;
-
-	//float2 ViewportUV = NearestBufferUV;
-	float2 ViewportUV = (float2(DispatchThreadId) + 0.5f) * CombinedVelocity_ViewportSizeInverse;
+	const float2 ViewportUV = (float2(DispatchThreadId) + 0.5f) * CombinedVelocity_ViewportSizeInverse;
 	
 	// Pixel coordinate of the center of output pixel O in the input viewport.
-	float2 PPCo = ViewportUV * Velocity_ViewportSize + TemporalJitterPixels;
+	const float2 PPCo = ViewportUV * Velocity_ViewportSize + TemporalJitterPixels;
 
 	// Pixel coordinate of the center of the nearest input pixel K.
-	float2 PPCk = floor(PPCo) + 0.5;
+	const float2 PPCk = floor(PPCo) + 0.5;
 
-	// Pixel coordinate of the center of the nearest top left input pixel T.
-	float2 PPCt = floor(PPCo - 0.5) + 0.5;
-
-	NearestBufferUV = Velocity_ExtentInverse * (Velocity_ViewportMin + PPCk);
+	const float2 NearestBufferUV = Velocity_ExtentInverse * (Velocity_ViewportMin + PPCk);
 	
 	// FIND MOTION OF PIXEL AND NEAREST IN NEIGHBORHOOD
 	// ------------------------------------------------
@@ -151,22 +145,22 @@ void VelocityCombineMain(
 		BackN = DecodeVelocityFromTexture(VelocityN).xy;
 	}
 	BackTemp = BackN * CombinedVelocity_ViewportSize;
-
 	OutVelocityCombinedTexture[OutputPixelPos].xy = -BackTemp * float2(0.5, -0.5);
-
 #else
+	const uint2 PixelPos = DispatchThreadId + Velocity_ViewportMin;
 	float4 EncodedVelocity = VelocityTexture[PixelPos];
 	float Depth = DepthTexture[PixelPos].x;
 	
-	float2 Velocity;
-	if (all(EncodedVelocity.xy > 0))
+	float2 Velocity = 0.0f;
+
+	if (EncodedVelocity.x > 0.0f)
 	{
 		Velocity = DecodeVelocityFromTexture(EncodedVelocity).xy;
 	}
 	else
 	{
 		float4 ClipPos;
-		ClipPos.xy = SvPositionToScreenPosition(float4(PixelPos.xy, 0, 1)).xy;
+		ClipPos.xy = SvPositionToScreenPosition(float4(PixelPos.xy + 0.5f, 0.0f, 1.0f)).xy;
 		ClipPos.z = Depth;
 		ClipPos.w = 1;
 
@@ -177,13 +171,22 @@ void VelocityCombineMain(
 			float2 PrevScreen = PrevClipPos.xy / PrevClipPos.w;
 			Velocity = ClipPos.xy - PrevScreen.xy;
 		}
-		else
-		{
-			Velocity = EncodedVelocity.xy;
-		}
 	}
 
-	float2 OutVelocity = Velocity * float2(0.5, -0.5) * View.ViewSizeAndInvSize.xy;
+	float2 OutVelocity = Velocity * float2(0.5, -0.5) * CombinedVelocity_ViewportSize;
+
+#if SUPPORT_ALTERNATE_MOTION_VECTOR
+	const float2 EncodedAltVelocity = AlternateMotionVectorsTexture[PixelPos];
+
+	if (EncodedAltVelocity.x > 0.0f)
+	{
+		float2 DecodedVelocity = DecodeVelocityFromTexture(float4(EncodedAltVelocity, 0.0f, 0.0f)).xy;
+
+		// we encode in the orientation DLSS expects, so the extra negate it to make them consistent with the ones
+		// generated above
+		OutVelocity = -1.0f * DecodedVelocity * CombinedVelocity_ViewportSize;
+	}
+#endif
 
 	OutVelocityCombinedTexture[OutputPixelPos].xy = -OutVelocity;
 #endif

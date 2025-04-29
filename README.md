@@ -1,5 +1,7 @@
 # UCMS - Ultimate CommonUI Menu System
 
+**A version using a custom C++ plugin will come one day, this project won't receive any big update in the meantime.**
+
 <img src="https://i.imgur.com/uzxaYqd.png" width=49%> <img src="https://i.imgur.com/afaZQmT.png" width=49%>
 
 ## Features 
@@ -15,7 +17,7 @@
   - Keyboard arrows navigation (validate with space)
   - Simple notification system
   - Partial French localization
-  - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [for the last commits I didn't take the time to actually add each text in the string table]
+  - ~~Every text is on a single string table so it's easier to edit it and to make localization (it's also faster)~~ [it's not the case anymore, only strings from the earlier versions are in a single string table. I will later replace it to only use string table for repetitive texts like "Yes", "No", "Apply", etc.]
   - Practically no canvas panel is used, so the performances are pretty good since canvas panels have high performance demands
   - Easy integration in your own project. For more informations, check out the [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki/Integrate-to-your-own-project)
 
@@ -28,7 +30,7 @@ You can already experience this City Sample build in it current stage by clickin
 The goal of this project is to make the ultimate game menu system that has everything you need, from a complete options menu (only graphics settings at the moment) that feature practically all settings that can be useful for normal and more advanced users including settings for common plugins/assets, to a beautiful main menu. And all of that free for everyone to use and/or contribute to save hours and hours of making a menu system that doesn't even necessarily feature as many options as this one. Everything is in Blueprint and is easily reusable/customizable whether you want to use it as it is or you want to build your own menu by using this one as a base. You can check out the WIP [Wiki](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/wiki) for more informations. To make things even better, everyone can contribute, because the more people contribute, the better it will represent what the community wants. I will then create a branch with all community changes.
 
 ## Branches
-There are currently 4 different branches:
+There are currently 5 other branches:
 
 - [main](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main): This branch uses Unreal Engine 5.4, it is the default branch and the one you should use if your game is not using the [NvRTX Branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/NvRTX) or the [5.3 branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.3).
 - [5.3](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/5.3): This branch is for peoples who still use Unreal Engine 5.3, but since it's an outdated Unreal Engine 5 version, it won't be updated anymore. Switch to the [main branch](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/tree/main) for latest updates.
@@ -41,9 +43,9 @@ If you have a missing plugins error, it's probably because I forgot to disable t
 The plugins that are used in the menu need to be installed in order for this to properly work. Fortunately, they are now included in the project files.  Here is a table of these plugins: 
 | Name | Description |
 | ------------- | ------------- |
-| [NVIDIA DLSS 3.7](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS 3.7 is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
+| [NVIDIA DLSS 4](https://developer.nvidia.com/rtx/dlss/get-started#ue-version)   |  NVIDIA DLSS is a suite of AI rendering technologies powered by Tensor Cores on GeForce RTX GPUs for faster frame rates, better image quality, and great responsiveness.  |
 | [AMD FidelityFX Super Resolution 3.1](https://gpuopen.com/learn/ue-fsr3/)  |  The AMD FidelityFX Super Resolution 3 (FSR 3) plugin for Unreal Engine provides an open source, high-quality solution for producing high resolution frames from lower resolution inputs and a frame interpolation technique which can increase the frame rate up to twice the input rate to improve smoothness of animations and frame pacing.  |
-| [Intel Xe Super Sampling](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
+| [Intel Xe Super Sampling 2](https://github.com/GameTechDev/XeSSUnrealPlugin)  |  Intel XeSS enables an innovative framerate boosting technology supported by Intel Arc graphics cards and other GPU vendors. Using AI deep-learning to perform upscaling, XeSS offers higher framerates without degrading the image quality.  |
 | [Async Loading Screen](https://github.com/truong-bui/AsyncLoadingScreen)  |  Async Loading Screen allows you to easily configure a Loading Screen System in the project settings, and automatically add a Loading Screen whenever you open a new level. Async Loading Screen also comes with pre-design UI layouts and default icons that make it easy to custom your loading screen in a few minutes.  |
 
 This was external plugins, but I use other plugins integrated in the Engine:
@@ -57,22 +59,33 @@ This was external plugins, but I use other plugins integrated in the Engine:
 
 ## Conditions of Use
   - You can use this freely in your projects
-  - You have to credit me:
-    - It can be "UCMS Base UI" or anything you want but you need to add at least the name of this project.
+  - You have to credit me
 
 ## Recommendations
 I recommend launching the game in "Standalone Game" mode instead of "Selected Viewport" or "New Editor Window (PIE)" mode. This way, if it crashes, it won't crash the whole engine, and you can change resolution settings, fullscreen, etc, and actually see the changes. And it's better because it's closer to what players will experience.
 
 ## Known Bugs
-None for now.
+- You can't change the slider or switcher value with a Gamepad or Keyboard in 5.5. It happens because I can't set the Navigation Mode to "Custom" in the widgets. It works on "primitive" widgets like the default slider, but I can't change it anymore for custom widgets (which are used everywhere here...). It wasn't the case in 5.4, so I don't know why it doesn't work anymore. I will try to find a workaround, but for now, you can only use the mouse to change the value of sliders and switchers. (see [#29](https://github.com/Adriwin06/Ultimate-CommonUI-Menu-System/issues/29))
+- FSR 3 Frame Generation doesn's want to be enabled, it doesn't seems to do anything. It is probably a problem in the plugin configuration.
+- DLSS Ray Reconstruction doesn't work properly, it destroys the image quality (probably a prroblem in how it is enabled).
+- The screen might stay black for some seconds after the intro logo
 
 ## To do
+  - Improve the code and make it more efficient (the more I look into it the more I see that a lot of things need to be improved)
+  - Add new upscalers settings like XeSS frame generation, DLSS model (Transformer or CNN), and merge all 3 frame generations in a single switcher setting.
+  - Fix all bugs.
   - Enhance Enhanced Input system implementation (Available in experimental version in [this branch](https://github.com/Adriwin06/Ultimate-UE5-CommonUI-Full-Game-Menu-System/tree/Enhanced-Inputs))
   - Add comparison images for each setting, and custom description widgets when it's needed
-  - Fix all bugs.
 
 ### To maybe do in C++
+  - A plugin that will make everything way easier to work with while being more performant. It will still be mostly Blueprint, but the repeptitve tasks like adding a new setting that is saved will be handled automatically by the plugin.
   - CommonBoundActionBar actions, instead of hidden action button in the widget that got displayed in this bar.
   - Update the style of buttons in the CommonBoundActionBar of the "Options" menu when switching between controller and mouse & keyboard inputs, avoiding the use of two separate bars with different styles that are hidden based on the input type.
   - Prompt system.
   - Tab List View automation to eliminate the need for separate button Blueprint for each tab button.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Adriwin06/Ultimate-CommonUI-Menu-System&type=Date&theme=dark" />
+  <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Adriwin06/Ultimate-CommonUI-Menu-System&type=Date" />
+  <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Adriwin06/Ultimate-CommonUI-Menu-System&type=Date" />
+</picture>

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -51,6 +51,7 @@ class IDLSSModuleInterface : public IModuleInterface
 		virtual float GetResolutionFractionForQuality(int32 Quality) const = 0;
 		virtual FDLSSUpscaler* GetDLSSUpscaler() const = 0;
 		virtual TSharedPtr< ISceneViewExtension, ESPMode::ThreadSafe> GetDLSSUpscalerViewExtension() const = 0;
+		virtual bool GetIsRRSupportedByRHI() const = 0;
 };
 
 class FDLSSModule final: public IDLSSModuleInterface
@@ -70,6 +71,8 @@ public:
 	virtual FDLSSUpscaler* GetDLSSUpscaler() const override;
 
 	virtual TSharedPtr< ISceneViewExtension, ESPMode::ThreadSafe> GetDLSSUpscalerViewExtension() const override;
+
+	virtual bool GetIsRRSupportedByRHI() const override;
 
 private:
 

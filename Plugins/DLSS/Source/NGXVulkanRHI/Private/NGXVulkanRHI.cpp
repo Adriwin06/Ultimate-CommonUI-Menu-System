@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -52,6 +52,7 @@ public:
 	FNGXVulkanRHI(const FNGXRHICreateArguments& Arguments);
 	virtual void ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments& InArguments, FDLSSStateRef InDLSSState) final;
 	virtual ~FNGXVulkanRHI();
+	virtual bool IsRRSupportedByRHI() const override { return false; }
 private:
 
 	IVulkanDynamicRHI* VulkanRHI = nullptr;
@@ -108,7 +109,6 @@ FNGXVulkanRHI::FNGXVulkanRHI(const FNGXRHICreateArguments& Arguments)
 	check(VulkanRHI);
 
 	const FString NGXLogDir = GetNGXLogDirectory();
-	IPlatformFile::GetPlatformPhysical().CreateDirectoryTree(*NGXLogDir);
 
 	bIsIncompatibleAPICaptureToolActive = IsIncompatibleAPICaptureToolActive();
 
@@ -357,6 +357,20 @@ void FNGXVulkanRHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArgument
 		DlssRREvalParams.pInNormals = &InNormalTexture;
 		NVSDK_NGX_Resource_VK InRoughnessTexture = NGXVulkanResourceFromRHITexture(InArguments.InputRoughness);
 		DlssRREvalParams.pInRoughness = &InRoughnessTexture;
+
+#if SUPPORT_GUIDE_GBUFFER
+		if (InArguments.InputReflectionHitDistance)
+		{
+			NVSDK_NGX_Resource_VK InReflectionDistanceTexture = NGXVulkanResourceFromRHITexture(InArguments.InputReflectionHitDistance);
+			DlssRREvalParams.pInSpecularHitDistance = &InReflectionDistanceTexture;
+			DlssRREvalParams.InSpecularHitDistanceSubrectBase.X = 0;
+			DlssRREvalParams.InSpecularHitDistanceSubrectBase.Y = 0;
+
+			// Yes, the interface takes a non-const ptr as an argument
+			DlssRREvalParams.pInWorldToViewMatrix = const_cast<float*>(InArguments.ViewMatrix);
+			DlssRREvalParams.pInViewToClipMatrix = const_cast<float*>(InArguments.ProjectionMatrix);
+		}
+#endif
 
 		NVSDK_NGX_Result ResultEvaluate = NGX_VULKAN_EVALUATE_DLSSD_EXT(
 			VulkanCommandBuffer,

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -25,17 +25,52 @@ enum class EDLSSSettingOverride : uint8
 	UseProjectSettings UMETA(DisplayName = "Use project settings"),
 };
 
-UENUM()
+UENUM(BlueprintType)
 enum class EDLSSPreset : uint8
 {
 	Default=0 UMETA(ToolTip = "default behavior, preset specified per DLSS SDK release"),
-	A=1 UMETA(ToolTip = "force preset A"),
-	B=2 UMETA(ToolTip = "force preset B"),
-	C=3 UMETA(ToolTip = "force preset C"),
-	D=4 UMETA(ToolTip = "force preset D"),
-	E=5 UMETA(ToolTip = "force preset E"),
-	F=6 UMETA(ToolTip = "force preset F"),
-	G=7 UMETA(ToolTip = "force preset G"),
+	A=1  UMETA(ToolTip = "Force preset A, For Perf/Balanced/Quality modes, An older variant best suited to combat ghosting for elements with missing inputs (such as motion vectors)", DisplayName = "Preset A"),
+	B=2  UMETA(ToolTip = "Force preset B, For Ultra Perf mode, Similar to Preset A but for Ultra Performance mode", DisplayName = "Preset B"),
+	C=3  UMETA(ToolTip = "Force preset C, For Perf/Balanced/Quality modes, Preset which generally favors current frame information. Generally well-suited for fast-paced game content", DisplayName = "Preset C"),
+	D=4  UMETA(ToolTip = "Force preset D, For Perf/Balanced/Quality modes, Similar to Preset E. Preset E is generally recommended over Preset D.", DisplayName = "Preset D"),
+	E=5  UMETA(ToolTip = "Force preset E, For Perf/Balanced/Quality modes, The default preset for Perf/Balanced/Quality modes. Generally recommended preset for most performance and image stability.", DisplayName = "Preset E"),
+	F=6  UMETA(ToolTip = "Force preset F, For Ultra Perf/DLAA modes, The default preset for Ultra Perf and DLAA modes.", DisplayName = "Preset F"),
+	G=7  UMETA(ToolTip = "Force preset G, Do not use – reverts to default behavior", Hidden),
+	H=8  UMETA(ToolTip = "Force preset H, Do not use – reverts to default behavior", Hidden),
+	I=9  UMETA(ToolTip = "Force preset I, Do not use – reverts to default behavior", Hidden),
+	J=10 UMETA(ToolTip = "Force preset J, Similar to preset K. Preset J might exhibit slightly less ghosting at the cost of extra flickering. Preset K is generally recommended over preset J", DisplayName = "Preset J"),
+	K=11 UMETA(ToolTip = "Force preset K, Default preset for DLAA/Perf/Balanced/Quality modes that is transformer based. Best image quality preset at a higher performance cost.",DisplayName= "Preset K"),
+	L=12 UMETA(ToolTip = "Force preset L, Do not use - Reverts to default behavior", Hidden),
+	M=13 UMETA(ToolTip = "Force preset M, Do not use - Reverts to default behavior", Hidden),
+	N=14 UMETA(ToolTip = "Force preset N, Do not use - Reverts to default behavior", Hidden),
+	O=15 UMETA(ToolTip = "Force preset O, Do not use - Reverts to default behavior", Hidden),
+
+	//Please add new presets above this line.
+	MAX UMETA(Hidden)
+};
+
+UENUM(BlueprintType)
+enum class EDLSSRRPreset : uint8
+{
+	Default=0 UMETA(ToolTip="Default behavior, may or may not change after OTA"),
+	A =  1 UMETA(ToolTip = "Force preset A",Hidden),
+	B =  2 UMETA(ToolTip = "Force preset B",Hidden),
+	C =  3 UMETA(ToolTip = "Force preset C",Hidden),
+	D =  4 UMETA(ToolTip = "Force preset D, Default model (transformer)",DisplayName = "Preset D"),
+	E =  5 UMETA(ToolTip = "Force preset E, Latest transformer model (must use if DoF guide is needed)",DisplayName = "Preset E"),
+	F =  6 UMETA(ToolTip = "Force preset F, Do not use – reverts to default behavior", Hidden),
+	G =  7 UMETA(ToolTip = "Force preset G, Do not use – reverts to default behavior", Hidden),
+	H =  8 UMETA(ToolTip = "Force preset H, Do not use – reverts to default behavior", Hidden),
+	I =  9 UMETA(ToolTip = "Force preset I, Do not use – reverts to default behavior", Hidden),
+	J = 10 UMETA(ToolTip = "Force preset J, Do not use – reverts to default behavior", Hidden),
+	K = 11 UMETA(ToolTip = "Force preset K, Do not use – reverts to default behavior", Hidden),
+	L = 12 UMETA(ToolTip = "Force preset L, Do not use – reverts to default behavior", Hidden),
+	M = 13 UMETA(ToolTip = "Force preset M, Do not use – reverts to default behavior", Hidden),
+	N = 14 UMETA(ToolTip = "Force preset N, Do not use – reverts to default behavior", Hidden),
+	O = 15 UMETA(ToolTip = "Force preset O, Do not use – reverts to default behavior", Hidden),
+
+	//Please add new presets above this line.
+	MAX UMETA(Hidden)
 };
 
 UCLASS(Config = Engine, ProjectUserConfig)
@@ -144,5 +179,33 @@ public:
 	/** DLSS ultra performance mode preset setting. Allows selecting a different DL model than the default */
 	UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLSS Ultra Performance Preset", AdvancedDisplay)
 		EDLSSPreset DLSSUltraPerformancePreset = EDLSSPreset::Default;
+
+	UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLAA-RR Preset", AdvancedDisplay)
+		EDLSSRRPreset DLAARRPreset = EDLSSRRPreset::Default;
+
+	/** DLSS-RR quality mode preset setting. Allows selecting a different DL model than the default */
+	// NOT IMPLEMENTED YET UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLSS Ultra Quality Preset", AdvancedDisplay)
+		EDLSSRRPreset DLSSRRUltraQualityPreset = EDLSSRRPreset::Default;
+
+	/** DLSS-RR quality mode preset setting. Allows selecting a different DL model than the default */
+	UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLSS-RR Quality Preset", AdvancedDisplay)
+		EDLSSRRPreset DLSSRRQualityPreset = EDLSSRRPreset::Default;
+
+	/** DLSS-RR balanced mode preset setting. Allows selecting a different DL model than the default */
+	UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLSS-RR Balanced Preset", AdvancedDisplay)
+		EDLSSRRPreset DLSSRRBalancedPreset = EDLSSRRPreset::Default;
+
+	/** DLSS-RR performance mode preset setting. Allows selecting a different DL model than the default */
+	UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLSS-RR Performance Preset", AdvancedDisplay)
+		EDLSSRRPreset DLSSRRPerformancePreset = EDLSSRRPreset::Default;
+
+	/** DLSS-RR ultra performance mode preset setting. Allows selecting a different DL model than the default */
+	UPROPERTY(Config, EditAnywhere, Category = "General Settings", DisplayName = "DLSS-RR Ultra Performance Preset", AdvancedDisplay)
+		EDLSSRRPreset DLSSRRUltraPerformancePreset = EDLSSRRPreset::Default;
+
+public:
+
+	virtual void PostInitProperties();
+
 };
 

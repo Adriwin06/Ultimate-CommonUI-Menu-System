@@ -22,52 +22,66 @@
 
 #include "XeSSModule.h"
 
-#include "XeSSMacros.h"
+#include "XeSSCommonMacros.h"
 
 #include "Engine/Engine.h"
 #include "Interfaces/IPluginManager.h"
+#include "Misc/CommandLine.h"
+#include "Misc/CoreDelegates.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Modules/ModuleManager.h"
 #include "Windows/WindowsHWrapper.h"
+#include "XeSSCommonUtil.h"
 #include "XeSSRHI.h"
+#include "XeSSSDKLoader.h"
 #include "XeSSUpscaler.h"
 #include "XeSSUtil.h"
 
-#define LOCTEXT_NAMESPACE "FXeSSPlugin"
-DEFINE_LOG_CATEGORY(LogXeSS);
+DEFINE_LOG_CATEGORY_STATIC(LogXeSSModule, Log, All);
 
-TAutoConsoleVariable<FString> GCVarXeSSVersion(
-	TEXT("r.XeSS.Version"),
-	TEXT("Unknown"),
-	TEXT("Show XeSS SDK's version"),
+#define XESS_UNSUPPORTED_RHI_MESSAGE TEXT("RHI not supported by XeSS, RHI: %s")
+
+static TAutoConsoleVariable<bool> CVarXeSSSupported(
+	TEXT("r.XeSS.Supported"),
+	false,
+	TEXT("If XeSS is supported."),
 	ECVF_ReadOnly);
 
 static TUniquePtr<FXeSSUpscaler> XeSSUpscaler;
 static TUniquePtr<FXeSSRHI> XeSSRHI;
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
 static TSharedPtr<FXeSSUpscalerViewExtension, ESPMode::ThreadSafe> XeSSUpscalerViewExtension;
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+#endif
 
-void FXeSSPlugin::StartupModule()
+void FXeSSModule::StartupModule()
 {
 	TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin("XeSS");
 
 	// Log plugin version info
-	UE_LOG(LogXeSS, Log, TEXT("XeSS plugin version: %u, version name: %s"), 
+	UE_LOG(LogXeSSModule, Log, TEXT("XeSS plugin version: %u, version name: %s"),
 		Plugin->GetDescriptor().Version,
 		*Plugin->GetDescriptor().VersionName
 	);
 
-	// Do not load the library if XeSS is explicitly disabled
-	if (FParse::Param(FCommandLine::Get(), TEXT("xessdisabled")))
+	// Do not init module if XeSS is explicitly disabled
+	if (FParse::Param(FCommandLine::Get(), TEXT("XeSSDisabled")))
 	{
-		UE_LOG(LogXeSS, Log, TEXT("XeSS disabled by command line option"));
+		UE_LOG(LogXeSSModule, Log, TEXT("XeSS disabled by command line option"));
 		return;
 	}
 
-	// XeSS is only currently supported for DX12
-	const FString RHIName = GDynamicRHI->GetName();
-	if (RHIName != TEXT("D3D12"))
+	int32 XeSSLogLevel = 0;
+	if (FParse::Value(FCommandLine::Get(), TEXT("XeSSLogLevel="), XeSSLogLevel))
+	{
+		auto CVarXeSSLogLevel = IConsoleManager::Get().FindConsoleVariable(TEXT("r.XeSS.LogLevel"));
+		CVarXeSSLogLevel->Set(XeSSLogLevel);
+		UE_LOG(LogXeSSModule, Log, TEXT("XeSS SDK log level set by command line option, value: %d"), XeSSLogLevel);
+	}
+
+	check(GDynamicRHI);
+	const FString RHIName = FString(GDynamicRHI->GetName());
+	if (RHIName != TEXT("D3D12") && RHIName != TEXT("D3D11") && RHIName != TEXT("Vulkan"))
 	{
 		const auto CVarXeSSEnabled = IConsoleManager::Get().FindConsoleVariable(TEXT("r.XeSS.Enabled"));
 
@@ -75,51 +89,24 @@ void FXeSSPlugin::StartupModule()
 		{
 			if (InVariable->GetBool())
 			{
-				XeSSUtil::AddErrorMessageToScreen(
-					FString::Printf(TEXT("Current RHI %s doesn't support XeSS, please switch to D3D12 to use it"), *RHIName),
-					XeSSUtil::ON_SCREEN_MESSAGE_KEY_NOT_SUPPORT_RHI
-				);
+				XeSSUtil::AddErrorMessageToScreen(FString::Printf(XESS_UNSUPPORTED_RHI_MESSAGE, *RHIName), XeSSUtil::ON_SCREEN_MESSAGE_KEY_UNSUPPORTED_RHI);
 			}
 			else
 			{
-				XeSSUtil::RemoveMessageFromScreen(XeSSUtil::ON_SCREEN_MESSAGE_KEY_NOT_SUPPORT_RHI);
+				XeSSUtil::RemoveMessageFromScreen(XeSSUtil::ON_SCREEN_MESSAGE_KEY_UNSUPPORTED_RHI);
 			}
 		}));
-		UE_LOG(LogXeSS, Log, TEXT("Current RHI %s doesn't support XeSS, please switch to D3D12 to use it"), *RHIName);
+		UE_LOG(LogXeSSModule, Log, XESS_UNSUPPORTED_RHI_MESSAGE, *RHIName);
 		return;
 	}
 
-	// Add DLL search path for XeFX.dll and XeFX_Loader.dll
-	SetDllDirectory(*FPaths::Combine(Plugin->GetBaseDir(), TEXT("/Binaries/ThirdParty/Win64")));
-
-	// Get XeSS SDK version
-	xess_version_t XeSSLibVersion;
-	if (xessGetVersion(&XeSSLibVersion) != XESS_RESULT_SUCCESS)
-	{
-		UE_LOG(LogXeSS, Warning, TEXT("Error when calling XeSS function: xessGetVersion"));
-		return;
-	}
-
-	TStringBuilder<32> VersionStringBuilder;
-	VersionStringBuilder << "XeSS version: " << XeSSLibVersion.major << "." << XeSSLibVersion.minor << "." << XeSSLibVersion.patch;
-	GCVarXeSSVersion->Set(VersionStringBuilder.GetData());
-
-	UE_LOG(LogXeSS, Log, TEXT("Loading XeSS library %d.%d.%d on %s RHI %s"),
-		XeSSLibVersion.major, XeSSLibVersion.minor, XeSSLibVersion.patch,
-		RHIVendorIdToString(), *RHIName);
-
-	XeSSRHI.Reset(new FXeSSRHI(GDynamicRHI));
+	IXeSSRHIModule& XeSSRHIModule = FModuleManager::LoadModuleChecked<IXeSSRHIModule>(*FString::Format(TEXT("XeSS{0}RHI"), { RHIName }));
+	XeSSRHI.Reset(XeSSRHIModule.CreateXeSSRHI());
 	check(XeSSRHI);
 
-	bool bXeSSInitialized = XeSSRHI->IsXeSSInitialized();
-
-	if (bXeSSInitialized)
+	if (XeSSRHI->Initialize())
 	{
 		XeSSUpscaler.Reset(new FXeSSUpscaler(XeSSRHI.Get()));
-		check(XeSSUpscaler);
-#if XESS_ENGINE_VERSION_GEQ(5, 1)
-		XeSSUpscalerViewExtension = FSceneViewExtensions::NewExtension<FXeSSUpscalerViewExtension>(XeSSUpscaler.Get());
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
 	}
 	else
 	{
@@ -127,45 +114,54 @@ void FXeSSPlugin::StartupModule()
 		return;
 	}
 
-	UE_LOG(LogXeSS, Log, TEXT("XeSS successfully initialized"));
+	FCoreDelegates::OnPostEngineInit.AddRaw(this, &FXeSSModule::OnPostEngineInit);
+	CVarXeSSSupported->Set(true);
+	UE_LOG(LogXeSSModule, Log, TEXT("XeSS successfully initialized"));
 }
 
-void FXeSSPlugin::ShutdownModule()
+void FXeSSModule::ShutdownModule()
 {
-	UE_LOG(LogXeSS, Log, TEXT("XeSS plugin shut down"));
+	UE_LOG(LogXeSSModule, Log, TEXT("XeSS shut down"));
 
+	FCoreDelegates::OnPostEngineInit.RemoveAll(this);
 #if XESS_ENGINE_VERSION_GEQ(5, 1)
 	XeSSUpscalerViewExtension = nullptr;
-#else // XESS_ENGINE_VERSION_GEQ(5, 1)
-	// restore default screen percentage driver and upscaler
+#else
+	// Restore default screen percentage driver and upscaler
 	GCustomStaticScreenPercentage = nullptr;
 
-#if ENGINE_MAJOR_VERSION < 5
+	#if ENGINE_MAJOR_VERSION < 5
 	GTemporalUpscaler = ITemporalUpscaler::GetDefaultTemporalUpscaler();
-#endif // ENGINE_MAJOR_VERSION < 5
+	#endif
 
-#endif // XESS_ENGINE_VERSION_GEQ(5, 1)
+#endif
 
 	XeSSRHI.Reset();
 	XeSSUpscaler.Reset();
 }
 
-FXeSSRHI* FXeSSPlugin::GetXeSSRHI() const
+void FXeSSModule::OnPostEngineInit()
+{
+#if XESS_ENGINE_VERSION_GEQ(5, 1)
+	check(XeSSUpscaler);
+	XeSSUpscalerViewExtension = FSceneViewExtensions::NewExtension<FXeSSUpscalerViewExtension>(XeSSUpscaler.Get());
+#endif
+}
+
+FXeSSRHI* FXeSSModule::GetXeSSRHI() const
 {
 	return XeSSRHI.Get();
 }
 
-FXeSSUpscaler* FXeSSPlugin::GetXeSSUpscaler() const
+FXeSSUpscaler* FXeSSModule::GetXeSSUpscaler() const
 {
 	return XeSSUpscaler.Get();
 }
 
-bool FXeSSPlugin::IsXeSSSupported() const
+bool FXeSSModule::IsXeSSSupported() const
 {
 	// XeSSRHI will be reset if XeSS is not supported(fail to initialize XeSS)
 	return XeSSRHI.IsValid();
 }
 
-#undef LOCTEXT_NAMESPACE
-IMPLEMENT_MODULE(FXeSSPlugin, XeSSPlugin)
-
+IMPLEMENT_MODULE(FXeSSModule, XeSSCore)

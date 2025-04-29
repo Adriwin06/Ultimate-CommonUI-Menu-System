@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -51,6 +51,7 @@ public:
 	
 	virtual void ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments& InArguments, FDLSSStateRef InDLSSState) final;
 	virtual ~FNGXD3D11RHI();
+	virtual bool IsRRSupportedByRHI() const override { return false; }
 private:
 
 	ID3D11DynamicRHI* D3D11RHI = nullptr;
@@ -124,8 +125,7 @@ FNGXD3D11RHI::FNGXD3D11RHI(const FNGXRHICreateArguments& Arguments)
 	bIsIncompatibleAPICaptureToolActive = IsIncompatibleAPICaptureToolActive(Direct3DDevice);
 	
 	const FString NGXLogDir = GetNGXLogDirectory();
-	IPlatformFile::GetPlatformPhysical().CreateDirectoryTree(*NGXLogDir);
-
+	
 	NVSDK_NGX_Result ResultInit = Init_NGX_D3D11(Arguments, *NGXLogDir, Direct3DDevice, CommonFeatureInfo());
 	UE_LOG(LogDLSSNGXD3D11RHI, Log, TEXT("NVSDK_NGX_D3D11_Init (Log %s) -> (%u %s)"), *NGXLogDir, ResultInit, GetNGXResultAsString(ResultInit));
 	
@@ -317,6 +317,19 @@ void FNGXD3D11RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 
 		DlssRREvalParams.pInNormals = D3D11RHI->RHIGetResource(InArguments.InputNormals);
 		DlssRREvalParams.pInRoughness = D3D11RHI->RHIGetResource(InArguments.InputRoughness);
+
+#if SUPPORT_GUIDE_GBUFFER
+		if (InArguments.InputReflectionHitDistance)
+		{
+			DlssRREvalParams.pInSpecularHitDistance = D3D11RHI->RHIGetResource(InArguments.InputReflectionHitDistance);
+			DlssRREvalParams.InSpecularHitDistanceSubrectBase.X = 0;
+			DlssRREvalParams.InSpecularHitDistanceSubrectBase.Y = 0;
+
+			// Yes, the interface takes a non-const ptr as an argument
+			DlssRREvalParams.pInWorldToViewMatrix = const_cast<float*>(InArguments.ViewMatrix);
+			DlssRREvalParams.pInViewToClipMatrix = const_cast<float*>(InArguments.ProjectionMatrix);
+		}
+#endif
 
 		NVSDK_NGX_Result ResultEvaluate = NGX_D3D11_EVALUATE_DLSSD_EXT(
 			Direct3DDeviceIMContext,

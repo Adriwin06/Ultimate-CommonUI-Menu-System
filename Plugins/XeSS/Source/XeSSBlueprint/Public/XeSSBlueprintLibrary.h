@@ -28,6 +28,7 @@
 
 #include "XeSSBlueprintLibrary.generated.h"
 
+class FXeSSModule;
 class FXeSSRHI;
 class FXeSSUpscaler;
 
@@ -45,42 +46,42 @@ enum class EXeSSQualityMode : uint8
 	AntiAliasing		UMETA(DisplayName = "Anti-Aliasing"),
 };
 
-UCLASS(Blueprintable, BlueprintType, meta = (DisplayName = "XeSS Blueprint Library"))
+UCLASS()
 class  UXeSSBlueprintLibrary : public UBlueprintFunctionLibrary
 {
-	friend class FXeSSBlueprint;
 	GENERATED_BODY()
 
 public:
-	/** Checks if Intel XeSS is supported on the current GPU */
-	UFUNCTION(BlueprintPure, Category = "XeSS", meta = (DisplayName = "Is Intel(R) XeSS Supported"))
+	static void Init(FXeSSModule* InXeSSModule);
+	static void Deinit();
+
+	/** Check if Intel XeSS-SR is supported on the current Platform */
+	UFUNCTION(BlueprintPure, Category = "XeSS-SR", meta = (DisplayName = "Is Intel(R) XeSS-SR Supported"))
 	static XESSBLUEPRINT_API bool IsXeSSSupported();
 
-	/** Lists all available Intel XeSS quality modes*/
-	UFUNCTION(BlueprintPure, Category = "XeSS", meta = (DisplayName = "Get Supported Intel(R) XeSS Quality Modes"))
+	/** List all available Intel XeSS-SR quality modes */
+	UFUNCTION(BlueprintPure, Category = "XeSS-SR", meta = (DisplayName = "Get Supported Intel(R) XeSS-SR Quality Modes"))
 	static XESSBLUEPRINT_API TArray<EXeSSQualityMode> GetSupportedXeSSQualityModes();
 
-	/** Gets current Intel XeSS quality mode*/
-	UFUNCTION(BlueprintPure, Category = "XeSS", meta = (DisplayName = "Get Current Intel(R) XeSS Quality Mode"))
+	/** Get the current Intel XeSS-SR quality mode */
+	UFUNCTION(BlueprintPure, Category = "XeSS-SR", meta = (DisplayName = "Get Current Intel(R) XeSS-SR Quality Mode"))
 	static XESSBLUEPRINT_API EXeSSQualityMode GetXeSSQualityMode();
 
-	/** Gets the default Intel XeSS quality mode for the given Screen Resolution*/
-	UFUNCTION(BlueprintPure, Category = "XeSS", meta = (DisplayName = "Get Default Intel(R) XeSS Quality Mode"))
+	/** Get the default Intel XeSS-SR quality mode for the given screen resolution */
+	UFUNCTION(BlueprintPure, Category = "XeSS-SR", meta = (DisplayName = "Get Default Intel(R) XeSS-SR Quality Mode"))
 	static XESSBLUEPRINT_API EXeSSQualityMode GetDefaultXeSSQualityMode(FIntPoint ScreenResolution);
 
-	/** Sets the selected Intel XeSS quality mode*/
-	UFUNCTION(BlueprintCallable, Category = "XeSS", meta = (DisplayName = "Set Intel(R) XeSS Quality Mode"))
+	/** Set the selected Intel XeSS-SR quality mode */
+	UFUNCTION(BlueprintCallable, Category = "XeSS-SR", meta = (DisplayName = "Set Intel(R) XeSS-SR Quality Mode"))
 	static XESSBLUEPRINT_API void SetXeSSQualityMode(EXeSSQualityMode QualityMode);
 
-	/** Gets Intel XeSS quality mode information*/
-	UFUNCTION(BlueprintCallable, Category = "XeSS", meta = (DisplayName = "Get Intel(R) XeSS Quality Mode Information"))
+	/** Get Intel XeSS-SR quality mode information, e.g., screen percentage */
+	UFUNCTION(BlueprintCallable, Category = "XeSS-SR", meta = (DisplayName = "Get Intel(R) XeSS-SR Quality Mode Information"))
 	static XESSBLUEPRINT_API bool GetXeSSQualityModeInformation(EXeSSQualityMode QualityMode, float& ScreenPercentage);
 
 private:
-	static bool bXeSSSupported;
-
-#if USE_XESS
+	static bool bInitialized;
+	static bool bIsXeSSSupported;
 	static FXeSSRHI* XeSSRHI;
 	static FXeSSUpscaler* XeSSUpscaler;
-#endif
 };

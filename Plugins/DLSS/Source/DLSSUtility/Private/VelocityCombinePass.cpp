@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -27,6 +27,7 @@ const int32 kVelocityCombineComputeTileSizeY = FComputeShaderUtils::kGolden2DGro
 
 
 class FDilateMotionVectorsDim : SHADER_PERMUTATION_BOOL("DILATE_MOTION_VECTORS");
+class FSupportAlternateMotionVectorDim : SHADER_PERMUTATION_BOOL("SUPPORT_ALTERNATE_MOTION_VECTOR");
 
 class FVelocityCombineCS : public FGlobalShader
 {
@@ -46,7 +47,7 @@ public:
 		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEX"), kVelocityCombineComputeTileSizeX);
 		OutEnvironment.SetDefine(TEXT("THREADGROUP_SIZEY"), kVelocityCombineComputeTileSizeY);
 	}
-	using FPermutationDomain = TShaderPermutationDomain<FDilateMotionVectorsDim>;
+	using FPermutationDomain = TShaderPermutationDomain<FDilateMotionVectorsDim, FSupportAlternateMotionVectorDim>;
 
 	DECLARE_GLOBAL_SHADER(FVelocityCombineCS);
 	SHADER_USE_PARAMETER_STRUCT(FVelocityCombineCS, FGlobalShader);
@@ -68,9 +69,11 @@ public:
 		SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, OutVelocityCombinedTexture)
 		SHADER_PARAMETER_STRUCT(FScreenPassTextureViewportParameters, CombinedVelocity)
 
+		// motion vectors to consider instead of the standard ones from the engine
+		SHADER_PARAMETER_RDG_TEXTURE(Texture2D<float2>, AlternateMotionVectorsTexture)
+		
 	END_SHADER_PARAMETER_STRUCT()
 };
-
 
 IMPLEMENT_GLOBAL_SHADER(FVelocityCombineCS, "/Plugin/DLSS/Private/VelocityCombine.usf", "VelocityCombineMain", SF_Compute);
 
@@ -83,6 +86,7 @@ FRDGTextureRef AddVelocityCombinePass(
 #endif
 	FRDGTextureRef InSceneDepthTexture,
 	FRDGTextureRef InVelocityTexture,
+	FRDGTextureRef AlternateMotionVectorTexture,
 	FIntRect InputViewRect,
 	FIntRect DLSSOutputViewRect,
 	FVector2f TemporalJitterPixels,
@@ -97,12 +101,13 @@ FRDGTextureRef AddVelocityCombinePass(
 		FClearValueBinding::Black,
 		TexCreate_ShaderResource | TexCreate_UAV);
 	const TCHAR* OutputName = TEXT("DLSSCombinedVelocity");
-
 	FRDGTextureRef CombinedVelocityTexture = GraphBuilder.CreateTexture(
 		CombinedVelocityDesc,
 		OutputName);
 
 	FVelocityCombineCS::FParameters* PassParameters = GraphBuilder.AllocParameters<FVelocityCombineCS::FParameters>();
+
+	const bool bHasAlternateMotionVectors = AlternateMotionVectorTexture != nullptr;
 
 	// input velocity
 	{
@@ -120,6 +125,12 @@ FRDGTextureRef AddVelocityCombinePass(
 		PassParameters->DepthTexture = InSceneDepthTexture;
 		PassParameters->DepthTextureSampler = TStaticSamplerState<SF_Point>::GetRHI();
 	}
+
+	// replacement motion vectors for items like reflections that DLSS might prefer to track	
+	{
+		PassParameters->AlternateMotionVectorsTexture = AlternateMotionVectorTexture;
+	}
+
 	// output combined velocity
 	{
 		PassParameters->OutVelocityCombinedTexture = GraphBuilder.CreateUAV(CombinedVelocityTexture);
@@ -137,6 +148,7 @@ FRDGTextureRef AddVelocityCombinePass(
 
 	FVelocityCombineCS::FPermutationDomain PermutationVector;
 	PermutationVector.Set<FDilateMotionVectorsDim>(bDilateMotionVectors);
+	PermutationVector.Set<FSupportAlternateMotionVectorDim>(bHasAlternateMotionVectors);
 
 	const FGlobalShaderMap* ShaderMap = GetGlobalShaderMap(View.GetFeatureLevel());
 	TShaderMapRef<FVelocityCombineCS> ComputeShader(ShaderMap, PermutationVector);

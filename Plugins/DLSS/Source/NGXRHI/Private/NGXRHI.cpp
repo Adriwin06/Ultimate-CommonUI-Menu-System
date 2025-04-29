@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -39,13 +39,6 @@ static TAutoConsoleVariable<int32> CVarNGXLogLevel(
 	TEXT("0: off \n")
 	TEXT("1: on (default)\n")
 	TEXT("2: verbose "),
-	ECVF_ReadOnly);
-
-static TAutoConsoleVariable<int32> CVarNGXEnableOtherLoggingSinks(
-	TEXT("r.NGX.EnableOtherLoggingSinks"), 0,
-	TEXT("Determines whether the NGX implementation will write logs to files. Can also be set on the command line via -NGXLogFileEnable and -NGXLogFileDisable\n")
-	TEXT("0: off (default)\n")
-	TEXT("1: on \n"),
 	ECVF_ReadOnly);
 
 static TAutoConsoleVariable<int32> CVarNGXFramesUntilFeatureDestruction(
@@ -193,7 +186,7 @@ NGXRHI::NGXRHI(const FNGXRHICreateArguments& Arguments)
 
 	// logging
 	{
-		FeatureInfo.LoggingInfo.DisableOtherLoggingSinks = 1 != CVarNGXEnableOtherLoggingSinks.GetValueOnAnyThread();
+		FeatureInfo.LoggingInfo.DisableOtherLoggingSinks = 1; 
 		FeatureInfo.LoggingInfo.LoggingCallback = &NGXLogSink;
 
 		switch (CVarNGXLogLevel.GetValueOnAnyThread())
@@ -439,17 +432,26 @@ FDLSSOptimalSettings NGXRHI::FDLSSQueryFeature::GetDLSSOptimalSettings(const FDL
 
 FString NGXRHI::GetNGXLogDirectory()
 {
-	// encode the time and instance id to handle cases like PIE standalone game where multiple processe are running at the same time.
-	FString AbsoluteProjectLogDir = FPaths::ConvertRelativePathToFull(FPaths::ProjectLogDir());
-	FString NGXLogDir = FPaths::Combine(AbsoluteProjectLogDir, TEXT("NGX"), FString::Printf(TEXT("NGX_%s_%s"), *FDateTime::Now().ToString(), *FApp::GetInstanceId().ToString()));
-	return NGXLogDir;
+	return FPaths::ConvertRelativePathToFull(FPaths::ProjectLogDir());
 }
 
 bool NGXRHI::IsSafeToShutdownNGX() const
 {
 	// Streamline plugin also uses NGX so it's not safe for us to call NGX shutdown functions from this plugin when Streamline is enabled
-	TSharedPtr<IPlugin> StreamlinePlugin = IPluginManager::Get().FindPlugin(TEXT("Streamline"));
-	return !StreamlinePlugin.IsValid() || !StreamlinePlugin->IsEnabled();
+
+	//First check if StreamlineCore exists, if so this means that the dev is using the newer version of SL
+	TSharedPtr<IPlugin> StreamlinePlugin = IPluginManager::Get().FindPlugin(TEXT("StreamlineCore"));
+
+	if (StreamlinePlugin.IsValid())
+	{	
+		return !StreamlinePlugin->IsEnabled();
+	}
+	else
+	{
+		//else we revert to check if the older plugin exists so we don't break backwards computability.
+		StreamlinePlugin = IPluginManager::Get().FindPlugin(TEXT("Streamline"));
+		return !StreamlinePlugin.IsValid() || !StreamlinePlugin->IsEnabled();
+	}
 }
 
 uint32 FRHIDLSSArguments::GetNGXCommonDLSSFeatureFlags() const
@@ -573,23 +575,14 @@ void NGXRHI::ApplyCommonNGXParameterSettings(NVSDK_NGX_Parameter* InOutParameter
 	NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_Performance, static_cast<uint32>(InArguments.DLSSPreset));
 	NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_DLSS_Hint_Render_Preset_UltraPerformance, static_cast<uint32>(InArguments.DLSSPreset));
 
-	// if none of these static assertions fail, we can reuse the DLSS-SR preset values as the DLSS-RR preset values
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_Default == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_Default);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_A == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_A);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_B == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_B);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_C == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_C);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_D == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_D);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_E);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_F == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_F);
-	static_assert(NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_G == NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_G);
-	if (NGXQueryFeature.bIsDlssRRAvailable)
+	if (NGXQueryFeature.bIsDlssRRAvailable && InArguments.DenoiserMode == ENGXDLSSDenoiserMode::DLSSRR)
 	{
-		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_DLAA, static_cast<uint32>(InArguments.DLSSPreset));
-		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraQuality, static_cast<uint32>(InArguments.DLSSPreset));
-		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Quality, static_cast<uint32>(InArguments.DLSSPreset));
-		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced, static_cast<uint32>(InArguments.DLSSPreset));
-		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance, static_cast<uint32>(InArguments.DLSSPreset));
-		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance, static_cast<uint32>(InArguments.DLSSPreset));
+		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_DLAA, static_cast<uint32>(InArguments.DLSSRRPreset));
+		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraQuality, static_cast<uint32>(InArguments.DLSSRRPreset));
+		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Quality, static_cast<uint32>(InArguments.DLSSRRPreset));
+		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Balanced, static_cast<uint32>(InArguments.DLSSRRPreset));
+		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_Performance, static_cast<uint32>(InArguments.DLSSRRPreset));
+		NVSDK_NGX_Parameter_SetUI(InOutParameter, NVSDK_NGX_Parameter_RayReconstruction_Hint_Render_Preset_UltraPerformance, static_cast<uint32>(InArguments.DLSSRRPreset));
 	}
 }
 
@@ -650,15 +643,6 @@ void FNGXRHIModule::StartupModule()
 	if (FParse::Value(FCommandLine::Get(), TEXT("ngxloglevel="), NGXLogLevel))
 	{
 		CVarNGXLogLevel->Set(NGXLogLevel, ECVF_SetByCommandline);
-	}
-
-	if (FParse::Param(FCommandLine::Get(), TEXT("ngxlogfileenable")))
-	{
-		CVarNGXEnableOtherLoggingSinks->Set(1, ECVF_SetByCommandline);
-	}
-	else if (FParse::Param(FCommandLine::Get(), TEXT("ngxlogfiledisable")))
-	{
-		CVarNGXEnableOtherLoggingSinks->Set(0, ECVF_SetByCommandline);
 	}
 
 	UE_LOG(LogDLSSNGXRHI, Log, TEXT("%s Leave"), ANSI_TO_TCHAR(__FUNCTION__));

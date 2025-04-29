@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -119,6 +119,10 @@ public:
 	/** Retrieve all supported DLSS modes. Can be used to populate UI */
 	UFUNCTION(BlueprintPure, Category = "DLSS", meta = (DisplayName = "Get Supported DLSS-SR Modes"))
 	static DLSSBLUEPRINT_API TArray<UDLSSMode> GetSupportedDLSSModes();
+
+	/** Returns 'true' when running on RT-capable machine */
+	UFUNCTION(BlueprintPure, Category = "DLSS", meta = (DisplayName = "Is RayTracing Available"))
+	static DLSSBLUEPRINT_API bool IsRayTracingAvailable();
 
 	/** Provide additional details (such as screen percentage ranges) about a DLSS mode. Screen Resolution is required for Auto mode */
 	UFUNCTION(BlueprintPure, Category = "DLSS", meta = (DisplayName = "Get DLSS-SR Mode Information"))

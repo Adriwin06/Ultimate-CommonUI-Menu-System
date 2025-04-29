@@ -1,7 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 /*=============================================================================
-	FlattenVelocity.usf: XeSS Flatten Vecolity
+	FlattenVelocity.usf: XeSS Flatten Velocity
 =============================================================================*/
 
 #include "/Engine/Private/Common.ush"
@@ -51,7 +51,7 @@ float2 FlattenAndUpsampleVelocity(uint2 PixelId)
 	PosN.xy = float2(2 * ViewportUV.x - 1, 1 - 2 * ViewportUV.y);
 
 	// Apply offset to the input depth pixel coordinate.
-    int2 DepthCoord = int2(InputViewMin) + int2(PPCk);
+	int2 DepthCoord = int2(InputViewMin) + int2(PPCk);
 	PosN.z = LoadSceneDepthTexture(DepthCoord, int2(0,0));
 
 	// Screen position of minimum depth.
@@ -92,9 +92,9 @@ float2 FlattenAndUpsampleVelocity(uint2 PixelId)
 				VelocityOffset = DepthOffset;
 				PosN.z = DepthsXYZW;
 			}
-		#else // !HAS_INVERTED_Z_BUFFER
+		#else
 			#error Fix me!
-		#endif // !HAS_INVERTED_Z_BUFFER
+		#endif
 	}
 
 	// Camera motion for pixel or nearest pixel (in ScreenPos space).
@@ -116,8 +116,8 @@ float2 FlattenAndUpsampleVelocity(uint2 PixelId)
 		}
 	}
 
-	float2 velocityColor = -BackN * OutputViewportSize.xy * float2(0.5, -0.5);
-	return velocityColor;
+	float2 VelocityColor = -BackN * OutputViewportSize.xy * float2(0.5, -0.5);
+	return VelocityColor;
 }
 
 //------------------------------------------------------- ENTRY POINT

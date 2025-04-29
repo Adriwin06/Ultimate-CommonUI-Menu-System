@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -23,6 +23,13 @@
 DEFINE_LOG_CATEGORY_STATIC(LogDLSSNGXD3D12RHI, Log, All);
 
 #define LOCTEXT_NAMESPACE "FNGXD3D12RHIModule"
+
+#if ENGINE_PROVIDES_ID3D12DYNAMICRHI && ENGINE_ID3D12DYNAMICRHI_NEEDS_CMDLIST
+#define RHICMDLIST_ARG_PASSTHROUGH CmdList,
+#else
+#define RHICMDLIST_ARG_PASSTHROUGH 
+#endif
+
 
 class FD3D12NGXDLSSFeature final : public NGXDLSSFeature
 {
@@ -52,6 +59,7 @@ public:
 	FNGXD3D12RHI(const FNGXRHICreateArguments& Arguments);
 	virtual void ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments& InArguments, FDLSSStateRef InDLSSState) final;
 	virtual ~FNGXD3D12RHI();
+	virtual bool IsRRSupportedByRHI() const override { return true; }
 private:
 	NVSDK_NGX_Result Init_NGX_D3D12(const FNGXRHICreateArguments& InArguments, const wchar_t* InApplicationDataPath, ID3D12Device* InHandle, const NVSDK_NGX_FeatureCommonInfo* InFeatureInfo);
 	static bool IsIncompatibleAPICaptureToolActive(ID3D12Device* InDirect3DDevice);
@@ -125,7 +133,6 @@ FNGXD3D12RHI::FNGXD3D12RHI(const FNGXRHICreateArguments& Arguments)
 	bIsIncompatibleAPICaptureToolActive = IsIncompatibleAPICaptureToolActive(Direct3DDevice);
 
 	const FString NGXLogDir = GetNGXLogDirectory();
-	IPlatformFile::GetPlatformPhysical().CreateDirectoryTree(*NGXLogDir);
 
 	NVSDK_NGX_Result ResultInit = Init_NGX_D3D12(Arguments, *NGXLogDir, Direct3DDevice, CommonFeatureInfo());
 	UE_LOG(LogDLSSNGXD3D12RHI, Log, TEXT("NVSDK_NGX_D3D12_Init (Log %s) -> (%u %s)"), *NGXLogDir, ResultInit, GetNGXResultAsString(ResultInit));
@@ -231,7 +238,7 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 	InArguments.Validate();
 
 	const uint32 DeviceIndex = D3D12RHI->RHIGetResourceDeviceIndex(InArguments.InputColor);
-	ID3D12GraphicsCommandList* D3DGraphicsCommandList = D3D12RHI->RHIGetGraphicsCommandList(CmdList,DeviceIndex);
+	ID3D12GraphicsCommandList* D3DGraphicsCommandList = D3D12RHI->RHIGetGraphicsCommandList(RHICMDLIST_ARG_PASSTHROUGH DeviceIndex);
 
 	if (InDLSSState->RequiresFeatureRecreation(InArguments))
 	{
@@ -368,6 +375,19 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 		DlssRREvalParams.pInNormals = D3D12RHI->RHIGetResource(InArguments.InputNormals);
 		DlssRREvalParams.pInRoughness = D3D12RHI->RHIGetResource(InArguments.InputRoughness);
 
+#if SUPPORT_GUIDE_GBUFFER
+		if (InArguments.InputReflectionHitDistance)
+		{
+			DlssRREvalParams.pInSpecularHitDistance = D3D12RHI->RHIGetResource(InArguments.InputReflectionHitDistance);
+			DlssRREvalParams.InSpecularHitDistanceSubrectBase.X = 0;
+			DlssRREvalParams.InSpecularHitDistanceSubrectBase.Y = 0;
+
+			// Yes, the interface takes a non-const ptr as an argument
+			DlssRREvalParams.pInWorldToViewMatrix = const_cast<float*>(InArguments.ViewMatrix);
+			DlssRREvalParams.pInViewToClipMatrix = const_cast<float*>(InArguments.ProjectionMatrix);
+		}
+#endif
+
 		NVSDK_NGX_Result ResultEvaluate = NGX_D3D12_EVALUATE_DLSSD_EXT(
 			D3DGraphicsCommandList,
 			InDLSSState->DLSSFeature->Feature,
@@ -379,7 +399,7 @@ void FNGXD3D12RHI::ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments
 
 	InDLSSState->DLSSFeature->Tick(FrameCounter);
 
-	D3D12RHI->RHIFinishExternalComputeWork(CmdList,DeviceIndex, D3DGraphicsCommandList);
+	D3D12RHI->RHIFinishExternalComputeWork(RHICMDLIST_ARG_PASSTHROUGH DeviceIndex, D3DGraphicsCommandList);
 }
 
 /** IModuleInterface implementation */

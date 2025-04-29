@@ -27,86 +27,40 @@ public class XeSSBlueprint : ModuleRules
 	public XeSSBlueprint(ReadOnlyTargetRules Target) : base(Target)
 	{
 		int EngineMajorVersion = ReadOnlyBuildVersion.Current.MajorVersion;
+		int EngineMinorVersion = ReadOnlyBuildVersion.Current.MinorVersion;
 
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicIncludePaths.AddRange(
-			new string[]
-			{
-				// ... add public include paths required here ...
-			}
-			);
+		PrivateDependencyModuleNames.AddRange(
+			new string[] {
+				"Core",
+				"CoreUObject",
 
-		// For ScenePrivate.h
-		PrivateIncludePaths.Add(Path.Combine(EngineDirectory, "Source/Runtime/Renderer/Private"));
+				"XeSSCommon",
+			}
+		);
 
 		PublicDependencyModuleNames.AddRange(
-			new string[]
-			{
+			new string[] {
+				"Engine",
 			}
-			);
-
-
-		PrivateDependencyModuleNames.AddRange(
-			new string[]
-			{
-					"Core",
-					"CoreUObject",
-					"Engine",
-					"Renderer",
-					"RenderCore",
-					"Projects",
-					"RHI",
-			}
-			);
-
-		if (EngineMajorVersion >= 5)
-		{
-			PrivateDependencyModuleNames.Add("RHICore");
-		}
-
-		DynamicallyLoadedModuleNames.AddRange(
-			new string[]
-			{
-			}
-			);
+		);
 
 		if (Target.Platform == UnrealTargetPlatform.Win64)
 		{
-			PublicDefinitions.Add("USE_XESS=1");
-
-			PublicIncludePaths.AddRange(
-				new string[]
-				{
-					Path.Combine(ModuleDirectory, "../XeSS/Public")
-				}
-			);
-
-			PrivateIncludePaths.AddRange(
-				new string[]
-				{
-					Path.Combine(ModuleDirectory, "../XeSS/Private")
-				}
-			);
-
-			PublicDependencyModuleNames.AddRange(
-				new string[]
-				{
-				}
-			);
-
+			PublicDefinitions.Add("WITH_XESS=1");
 			PrivateDependencyModuleNames.AddRange(
-				new string[]
-				{
-					"XeSSPlugin",
-					"IntelXeSS"
+				new string[] {
+					"XeSSCore",
+					"XeSSSDK",
+					"XeSSUnreal",
 				}
 			);
 		}
 		else
 		{
-			PublicDefinitions.Add("USE_XESS=0");
-			System.Console.WriteLine("XeSS not supported on this platform");
+			PublicDefinitions.Add("WITH_XESS=0");
+			System.Console.WriteLine("NOTE: XeSS not supported on this platform: " + Target.Platform);
 		}
 	}
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2020 - 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2020 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -18,6 +18,13 @@
 
 #include "nvsdk_ngx_params.h"
 #include "nvsdk_ngx_helpers_dlssd.h"
+#include "SceneTexturesConfig.h"
+
+
+// That is set to 1 in NVRTX branches
+#ifndef SUPPORT_GUIDE_GBUFFER
+#define SUPPORT_GUIDE_GBUFFER 0
+#endif
 
 #define NVSDK_NGX_VERSION_API_MACRO_BASE_LINE (0x0000013)
 #define NVSDK_NGX_VERSION_API_MACRO_WITH_LOGGING (0x0000014)
@@ -37,6 +44,7 @@ struct FDLSSFeatureDesc
 	{
 		return DestRect.Size() != Other.DestRect.Size()
 			|| DLSSPreset != Other.DLSSPreset
+			|| DLSSRRPreset != Other.DLSSRRPreset
 			|| PerfQuality != Other.PerfQuality
 			|| bHighResolutionMotionVectors != Other.bHighResolutionMotionVectors
 			|| bNonZeroSharpness != Other.bNonZeroSharpness
@@ -56,6 +64,7 @@ struct FDLSSFeatureDesc
 	FIntRect SrcRect = FIntRect(FIntPoint::NoneValue, FIntPoint::NoneValue);
 	FIntRect DestRect = FIntRect(FIntPoint::NoneValue, FIntPoint::NoneValue);
 	int32 DLSSPreset = -1;
+	int32 DLSSRRPreset = -1;
 	int32 PerfQuality = -1;
 	bool bHighResolutionMotionVectors = false;
 	bool bNonZeroSharpness = false;
@@ -67,9 +76,9 @@ struct FDLSSFeatureDesc
 	ENGXDLSSDenoiserMode DenoiserMode = ENGXDLSSDenoiserMode::Off;
 	FString GetDebugDescription() const
 	{
-		auto NGXDLSSPresetString = [] (int NGXPerfQuality)
+		auto NGXDLSSPresetString = [] (int NGXPreset)
 		{
-			switch (NGXPerfQuality)
+			switch (NGXPreset)
 			{
 				case NVSDK_NGX_DLSS_Hint_Render_Preset_Default:return TEXT("Default");
 				case NVSDK_NGX_DLSS_Hint_Render_Preset_A:return TEXT("Preset A");
@@ -79,8 +88,40 @@ struct FDLSSFeatureDesc
 				case NVSDK_NGX_DLSS_Hint_Render_Preset_E:return TEXT("Preset E");
 				case NVSDK_NGX_DLSS_Hint_Render_Preset_F:return TEXT("Preset F");
 				case NVSDK_NGX_DLSS_Hint_Render_Preset_G:return TEXT("Preset G");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_H_Reserved:return TEXT("Preset H");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_I_Reserved:return TEXT("Preset I");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_J:return TEXT("Preset J");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_K:return TEXT("Preset K");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_L:return TEXT("Preset L");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_M:return TEXT("Preset M");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_N:return TEXT("Preset N");
+				case NVSDK_NGX_DLSS_Hint_Render_Preset_O:return TEXT("Preset O");
 				default:return TEXT("Invalid NVSDK_NGX_DLSS_Hint_Render_Preset");
 			}
+		};
+
+		auto NGXDLSSRRPresetString = [](int NGXDLSSRRPreset)
+		{
+				switch (NGXDLSSRRPreset)
+				{
+					default: return TEXT("Invalid NVSDK_NGX_RayReconstruction_Hint_Render_Preset");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_Default:return TEXT("Default");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_A:return TEXT("Preset A");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_B:return TEXT("Preset B");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_C:return TEXT("Preset C");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_D:return TEXT("Preset D");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_E:return TEXT("Preset E");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_F:return TEXT("Preset F");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_G:return TEXT("Preset G");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_H:return TEXT("Preset H");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_I:return TEXT("Preset I");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_J:return TEXT("Preset J");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_K:return TEXT("Preset K");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_L:return TEXT("Preset L");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_M:return TEXT("Preset M");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_N:return TEXT("Preset N");
+					case NVSDK_NGX_RayReconstruction_Hint_Render_Preset_O:return TEXT("Preset O");
+				}
 		};
 		auto NGXPerfQualityString = [] (int NGXPerfQuality)
 		{
@@ -105,12 +146,13 @@ struct FDLSSFeatureDesc
 			}
 		};
 
-		return FString::Printf(TEXT("SrcRect=[%dx%d->%dx%d], DestRect=[%dx%d->%dx%d], ScaleX=%f, ScaleY=%f, NGXDLSSPreset=%s(%d), NGXPerfQuality=%s(%d), bHighResolutionMotionVectors=%d, bNonZeroSharpness=%d, bUseAutoExposure=%d, bEnableAlphaUpscaling=%d, bReleaseMemoryOnDelete=%d, GPUNode=%u, GPUVisibility=0x%x, DenoiseMode=%s"),
+		return FString::Printf(TEXT("SrcRect=[%dx%d->%dx%d], DestRect=[%dx%d->%dx%d], ScaleX=%f, ScaleY=%f, NGXDLSSPreset=%s(%d), NGXDLSSRRPreset=%s(%d), NGXPerfQuality=%s(%d), bHighResolutionMotionVectors=%d, bNonZeroSharpness=%d, bUseAutoExposure=%d, bEnableAlphaUpscaling=%d, bReleaseMemoryOnDelete=%d, GPUNode=%u, GPUVisibility=0x%x, DenoiseMode=%s"),
 			SrcRect.Min.X, SrcRect.Min.Y, SrcRect.Max.X, SrcRect.Max.Y,
 			DestRect.Min.X, DestRect.Min.Y, DestRect.Max.X, DestRect.Max.Y,
 			float(SrcRect.Width()) / float(DestRect.Width()),
 			float(SrcRect.Height()) / float(DestRect.Height()),
 			NGXDLSSPresetString(DLSSPreset), DLSSPreset,
+			NGXDLSSRRPresetString(DLSSRRPreset), DLSSRRPreset,
 			NGXPerfQualityString(PerfQuality), PerfQuality,
 			bHighResolutionMotionVectors,
 			bNonZeroSharpness,
@@ -137,6 +179,10 @@ struct NGXRHI_API FRHIDLSSArguments
 	FRHITexture* InputNormals = nullptr;
 	FRHITexture* InputRoughness = nullptr;
 
+#if SUPPORT_GUIDE_GBUFFER
+	FRHITexture* InputReflectionHitDistance = nullptr;
+#endif
+
 	FRHITexture* OutputColor = nullptr;
 
 	FIntRect SrcRect = FIntRect(FIntPoint::ZeroValue, FIntPoint::ZeroValue);
@@ -146,12 +192,17 @@ struct NGXRHI_API FRHIDLSSArguments
 
 	FMatrix InvViewProjectionMatrix;
 	FMatrix ClipToPrevClipMatrix;
+#if SUPPORT_GUIDE_GBUFFER
+	float ViewMatrix[16];
+	float ProjectionMatrix[16];
+#endif
 	bool bHighResolutionMotionVectors = false;
 
 	float Sharpness = 0.0f;
 	bool bReset = false;
 
 	int32 DLSSPreset = NVSDK_NGX_DLSS_Hint_Render_Preset::NVSDK_NGX_DLSS_Hint_Render_Preset_Default;
+	int32 DLSSRRPreset = NVSDK_NGX_RayReconstruction_Hint_Render_Preset::NVSDK_NGX_RayReconstruction_Hint_Render_Preset_Default;
 	int32 PerfQuality = 0;
 	float DeltaTimeMS = 0.0f;
 
@@ -172,7 +223,7 @@ struct NGXRHI_API FRHIDLSSArguments
 	{
 		return FDLSSFeatureDesc 
 		{ 
-			SrcRect, DestRect, DLSSPreset, PerfQuality,
+			SrcRect, DestRect, DLSSPreset,DLSSRRPreset, PerfQuality,
 			bHighResolutionMotionVectors, Sharpness != 0.0f, bUseAutoExposure, bEnableAlphaUpscaling,
 			bReleaseMemoryOnDelete, GPUNode, GPUVisibility, DenoiserMode
 		};
@@ -353,6 +404,8 @@ public:
 	virtual ~NGXRHI();
 
 	virtual void ExecuteDLSS(FRHICommandList& CmdList, const FRHIDLSSArguments& InArguments, FDLSSStateRef InDLSSState) = 0;
+
+	virtual bool IsRRSupportedByRHI() const = 0;
 
 	bool IsDLSSAvailable() const
 	{

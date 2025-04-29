@@ -1,5 +1,5 @@
 /*
-* Copyright (c) 2023-2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+* Copyright (c) 2023 - 2025 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 *
 * NVIDIA CORPORATION, its affiliates and licensors retain all intellectual
 * property and proprietary rights in and to this material, related
@@ -9,21 +9,34 @@
 * its affiliates is strictly prohibited.
 */
 
+
 #include "/Engine/Private/Common.ush"
 #include "/Engine/Private/DeferredShadingCommon.ush"
 #include "/Engine/Private/BRDF.ush"
 #include "/Engine/Private/FastMath.ush"
 #include "/Engine/Private/ScreenPass.ush"
+#include "/Engine/Private/RayTracing/RayTracingCommon.ush"
 
 
 #ifndef DIFFUSE_SPECULAR_ALBEDO
 #define DIFFUSE_SPECULAR_ALBEDO 0
 #endif
 
+#ifndef SPECULAR_HITT
+#define SPECULAR_HITT 0
+#endif
+
 SCREEN_PASS_TEXTURE_VIEWPORT(InputViewPort)
 SCREEN_PASS_TEXTURE_VIEWPORT(OutputViewPort)
 
+
 #include "/Engine/Private/PositionReconstructionCommon.ush"
+
+Texture2D<float4> PassthroughDiffuse;
+Texture2D<float4> PassthroughSpecular;
+Texture2D<float4> PassthroughNormalRoughness;
+Texture2D<float> PassthroughDepth;
+Texture2D<float> ReflectionHitDistance;
 
 float3 EnvBRDFApproxRTG(float3 SpecularColor, float alpha, float NoV)
 {
@@ -66,9 +79,60 @@ void GBufferResolvePixelShader(
 	, out float OutRoughness : SV_Target3
 	, out float OutDepth : SV_Target4
 #endif
+#if SPECULAR_HITT
+	, out float OutHitT : SV_Target5
+#endif
 )
 {
-	FGBufferData GBuffer = GetGBufferDataUint(uint2(SvPosition.xy + InputViewPort_ViewportMin), true);
+	uint2 PixelCoord = uint2(SvPosition.xy + InputViewPort_ViewportMin);
+
+
+#if PASSTHROUGH_FEATURE_BUFFERS
+	// In this case, everything has been pre-composited
+
+#if DIFFUSE_SPECULAR_ALBEDO
+	const float4 GuideDiffuse = PassthroughDiffuse[PixelCoord];
+	const float4 GuideSpecular = PassthroughSpecular[PixelCoord];
+	const float4 GuideNormalRoughness = PassthroughNormalRoughness[PixelCoord];
+	const float GuideDepthData = PassthroughDepth[PixelCoord];
+
+	OutDiffuseAlbedo = float4(GuideDiffuse.xyz, 1.0f);
+	OutSpecularAlbedo = float4(GuideSpecular.xyz, 1.0f);
+	OutNormal = float4(GuideNormalRoughness.xyz * 2.0 - 1.0, GuideNormalRoughness.w);
+	OutRoughness = GuideNormalRoughness.w;
+
+	OutDepth = GuideDepthData;
+#endif
+
+#if SPECULAR_HITT
+	float HitT = ReflectionHitDistance.Load(int3(SvPosition.xy + InputViewPort_ViewportMin, 0));
+
+	OutHitT = HitT;
+#endif
+
+#else
+	const float DeviceZ = SceneTexturesStruct.SceneDepthTexture[PixelCoord].x;
+
+	if (DeviceZ == 0.f)
+	{
+#if DIFFUSE_SPECULAR_ALBEDO
+		const float2 UV = SvPosition.xy * View.BufferSizeAndInvSize.zw;
+		const FRayDesc Ray = CreatePrimaryRay(UV);
+		OutDiffuseAlbedo = 0.2f;
+		OutSpecularAlbedo = 0.2f;
+		OutNormal = float4(-Ray.Direction, 0.5f);
+		OutRoughness = 0.5f;
+		OutDepth = POSITIVE_INFINITY;
+#endif
+
+#if SPECULAR_HITT
+		OutHitT = MaxHalfFloat;
+#endif
+		return;
+	}
+
+	FGBufferData GBuffer = GetGBufferDataUint(PixelCoord, true);
+
 #if DIFFUSE_SPECULAR_ALBEDO
 
 	float3 DiffuseColor = GBuffer.DiffuseColor;
@@ -85,7 +149,6 @@ void GBufferResolvePixelShader(
 		//SpecularColor = 1.0;
 	}
 
-
 	float3 WorldPos = ReconstructWorldPositionFromDepth(ViewportUVToBufferUV(InUV), GBuffer.Depth);
 	float3 RayDirection = normalize(WorldPos - LWCHackToFloat(PrimaryView.WorldCameraOrigin));
 
@@ -98,7 +161,15 @@ void GBufferResolvePixelShader(
 	OutSpecularAlbedo = float4(F, 1.0f);
 	OutNormal = float4(GBuffer.WorldNormal, GBuffer.Roughness);
 	OutRoughness = GBuffer.Roughness;
+
 	OutDepth = GBuffer.Depth;
+#endif
+
+#if SPECULAR_HITT
+	float HitT = ReflectionHitDistance.Load(int3(SvPosition.xy + InputViewPort_ViewportMin, 0));
+
+	OutHitT = HitT;
+#endif
 #endif
 }
 
